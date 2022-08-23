@@ -1,13 +1,12 @@
 import os
 import pytest
 
+
 @pytest.fixture
 def sugar_contract(Sugar, accounts):
-    yield Sugar.deploy(
-        os.getenv('VOTER_ADDRESS'),
-        os.getenv('WRAPPED_BRIBE_FACTORY'),
-        {'from': accounts[0]}
-    )
+    # Since we depend on the rest of the protocol,
+    # we just point to an existing deployment
+    yield Sugar.at('SUGAR_ADDRESS')
 
 
 def test_initial_state(sugar_contract):
