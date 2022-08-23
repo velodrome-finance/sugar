@@ -1,4 +1,4 @@
 eth-brownie
 vyper
 flake8
-black
+titanoboa
