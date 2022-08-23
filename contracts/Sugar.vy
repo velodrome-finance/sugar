@@ -42,6 +42,7 @@ interface IPairFactory:
 
 interface IWrappedBribeFactory:
   def oldBribeToNew(_external_bribe_addr: address) -> address: view
+  def voter() -> address: view
 
 interface IPair:
   def getReserves() -> uint256[3]: view
@@ -53,11 +54,14 @@ interface IPair:
   def stable() -> bool: view
 
 interface IVoter:
+  def _ve() -> address: view
   def factory() -> address: view
-  def base() -> address: view
   def gauges(_pair_addr: address) -> address: view
   def external_bribes(_gauge_addr: address) -> address: view
   def internal_bribes(_gauge_addr: address) -> address: view
+
+interface IVotingEscrow:
+  def token() -> address: view
 
 interface IGauge:
   def totalSupply() -> uint256: view
@@ -69,19 +73,33 @@ pair_factory: public(address)
 voter: public(address)
 wrapped_bribe_factory: public(address)
 token: public(address)
+owner: public(address)
 
 # Methods
 
 @external
-def __init__(_voter: address, _wrapped_bribe_factory: address):
+def __init__():
   """
-  @dev Sets up our contract addresses
+  @dev Sets up our contract management address
   """
+  self.owner = msg.sender
+
+@external
+def setup(_voter: address, _wrapped_bribe_factory: address):
+  """
+  @dev Sets up our external contract addresses
+  """
+  assert self.owner == msg.sender, 'Not allowed!'
+
   voter: IVoter = IVoter(_voter)
+  wrapped_bribe_factory: IWrappedBribeFactory = \
+    IWrappedBribeFactory(_wrapped_bribe_factory)
+
+  assert wrapped_bribe_factory.voter() == _voter, 'Voter mismatch!'
 
   self.voter = _voter
   self.pair_factory = voter.factory()
-  self.token = voter.base()
+  self.token = IVotingEscrow(voter._ve()).token()
   self.wrapped_bribe_factory = _wrapped_bribe_factory
 
 @external
@@ -161,7 +179,7 @@ def pairByAddress(_address: address) -> Pair:
     bribe: bribe_addr,
     wrapped_bribe: wrapped_bribe_addr,
 
-    emissions: gauge.rewardRate(token.address),
-    emissions_token: token.address,
+    emissions: gauge.rewardRate(self.token),
+    emissions_token: self.token,
     emissions_token_decimals: token.decimals()
   })
