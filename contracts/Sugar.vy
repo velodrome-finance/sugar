@@ -65,10 +65,10 @@ interface IGauge:
 
 # Vars
 
-pair_factory: public(IPairFactory)
-voter: public(IVoter)
-wrapped_bribe_factory: public(IWrappedBribeFactory)
-token: public(ERC20Detailed)
+pair_factory: public(address)
+voter: public(address)
+wrapped_bribe_factory: public(address)
+token: public(address)
 
 # Methods
 
@@ -77,27 +77,30 @@ def __init__(_voter: address, _wrapped_bribe_factory: address):
   """
   @dev Sets up our contract addresses
   """
-  self.voter = IVoter(_voter)
-  self.pair_factory = IPairFactory(self.voter.factory())
-  self.token = ERC20Detailed(self.voter.base())
-  self.wrapped_bribe_factory = IWrappedBribeFactory(_wrapped_bribe_factory)
+  voter: IVoter = IVoter(_voter)
+
+  self.voter = _voter
+  self.pair_factory = voter.factory()
+  self.token = voter.base()
+  self.wrapped_bribe_factory = _wrapped_bribe_factory
 
 @external
 @view
-def pairs() -> DynArray[Pair, MAX_INT128]:
+def pairs() -> DynArray[Pair, max_value(int128)]:
   """
   @notice Returns pair data
   @return Array for Pair structs
   """
-  pairsCount: uint256 = self.pair_factory.allPairsLength()
+  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  pairsCount: uint256 = pair_factory.allPairsLength()
 
-  all: DynArray[Pair, MAX_INT128] = []
+  all: DynArray[Pair, max_value(int128)] = []
 
-  for index in range(MAX_INT128):
+  for index in range(max_value(int128)):
     if index > pairsCount - 1:
       break
 
-    all[index] = self.pairByAddress(self.pair_factory.allPairs(index))
+    all[index] = self.pairByAddress(pair_factory.allPairs(index))
 
   return all
 
@@ -109,7 +112,9 @@ def pairByIndex(_index: uint256) -> Pair:
   @param _index The index to lookup
   @return Pair struct
   """
-  return self.pairByAddress(self.pair_factory.allPairs(_index))
+  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+
+  return self.pairByAddress(pair_factory.allPairs(_index))
 
 @internal
 @view
@@ -119,11 +124,16 @@ def pairByAddress(_address: address) -> Pair:
   @param _address The address to lookup
   @return Pair struct
   """
+  voter: IVoter = IVoter(self.voter)
+  wrapped_bribe_factory: IWrappedBribeFactory = \
+    IWrappedBribeFactory(self.wrapped_bribe_factory)
+  token: ERC20Detailed = ERC20Detailed(self.token)
+
   pair: IPair = IPair(_address)
-  gauge: IGauge = IGauge(self.voter.gauges(_address))
-  bribe_addr: address = self.voter.external_bribes(gauge.address)
+  gauge: IGauge = IGauge(voter.gauges(_address))
+  bribe_addr: address = voter.external_bribes(gauge.address)
   wrapped_bribe_addr: address = \
-    self.wrapped_bribe_factory.oldBribeToNew(bribe_addr)
+    wrapped_bribe_factory.oldBribeToNew(bribe_addr)
 
   token0: ERC20Detailed = ERC20Detailed(pair.token0())
   token1: ERC20Detailed = ERC20Detailed(pair.token1())
@@ -147,11 +157,11 @@ def pairByAddress(_address: address) -> Pair:
     gauge: gauge.address,
     gauge_total_supply: gauge.totalSupply(),
 
-    fee: self.voter.internal_bribes(gauge.address),
+    fee: voter.internal_bribes(gauge.address),
     bribe: bribe_addr,
     wrapped_bribe: wrapped_bribe_addr,
 
-    emissions: gauge.rewardRate(self.token.address),
-    emissions_token: self.token.address,
-    emissions_token_decimals: self.token.decimals()
+    emissions: gauge.rewardRate(token.address),
+    emissions_token: token.address,
+    emissions_token_decimals: token.decimals()
   })
