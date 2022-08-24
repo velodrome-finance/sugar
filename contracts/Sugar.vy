@@ -125,7 +125,7 @@ def pairs(_limit: uint256, _offset: uint256) -> DynArray[Pair, MAX_PAIRS]:
     if _offset > index:
       continue
 
-    if len(col) > _limit or index >= count:
+    if len(col) == _limit or index >= count:
       break
 
     pair_addr: address = pair_factory.allPairs(index)
