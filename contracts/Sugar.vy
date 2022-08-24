@@ -6,7 +6,10 @@
 
 # Structs
 
+MAX_PAIRS: constant(uint256) = 1000
+
 struct Pair:
+  pair_address: address
   symbol: String[100]
   stable: bool
   total_supply: uint256
@@ -106,23 +109,30 @@ def setup(_voter: address, _wrapped_bribe_factory: address):
 
 @external
 @view
-def pairs() -> DynArray[Pair, max_value(int128)]:
+def pairs(_limit: uint256, _offset: uint256) -> DynArray[Pair, MAX_PAIRS]:
   """
-  @notice Returns pair data
+  @notice Returns a collection of pair data
+  @param _limit The max amount of pairs to return
+  @param _offset The amount of pairs to skip
   @return Array for Pair structs
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  pairsCount: uint256 = pair_factory.allPairsLength()
+  count: uint256 = pair_factory.allPairsLength()
 
-  all: DynArray[Pair, max_value(int128)] = []
+  col: DynArray[Pair, MAX_PAIRS] = empty(DynArray[Pair, MAX_PAIRS])
 
-  for index in range(max_value(int128)):
-    if index > pairsCount - 1:
+  for index in range(MAX_PAIRS):
+    if _offset > index:
+      continue
+
+    if len(col) > _limit or index >= count:
       break
 
-    all[index] = self.pairByAddress(pair_factory.allPairs(index))
+    pair_addr: address = pair_factory.allPairs(index)
 
-  return all
+    col.append(self._pairByAddress(pair_addr))
+
+  return col
 
 @external
 @view
@@ -134,9 +144,9 @@ def pairByIndex(_index: uint256) -> Pair:
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
 
-  return self.pairByAddress(pair_factory.allPairs(_index))
+  return self._pairByAddress(pair_factory.allPairs(_index))
 
-@internal
+@external
 @view
 def pairByAddress(_address: address) -> Pair:
   """
@@ -144,6 +154,18 @@ def pairByAddress(_address: address) -> Pair:
   @param _address The address to lookup
   @return Pair struct
   """
+  return self._pairByAddress(_address)
+
+@internal
+@view
+def _pairByAddress(_address: address) -> Pair:
+  """
+  @notice Returns pair data based on the address
+  @param _address The address to lookup
+  @return Pair struct
+  """
+  assert _address != empty(address), 'Invalid address!'
+
   voter: IVoter = IVoter(self.voter)
   wrapped_bribe_factory: IWrappedBribeFactory = \
     IWrappedBribeFactory(self.wrapped_bribe_factory)
@@ -162,11 +184,12 @@ def pairByAddress(_address: address) -> Pair:
   gauge_total_supply: uint256 = 0
   emissions: uint256 = 0
 
-  if gauge.address != ZERO_ADDRESS:
+  if gauge.address != empty(address):
     gauge_total_supply = gauge.totalSupply()
     emissions = gauge.rewardRate(self.token)
 
   return Pair({
+    pair_address: _address,
     symbol: pair.symbol(),
     stable: pair.stable(),
     total_supply: pair.totalSupply(),
