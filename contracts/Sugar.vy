@@ -1,7 +1,5 @@
 # @version >=0.3.6 <0.4.0
 
-from vyper.interfaces import ERC20Detailed
-
 # @title Velodrome Finance Sugar v1
 # @author stas
 # @notice Methods to make Velodrome devs life easier.
@@ -35,6 +33,10 @@ struct Pair:
   emissions_token_decimals: uint8
 
 # Our contracts / Interfaces
+
+interface IERC20:
+  def decimals() -> uint8: view
+  def symbol() -> String[100]: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
@@ -145,7 +147,7 @@ def pairByAddress(_address: address) -> Pair:
   voter: IVoter = IVoter(self.voter)
   wrapped_bribe_factory: IWrappedBribeFactory = \
     IWrappedBribeFactory(self.wrapped_bribe_factory)
-  token: ERC20Detailed = ERC20Detailed(self.token)
+  token: IERC20 = IERC20(self.token)
 
   pair: IPair = IPair(_address)
   gauge: IGauge = IGauge(voter.gauges(_address))
@@ -153,8 +155,8 @@ def pairByAddress(_address: address) -> Pair:
   wrapped_bribe_addr: address = \
     wrapped_bribe_factory.oldBribeToNew(bribe_addr)
 
-  token0: ERC20Detailed = ERC20Detailed(pair.token0())
-  token1: ERC20Detailed = ERC20Detailed(pair.token1())
+  token0: IERC20 = IERC20(pair.token0())
+  token1: IERC20 = IERC20(pair.token1())
   reserves: uint256[3] = pair.getReserves()
 
   return Pair({
