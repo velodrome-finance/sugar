@@ -159,6 +159,13 @@ def pairByAddress(_address: address) -> Pair:
   token1: IERC20 = IERC20(pair.token1())
   reserves: uint256[3] = pair.getReserves()
 
+  gauge_total_supply: uint256 = 0
+  emissions: uint256 = 0
+
+  if gauge.address != ZERO_ADDRESS:
+    gauge_total_supply = gauge.totalSupply()
+    emissions = gauge.rewardRate(self.token)
+
   return Pair({
     symbol: pair.symbol(),
     stable: pair.stable(),
@@ -175,13 +182,13 @@ def pairByAddress(_address: address) -> Pair:
     reserve1: reserves[1],
 
     gauge: gauge.address,
-    gauge_total_supply: gauge.totalSupply(),
+    gauge_total_supply: gauge_total_supply,
 
     fee: voter.internal_bribes(gauge.address),
     bribe: bribe_addr,
     wrapped_bribe: wrapped_bribe_addr,
 
-    emissions: gauge.rewardRate(self.token),
+    emissions: emissions,
     emissions_token: self.token,
     emissions_token_decimals: token.decimals()
   })
