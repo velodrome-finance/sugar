@@ -4,10 +4,10 @@ from web3.constants import ADDRESS_ZERO
 
 
 @pytest.fixture
-def sugar_contract(Sugar, accounts):
+def sugar_contract(PairsSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield Sugar.at(os.getenv('SUGAR_ADDRESS'))
+    yield PairsSugar.at(os.getenv('PAIRS_SUGAR_ADDRESS'))
 
 
 def test_initial_state(sugar_contract):

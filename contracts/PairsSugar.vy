@@ -1,8 +1,8 @@
 # @version >=0.3.6 <0.4.0
 
-# @title Velodrome Finance Sugar v1
+# @title Velodrome Finance Liquidity Pairs Sugar v1
 # @author stas
-# @notice Methods to make Velodrome devs life easier.
+# @notice Makes it nicer to work with the liquidity pairs.
 
 # Structs
 
