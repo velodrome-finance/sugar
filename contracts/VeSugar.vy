@@ -132,7 +132,7 @@ def byAccount(_account: address) -> DynArray[VeNFT, MAX_NFTS]:
     if venft_id == 0:
       break
 
-    col.append(self._byId(index))
+    col.append(self._byId(venft_id))
 
   return col
 
