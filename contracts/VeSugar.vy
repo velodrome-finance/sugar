@@ -3,6 +3,8 @@
 # @title Velodrome Finance veNFT Sugar v1
 # @author stas
 # @notice Makes it nicer to work with our vote-escrow NFTs.
+# @dev Refactor pair-related stuff when library modules support is released:
+#       https://github.com/vyperlang/vyper/pull/2888
 
 MAX_RESULTS: constant(uint256) = 1000
 # Basically max attachments/gauges for a veNFT, this one is tricky, but
@@ -11,6 +13,37 @@ MAX_PAIRS: constant(uint256) = 30
 
 # Structs
 
+struct Pair:
+  pair_address: address
+  symbol: String[100]
+  stable: bool
+  total_supply: uint256
+
+  token0: address
+  token0_symbol: String[100]
+  token0_decimals: uint8
+  reserve0: uint256
+  claimable0: uint256
+
+  token1: address
+  token1_symbol: String[100]
+  token1_decimals: uint8
+  reserve1: uint256
+  claimable1: uint256
+
+  gauge: address
+  gauge_total_supply: uint256
+
+  fee: address
+  bribe: address
+  wrapped_bribe: address
+
+  emissions: uint256
+  emissions_token: address
+  emissions_token_decimals: uint8
+
+  account_balance: uint256
+  account_earned: uint256
 
 struct VeNFT:
   id: uint256
@@ -27,6 +60,16 @@ struct VeNFT:
   token: address
   token_decimals: uint8
   token_symbol: String[100]
+
+struct Reward:
+  venft_id: uint256
+  pair: address
+  amount: uint256
+  token: address
+  token_symbol: String[100]
+  token_decimals: uint8
+  fee: address
+  bribe: address
 
 # Our contracts / Interfaces
 
@@ -53,12 +96,26 @@ interface IVotingEscrow:
   def locked(_venft_id: uint256) -> (uint128, uint256): view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
 
+interface IBribe:
+  def rewardsListLength() -> uint256: view
+  def rewards(_index: uint256) -> address: view
+  def earned(_token: address, _venft_id: uint256) -> uint256: view
+
+interface IPairFactory:
+  def allPairsLength() -> uint256: view
+
+interface IPairsSugar:
+  def byIndex(_index: uint256, _account: address) -> Pair: view
+  def pair_factory() -> address: view
+
 # Vars
 
 voter: public(address)
 token: public(address)
 ve: public(address)
 rewards_distributor: public(address)
+pairs_sugar: public(address)
+pair_factory: public(address)
 owner: public(address)
 
 # Methods
@@ -71,7 +128,11 @@ def __init__():
   self.owner = msg.sender
 
 @external
-def setup(_voter: address, _rewards_distributor: address):
+def setup(
+    _voter: address,
+    _rewards_distributor: address,
+    _pairs_sugar: address
+  ):
   """
   @dev Sets up our external contract addresses
   """
@@ -87,6 +148,8 @@ def setup(_voter: address, _rewards_distributor: address):
   self.ve = voter._ve()
   self.token = IVotingEscrow(self.ve).token()
   self.rewards_distributor = _rewards_distributor
+  self.pairs_sugar = _pairs_sugar
+  self.pair_factory = IPairsSugar(_pairs_sugar).pair_factory()
 
 @external
 @view
@@ -111,6 +174,94 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[VeNFT, MAX_RESULTS]:
       continue
 
     col.append(self._byId(index))
+
+  return col
+
+@external
+@view
+def rewards(_venft_id: uint256) -> DynArray[Reward, MAX_RESULTS]:
+  """
+  @notice Returns a collection of veNFT rewards data
+  @param _venft_id The veNFT ID to get rewards for
+  @return Array for VeNFT Reward structs
+  """
+  psugar: IPairsSugar = IPairsSugar(self.pairs_sugar)
+  col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
+
+  venft_id: uint256 = _venft_id
+
+  for pindex in range(MAX_RESULTS):
+    if pindex >= IPairFactory(self.pair_factory).allPairsLength():
+      break
+
+    pair: Pair = psugar.byIndex(pindex, msg.sender)
+
+    if pair.pair_address == empty(address):
+      break
+
+    if pair.gauge == empty(address):
+      continue
+
+    fee0_amount: uint256 = IBribe(pair.fee).earned(pair.token0, venft_id)
+    fee1_amount: uint256 = IBribe(pair.fee).earned(pair.token1, venft_id)
+
+    if fee0_amount > 0:
+      col.append(
+        Reward({
+          venft_id: venft_id,
+          pair: pair.pair_address,
+          amount: fee0_amount,
+          token: pair.token0,
+          token_symbol: pair.token0_symbol,
+          token_decimals: pair.token0_decimals,
+          fee: pair.fee,
+          bribe: empty(address)
+        })
+      )
+
+    if fee1_amount > 0:
+      col.append(
+        Reward({
+          venft_id: venft_id,
+          pair: pair.pair_address,
+          amount: fee0_amount,
+          token: pair.token1,
+          token_symbol: pair.token1_symbol,
+          token_decimals: pair.token1_decimals,
+          fee: pair.fee,
+          bribe: empty(address)
+        })
+      )
+
+    if pair.wrapped_bribe == empty(address):
+      continue
+
+    bribe: IBribe = IBribe(pair.wrapped_bribe)
+    bribes_len: uint256 = bribe.rewardsListLength()
+
+    # Bribes have a 16 max rewards limit anyway...
+    for bindex in range(MAX_PAIRS):
+      if bindex > bribes_len:
+        break
+
+      bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
+      bribe_amount: uint256 = bribe.earned(bribe_token.address, venft_id)
+
+      if bribe_amount == 0:
+        break
+
+      col.append(
+        Reward({
+          venft_id: venft_id,
+          pair: pair.pair_address,
+          amount: bribe_amount,
+          token: bribe_token.address,
+          token_symbol: bribe_token.symbol(),
+          token_decimals: bribe_token.decimals(),
+          fee: empty(address),
+          bribe: pair.wrapped_bribe
+        })
+      )
 
   return col
 
