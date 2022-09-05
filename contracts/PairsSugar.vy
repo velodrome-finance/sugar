@@ -18,11 +18,13 @@ struct Pair:
   token0_symbol: String[100]
   token0_decimals: uint8
   reserve0: uint256
+  claimable0: uint256
 
   token1: address
   token1_symbol: String[100]
   token1_decimals: uint8
   reserve1: uint256
+  claimable1: uint256
 
   gauge: address
   gauge_total_supply: uint256
@@ -34,6 +36,9 @@ struct Pair:
   emissions: uint256
   emissions_token: address
   emissions_token_decimals: uint8
+
+  account_balance: uint256
+  account_earned: uint256
 
 # Our contracts / Interfaces
 
@@ -53,6 +58,8 @@ interface IPair:
   def getReserves() -> uint256[3]: view
   def token0() -> address: view
   def token1() -> address: view
+  def claimable0(_account: address) -> uint256: view
+  def claimable1(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def symbol() -> String[100]: view
   def decimals() -> uint8: view
@@ -69,6 +76,8 @@ interface IVotingEscrow:
   def token() -> address: view
 
 interface IGauge:
+  def earned(_token: address, _account: address) -> uint256: view
+  def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def rewardRate(_token_addr: address) -> uint256: view
 
@@ -109,11 +118,13 @@ def setup(_voter: address, _wrapped_bribe_factory: address):
 
 @external
 @view
-def pairs(_limit: uint256, _offset: uint256) -> DynArray[Pair, MAX_PAIRS]:
+def all(_limit: uint256, _offset: uint256, _account: address) \
+    -> DynArray[Pair, MAX_PAIRS]:
   """
   @notice Returns a collection of pair data
   @param _limit The max amount of pairs to return
   @param _offset The amount of pairs to skip
+  @param _account The account to check the staked and earned balances
   @return Array for Pair structs
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
@@ -130,38 +141,41 @@ def pairs(_limit: uint256, _offset: uint256) -> DynArray[Pair, MAX_PAIRS]:
 
     pair_addr: address = pair_factory.allPairs(index)
 
-    col.append(self._pairByAddress(pair_addr))
+    col.append(self._byAddress(pair_addr, _account))
 
   return col
 
 @external
 @view
-def pairByIndex(_index: uint256) -> Pair:
+def byIndex(_index: uint256, _account: address) -> Pair:
   """
   @notice Returns pair data at a specific stored index
   @param _index The index to lookup
+  @param _account The account to check the staked and earned balances
   @return Pair struct
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
 
-  return self._pairByAddress(pair_factory.allPairs(_index))
+  return self._byAddress(pair_factory.allPairs(_index), _account)
 
 @external
 @view
-def pairByAddress(_address: address) -> Pair:
+def byAddress(_address: address, _account: address) -> Pair:
   """
   @notice Returns pair data based on the address
   @param _address The address to lookup
+  @param _account The account to check the staked and earned balances
   @return Pair struct
   """
-  return self._pairByAddress(_address)
+  return self._byAddress(_address, _address)
 
 @internal
 @view
-def _pairByAddress(_address: address) -> Pair:
+def _byAddress(_address: address, _account: address) -> Pair:
   """
   @notice Returns pair data based on the address
   @param _address The address to lookup
+  @param _account The user account
   @return Pair struct
   """
   assert _address != empty(address), 'Invalid address!'
@@ -181,10 +195,14 @@ def _pairByAddress(_address: address) -> Pair:
   token1: IERC20 = IERC20(pair.token1())
   reserves: uint256[3] = pair.getReserves()
 
+  earned: uint256 = 0
+  acc_balance: uint256 = 0
   gauge_total_supply: uint256 = 0
   emissions: uint256 = 0
 
   if gauge.address != empty(address):
+    acc_balance = gauge.balanceOf(_account)
+    earned = gauge.earned(self.token, _account)
     gauge_total_supply = gauge.totalSupply()
     emissions = gauge.rewardRate(self.token)
 
@@ -198,11 +216,13 @@ def _pairByAddress(_address: address) -> Pair:
     token0_symbol: token0.symbol(),
     token0_decimals: token0.decimals(),
     reserve0: reserves[0],
+    claimable0: pair.claimable0(_account),
 
     token1: token1.address,
     token1_symbol: token1.symbol(),
     token1_decimals: token1.decimals(),
     reserve1: reserves[1],
+    claimable1: pair.claimable1(_account),
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
@@ -213,5 +233,8 @@ def _pairByAddress(_address: address) -> Pair:
 
     emissions: emissions,
     emissions_token: self.token,
-    emissions_token_decimals: token.decimals()
+    emissions_token_decimals: token.decimals(),
+
+    account_balance: acc_balance,
+    account_earned: earned
   })
