@@ -128,15 +128,12 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @return Array for Pair structs
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  count: uint256 = pair_factory.allPairsLength()
+  counted: uint256 = pair_factory.allPairsLength()
 
   col: DynArray[Pair, MAX_PAIRS] = empty(DynArray[Pair, MAX_PAIRS])
 
-  for index in range(MAX_PAIRS):
-    if _offset > index:
-      continue
-
-    if len(col) == _limit or index >= count:
+  for index in range(_offset, _offset + MAX_PAIRS):
+    if len(col) == _limit or index >= counted:
       break
 
     pair_addr: address = pair_factory.allPairs(index)

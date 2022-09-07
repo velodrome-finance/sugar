@@ -163,10 +163,7 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[VeNFT, MAX_RESULTS]:
   ve: IVotingEscrow = IVotingEscrow(self.ve)
   col: DynArray[VeNFT, MAX_RESULTS] = empty(DynArray[VeNFT, MAX_RESULTS])
 
-  for index in range(MAX_RESULTS):
-    if _offset > index:
-      continue
-
+  for index in range(_offset, _offset + MAX_RESULTS):
     if len(col) == _limit:
       break
 
