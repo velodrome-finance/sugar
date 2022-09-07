@@ -31,7 +31,93 @@ and normalize it based on it's relevancy.
 
 ## Usage
 
-The list of _sugar_ contracts will be published on docs.velodrome.finance
+Below is the list of datasets we support.
+
+### Liquidity Pairs Data
+
+`PairsSugar.vy` is deployed at `0xb3c06cc2b7e3185d2db4033efcb2b18eafb89574`
+
+It allows fetching on-chain pairs data.
+The returned data/struct of type `Pair` values represent:
+
+ * `pair_address` - pair contract address
+ * `symbol` - pair symbol
+ * `stable` - pair pool type (`stable = false`, means it's a variable type of pool)
+ * `total_supply` - pair tokens supply
+ * `token0` - pair 1st token address
+ * `token0_symbol` - pair 1st token symbol
+ * `token0_decimals` - pair 1st token decimals
+ * `reserve0` - pair 1st token reserves (nr. of tokens in the contract)
+ * `claimable0` - claimable 1st token from fees (for unstaked positions)
+ * `token1` - pair 2nd token address
+ * `token1_symbol` - pair 2nd token symbol
+ * `token1_decimals` - pair 2nd token decimals
+ * `reserve1` - pair 2nd token reserves (nr. of tokens in the contract)
+ * `claimable1` - claimable 2nd token from fees (for unstaked positions)
+ * `gauge` - pair gauge address
+ * `gauge_total_supply` - pair staked tokens (less/eq than/to pair total supply)
+ * `fee` - pair fees contract address
+ * `bribe` - pair bribes contract address
+ * `wrapped_bribe` - pair wrapped bribe contract address
+ * `emissions` - pair emissions (per second)
+ * `emissions_token` - pair emissions token address
+ * `emissions_token_decimals` - pair emissions token decimals
+ * `account_balance` - account pair staked balance
+ * `account_earned` - account earned emissions for this pair
+
+The available methods are:
+ * `all(_limit: uint256, _offset: uint256, _account: address) -> Pair[]` -
+   returns a paginated list of `Pair` structs.
+ * `byIndex(_index: uint256, _account: address) -> Pair` - returns the
+   `Pair` data for a specific index of a pair.
+ * `byAddress(_address: address, _account: address) -> Pair` - returns the
+   `Pair` data for a specific pair address.
+
+### Vote-Escrow Locked NFT (veNFT) Data
+
+`VeSugar.vy` is deployed at `0x09e7f25462045052c9222463a62bad3258d6c16c`
+
+It allows fetching on-chain veNFT data (including the rewards accrued).
+The returned data/struct of type `VeNFT` values represent:
+
+  * `id` - veNFT token ID
+  * `account` - veNFT token account address
+  * `decimals` - veNFT token decimals
+  * `amount` - veNFT locked amount
+  * `voting_amount` - veNFT voting power
+  * `rebase_amount` - veNFT accrued reabses amount
+  * `expires_at` - veNFT lock expiration timestamp
+  * `voted_at` - veNFT last vote timestamp
+  * `pairs` - veNFT list of voted pair address
+  * `votes` - veNFT list of vote weights casted
+  * `token` - veNFT locked token address
+  * `token_decimals` - veNFT locked token decimals
+  * `token_symbol` - veNFT locked token symbol
+
+The available methods are:
+
+ * `all(_limit: uint256, _offset: uint256) -> VeNFT[]` - returns a paginated
+   list of `veNFT` structs.
+ * `byAccount(_account: address) -> VeNFT[]` - returns a list of `VeNFT` structs
+   for a specific account.
+ * `byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
+   NFT id.
+
+For the veNFT rewards, we return a struct of type `Reward` with the following
+values:
+
+ * `venft_id` - the veNFT id it belongs to
+ * `pair` - the pair address representing the source of the reward
+ * `amount` - the amount of the tokens accrued
+ * `token` - the reward token address
+ * `token_symbol` - the reward token symbol
+ * `token_decimals` - the reward token decimals
+ * `fee` - the fee contract address (if the reward comes from fees)
+ * `bribe` - the bribe contract address (if the reward comes from bribes)
+
+To fetch a list of rewards for a specific veNFT, this method is available:
+
+ * `rewards(_venft_id: uint256) -> Reward[]`
 
 ## Development
 
