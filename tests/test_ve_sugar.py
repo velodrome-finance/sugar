@@ -1,6 +1,7 @@
 import os
 import pytest
-from web3.constants import ADDRESS_ZERO
+
+from collections import namedtuple
 
 
 @pytest.fixture
@@ -8,6 +9,14 @@ def sugar_contract(VeSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
     yield VeSugar.at(os.getenv('VE_SUGAR_ADDRESS'))
+
+
+@pytest.fixture
+def RewardStruct(sugar_contract):
+    method_output = sugar_contract.rewards.abi['outputs'][0]
+    members = list(map(lambda _e: _e['name'], method_output['components']))
+
+    yield namedtuple('RewardStruct', members)
 
 
 def test_initial_state(sugar_contract):
@@ -65,3 +74,13 @@ def test_all_limit_offset(sugar_contract):
 
     assert venft1[0] == second_venft[0]
     assert venft1[1] == second_venft[1]
+
+
+@pytest.mark.skip(reason="no testnet nfts with rewards")
+def test_rewards(sugar_contract, RewardStruct):
+    rewards = list(map(
+        lambda _r: RewardStruct(*_r),
+        sugar_contract.rewards(1)
+    ))
+
+    assert len(rewards) > 0
