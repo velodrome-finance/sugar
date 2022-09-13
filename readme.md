@@ -42,6 +42,7 @@ The returned data/struct of type `Pair` values represent:
 
  * `pair_address` - pair contract address
  * `symbol` - pair symbol
+ * `decimals` - pair decimals
  * `stable` - pair pool type (`stable = false`, means it's a variable type of pool)
  * `total_supply` - pair tokens supply
  * `token0` - pair 1st token address
@@ -72,6 +73,23 @@ The available methods are:
    `Pair` data for a specific index of a pair.
  * `byAddress(_address: address, _account: address) -> Pair` - returns the
    `Pair` data for a specific pair address.
+
+For the pair epoch data, we return a struct of type `PairEpoch` with the
+following values:
+
+ * `ts` - the start of the epoch/week timestamp
+ * `pair_address` - the pair address
+ * `votes` - the amount of the votes for that epoch/week
+ * `bribes` - a list of bribes data, it is a struct of type `PairEpochBribe` with
+   the following values:
+    * `token` - bribe token address
+    * `token_decimals` - bribe token decimals
+    * `token_symbol` - bribe token symbol
+    * `amount` - bribe amount
+
+To fetch a list of epochs for a specific pair, this method is available:
+
+ * `epochsByAddress(_pair: address) -> PairEpoch[]`
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
