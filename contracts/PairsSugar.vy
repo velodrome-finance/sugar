@@ -7,10 +7,14 @@
 # Structs
 
 MAX_PAIRS: constant(uint256) = 1000
+MAX_EPOCHS: constant(uint256) = 200
+MAX_REWARDS: constant(uint256) = 16
+WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct Pair:
   pair_address: address
   symbol: String[100]
+  decimals: uint8
   stable: bool
   total_supply: uint256
 
@@ -39,6 +43,18 @@ struct Pair:
 
   account_balance: uint256
   account_earned: uint256
+
+struct PairEpochBribe:
+  token: address
+  decimals: uint8
+  symbol: String[100]
+  amount: uint256
+
+struct PairEpoch:
+  ts: uint256
+  pair_address: address
+  votes: uint256
+  bribes: DynArray[PairEpochBribe, MAX_REWARDS]
 
 # Our contracts / Interfaces
 
@@ -80,6 +96,14 @@ interface IGauge:
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def rewardRate(_token_addr: address) -> uint256: view
+
+interface IBribe:
+  def getPriorSupplyIndex(_ts: uint256) -> uint256: view
+  def supplyCheckpoints(_index: uint256) -> uint256[2]: view
+  def tokenRewardsPerEpoch(_token: address, _epstart: uint256) -> uint256: view
+  def getEpochStart(_ts: uint256) -> uint256: view
+  def rewardsListLength() -> uint256: view
+  def rewards(_index: uint256) -> address: view
 
 # Vars
 
@@ -206,6 +230,7 @@ def _byAddress(_address: address, _account: address) -> Pair:
   return Pair({
     pair_address: _address,
     symbol: pair.symbol(),
+    decimals: pair.decimals(),
     stable: pair.stable(),
     total_supply: pair.totalSupply(),
 
@@ -235,3 +260,83 @@ def _byAddress(_address: address, _account: address) -> Pair:
     account_balance: acc_balance,
     account_earned: earned
   })
+
+@external
+@view
+def epochsByAddress(_address: address) -> DynArray[PairEpoch, MAX_EPOCHS]:
+  """
+  @notice Returns all pair epoch data based on the address
+  @param _address The address to lookup
+  @return Array for PairEpoch structs
+  """
+  pair: Pair = self._byAddress(_address, msg.sender)
+  bribe: IBribe = IBribe(pair.bribe)
+
+  epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
+    empty(DynArray[PairEpoch, MAX_EPOCHS])
+
+  if pair.bribe == empty(address):
+    return epochs
+
+  last_epoch_ts: uint256 = 0
+
+  for weeks in range(MAX_EPOCHS):
+    if weeks >= MAX_EPOCHS:
+      break
+
+    # Yeah, we're going backwards to return the most recent ones first...
+    supply_ts: uint256 = \
+      bribe.getPriorSupplyIndex(block.timestamp - weeks * WEEK)
+    supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_ts)
+    epoch_ts: uint256 = bribe.getEpochStart(supply_cp[0])
+
+    if last_epoch_ts == epoch_ts:
+      break
+
+    if supply_cp[1] == 0:
+      continue
+
+    epochs.append(PairEpoch({
+      ts: epoch_ts,
+      pair_address: _address,
+      votes: supply_cp[1],
+      bribes: self._epochBribes(epoch_ts, pair.wrapped_bribe),
+    }))
+
+    last_epoch_ts = epoch_ts
+
+  return epochs
+
+@internal
+@view
+def _epochBribes(_ts: uint256, _wrapped_bribe: address) \
+    -> DynArray[PairEpochBribe, MAX_REWARDS]:
+  """
+  @notice Updates a pair epoch data with bribes data
+  @param _ts The pair epoch start timestamp
+  @param _wrapped_bribe The pair wrapped bribe address
+  @return An array of `PairEpoch` structs
+  """
+  bribe: IBribe = IBribe(_wrapped_bribe)
+  bribes_len: uint256 = bribe.rewardsListLength()
+
+  bribes: DynArray[PairEpochBribe, MAX_REWARDS] = \
+    empty(DynArray[PairEpochBribe, MAX_REWARDS])
+
+  # Bribes have a 16 max rewards limit anyway...
+  for bindex in range(MAX_REWARDS):
+    if bindex >= bribes_len:
+      break
+
+    bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
+    bribe_amount: uint256 = bribe.tokenRewardsPerEpoch(bribe_token.address, _ts)
+
+    if bribe_amount > 0:
+      bribes.append(PairEpochBribe({
+        token: bribe_token.address,
+        decimals: bribe_token.decimals(),
+        symbol: bribe_token.symbol(),
+        amount: bribe_amount
+      }))
+
+  return bribes
