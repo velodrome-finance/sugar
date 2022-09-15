@@ -16,6 +16,7 @@ MAX_PAIRS: constant(uint256) = 30
 struct Pair:
   pair_address: address
   symbol: String[100]
+  decimals: uint8
   stable: bool
   total_supply: uint256
 
@@ -106,6 +107,7 @@ interface IPairFactory:
 
 interface IPairsSugar:
   def byIndex(_index: uint256, _account: address) -> Pair: view
+  def byAddress(_address: address, _account: address) -> Pair: view
   def pair_factory() -> address: view
 
 # Vars
@@ -171,94 +173,6 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[VeNFT, MAX_RESULTS]:
       continue
 
     col.append(self._byId(index))
-
-  return col
-
-@external
-@view
-def rewards(_venft_id: uint256) -> DynArray[Reward, MAX_RESULTS]:
-  """
-  @notice Returns a collection of veNFT rewards data
-  @param _venft_id The veNFT ID to get rewards for
-  @return Array for VeNFT Reward structs
-  """
-  psugar: IPairsSugar = IPairsSugar(self.pairs_sugar)
-  col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
-
-  venft_id: uint256 = _venft_id
-
-  for pindex in range(MAX_RESULTS):
-    if pindex >= IPairFactory(self.pair_factory).allPairsLength():
-      break
-
-    pair: Pair = psugar.byIndex(pindex, msg.sender)
-
-    if pair.pair_address == empty(address):
-      break
-
-    if pair.gauge == empty(address):
-      continue
-
-    fee0_amount: uint256 = IBribe(pair.fee).earned(pair.token0, venft_id)
-    fee1_amount: uint256 = IBribe(pair.fee).earned(pair.token1, venft_id)
-
-    if fee0_amount > 0:
-      col.append(
-        Reward({
-          venft_id: venft_id,
-          pair: pair.pair_address,
-          amount: fee0_amount,
-          token: pair.token0,
-          token_symbol: pair.token0_symbol,
-          token_decimals: pair.token0_decimals,
-          fee: pair.fee,
-          bribe: empty(address)
-        })
-      )
-
-    if fee1_amount > 0:
-      col.append(
-        Reward({
-          venft_id: venft_id,
-          pair: pair.pair_address,
-          amount: fee0_amount,
-          token: pair.token1,
-          token_symbol: pair.token1_symbol,
-          token_decimals: pair.token1_decimals,
-          fee: pair.fee,
-          bribe: empty(address)
-        })
-      )
-
-    if pair.wrapped_bribe == empty(address):
-      continue
-
-    bribe: IBribe = IBribe(pair.wrapped_bribe)
-    bribes_len: uint256 = bribe.rewardsListLength()
-
-    # Bribes have a 16 max rewards limit anyway...
-    for bindex in range(MAX_PAIRS):
-      if bindex > bribes_len:
-        break
-
-      bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
-      bribe_amount: uint256 = bribe.earned(bribe_token.address, venft_id)
-
-      if bribe_amount == 0:
-        break
-
-      col.append(
-        Reward({
-          venft_id: venft_id,
-          pair: pair.pair_address,
-          amount: bribe_amount,
-          token: bribe_token.address,
-          token_symbol: bribe_token.symbol(),
-          token_decimals: bribe_token.decimals(),
-          fee: empty(address),
-          bribe: pair.wrapped_bribe
-        })
-      )
 
   return col
 
@@ -359,3 +273,134 @@ def _byId(_id: uint256) -> VeNFT:
     token_decimals: token.decimals(),
     token_symbol: token.symbol()
   })
+
+@external
+@view
+def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
+    -> DynArray[Reward, MAX_RESULTS]:
+  """
+  @notice Returns a collection of veNFT rewards data
+  @param _limit The max amount of pairs to check for rewards
+  @param _offset The amount of pairs to skip checking for rewards
+  @param _venft_id The veNFT ID to get rewards for
+  @return Array for VeNFT Reward structs
+  """
+  psugar: IPairsSugar = IPairsSugar(self.pairs_sugar)
+  col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
+
+  pairs_count: uint256 = IPairFactory(self.pair_factory).allPairsLength()
+
+  for pindex in range(_offset, _offset + MAX_RESULTS):
+    if len(col) == _limit or pindex >= pairs_count:
+      break
+
+    # Do not send the `msg.sender` to save gas...
+    pair: Pair = psugar.byIndex(pindex, empty(address))
+    pcol: DynArray[Reward, MAX_RESULTS] = \
+      self._pairRewards(_venft_id, pair)
+
+    # Basically merge pair rewards to the rest of the rewards...
+    for cindex in range(MAX_RESULTS):
+      if cindex >= len(pcol):
+        break
+
+      col.append(pcol[cindex])
+
+  return col
+
+@external
+@view
+def rewardsByPair(_venft_id: uint256, _pair: address) \
+    -> DynArray[Reward, MAX_RESULTS]:
+  """
+  @notice Returns a collection of veNFT rewards data for a specific pair
+  @param _venft_id The veNFT ID to get rewards for
+  @param _pair The pair address to get rewards for
+  @return Array for VeNFT Reward structs
+  """
+  psugar: IPairsSugar = IPairsSugar(self.pairs_sugar)
+  # Do not send the `msg.sender` to save gas...
+  pair: Pair = psugar.byAddress(_pair, empty(address))
+
+  return self._pairRewards(_venft_id, pair)
+
+@internal
+@view
+def _pairRewards(_venft_id: uint256, _pair: Pair) \
+    -> DynArray[Reward, MAX_RESULTS]:
+  """
+  @notice Returns a collection with veNFT pair rewards
+  @param _venft_id The veNFT ID to get rewards for
+  @param _pair The `Pair` sturct to work with
+  @param _col The array of `Reward` sturcts to update
+  """
+  col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
+
+  if _pair.pair_address == empty(address):
+    return col
+
+  if _pair.gauge == empty(address):
+    return col
+
+  fee0_amount: uint256 = IBribe(_pair.fee).earned(_pair.token0, _venft_id)
+  fee1_amount: uint256 = IBribe(_pair.fee).earned(_pair.token1, _venft_id)
+
+  if fee0_amount > 0:
+    col.append(
+      Reward({
+        venft_id: _venft_id,
+        pair: _pair.pair_address,
+        amount: fee0_amount,
+        token: _pair.token0,
+        token_symbol: _pair.token0_symbol,
+        token_decimals: _pair.token0_decimals,
+        fee: _pair.fee,
+        bribe: empty(address)
+      })
+    )
+
+  if fee1_amount > 0:
+    col.append(
+      Reward({
+        venft_id: _venft_id,
+        pair: _pair.pair_address,
+        amount: fee1_amount,
+        token: _pair.token1,
+        token_symbol: _pair.token1_symbol,
+        token_decimals: _pair.token1_decimals,
+        fee: _pair.fee,
+        bribe: empty(address)
+      })
+    )
+
+  if _pair.wrapped_bribe == empty(address):
+    return col
+
+  bribe: IBribe = IBribe(_pair.wrapped_bribe)
+  bribes_len: uint256 = bribe.rewardsListLength()
+
+  # Bribes have a 16 max rewards limit anyway...
+  for bindex in range(MAX_PAIRS):
+    if bindex >= bribes_len:
+      break
+
+    bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
+    bribe_amount: uint256 = bribe.earned(bribe_token.address, _venft_id)
+
+    if bribe_amount == 0:
+      break
+
+    col.append(
+      Reward({
+        venft_id: _venft_id,
+        pair: _pair.pair_address,
+        amount: bribe_amount,
+        token: bribe_token.address,
+        token_symbol: bribe_token.symbol(),
+        token_decimals: bribe_token.decimals(),
+        fee: empty(address),
+        bribe: _pair.wrapped_bribe
+      })
+    )
+
+  return col
