@@ -89,7 +89,7 @@ following values:
 
 To fetch a list of epochs for a specific pair, this method is available:
 
- * `epochsByAddress(_pair: address) -> PairEpoch[]`
+ * `epochsByAddress(_limit: uint256, _offset: uint256, _address: address) -> PairEpoch[]`
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
