@@ -135,7 +135,8 @@ values:
 
 To fetch a list of rewards for a specific veNFT, this method is available:
 
- * `rewards(_venft_id: uint256) -> Reward[]`
+ * `rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) -> Reward[]`
+ * `rewardsByPair(_venft_id: uint256, _pair: address) -> Reward[]`
 
 ## Development
 
