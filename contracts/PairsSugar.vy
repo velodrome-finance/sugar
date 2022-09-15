@@ -263,9 +263,12 @@ def _byAddress(_address: address, _account: address) -> Pair:
 
 @external
 @view
-def epochsByAddress(_address: address) -> DynArray[PairEpoch, MAX_EPOCHS]:
+def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
+    -> DynArray[PairEpoch, MAX_EPOCHS]:
   """
   @notice Returns all pair epoch data based on the address
+  @param _limit The max amount of epochs to return
+  @param _offset The number of epochs to skip
   @param _address The address to lookup
   @return Array for PairEpoch structs
   """
@@ -280,14 +283,14 @@ def epochsByAddress(_address: address) -> DynArray[PairEpoch, MAX_EPOCHS]:
 
   last_epoch_ts: uint256 = 0
 
-  for weeks in range(MAX_EPOCHS):
-    if weeks >= MAX_EPOCHS:
+  for weeks in range(_offset, _offset + MAX_EPOCHS):
+    if len(epochs) == _limit or weeks >= MAX_EPOCHS:
       break
 
     # Yeah, we're going backwards to return the most recent ones first...
-    supply_ts: uint256 = \
+    supply_index: uint256 = \
       bribe.getPriorSupplyIndex(block.timestamp - weeks * WEEK)
-    supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_ts)
+    supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_index)
     epoch_ts: uint256 = bribe.getEpochStart(supply_cp[0])
 
     if last_epoch_ts == epoch_ts:
