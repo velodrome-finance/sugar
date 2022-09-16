@@ -100,6 +100,7 @@ interface IGauge:
 interface IBribe:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
   def supplyCheckpoints(_index: uint256) -> uint256[2]: view
+  def supplyNumCheckpoints() -> uint256: view
   def tokenRewardsPerEpoch(_token: address, _epstart: uint256) -> uint256: view
   def getEpochStart(_ts: uint256) -> uint256: view
   def rewardsListLength() -> uint256: view
@@ -281,32 +282,36 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   if pair.bribe == empty(address):
     return epochs
 
-  last_epoch_ts: uint256 = 0
+  supplies_count: uint256 = bribe.supplyNumCheckpoints()
+
+  if supplies_count == 0:
+    return epochs
+
+  # Start from future next week and move backwards in time...
+  start_ts: uint256 = block.timestamp + 1 * WEEK
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
     if len(epochs) == _limit or weeks >= MAX_EPOCHS:
       break
 
-    # Yeah, we're going backwards to return the most recent ones first...
-    supply_index: uint256 = \
-      bribe.getPriorSupplyIndex(block.timestamp - weeks * WEEK)
+    # Basically next week start timestamp, minus one second...
+    # We need to find the checkpoint of the closest to the end of the
+    # week timestamp, and in the same time, look up for the start of the
+    # week timestamp to get the rewards!
+    epoch_end_ts: uint256 = bribe.getEpochStart(start_ts - weeks * WEEK) - 1
+    supply_index: uint256 = bribe.getPriorSupplyIndex(epoch_end_ts)
     supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_index)
-    epoch_ts: uint256 = bribe.getEpochStart(supply_cp[0])
+    epoch_start_ts: uint256 = bribe.getEpochStart(supply_cp[0])
 
-    if last_epoch_ts == epoch_ts:
+    if supply_index == bribe.getPriorSupplyIndex(epoch_start_ts - 1):
       break
 
-    if supply_cp[1] == 0:
-      continue
-
     epochs.append(PairEpoch({
-      ts: epoch_ts,
+      ts: epoch_end_ts,
       pair_address: _address,
       votes: supply_cp[1],
-      bribes: self._epochBribes(epoch_ts, pair.wrapped_bribe),
+      bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
     }))
-
-    last_epoch_ts = epoch_ts
 
   return epochs
 
