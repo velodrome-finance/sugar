@@ -46,6 +46,10 @@ struct Pair:
   account_balance: uint256
   account_earned: uint256
 
+struct PairVotes:
+  pair: address
+  weight: uint256
+
 struct VeNFT:
   id: uint256
   account: address
@@ -55,8 +59,7 @@ struct VeNFT:
   rebase_amount: uint256
   expires_at: uint256
   voted_at: uint256
-  pairs: DynArray[address, MAX_PAIRS]
-  votes: DynArray[uint256, MAX_PAIRS]
+  votes: DynArray[PairVotes, MAX_PAIRS]
 
   token: address
   token_decimals: uint8
@@ -229,8 +232,7 @@ def _byId(_id: uint256) -> VeNFT:
   dist: IRewardsDistributor = IRewardsDistributor(self.rewards_distributor)
   token: IERC20 = IERC20(self.token)
 
-  pairs: DynArray[address, MAX_PAIRS] = []
-  votes: DynArray[uint256, MAX_PAIRS] = []
+  votes: DynArray[PairVotes, MAX_PAIRS] = []
   amount: uint128 = 0
   expires_at: uint256 = 0
   amount, expires_at = ve.locked(_id)
@@ -250,8 +252,10 @@ def _byId(_id: uint256) -> VeNFT:
 
     weight: uint256 = voter.votes(_id, pair_address)
 
-    pairs.append(pair_address)
-    votes.append(weight)
+    votes.append(PairVotes({
+      pair: pair_address,
+      weight: weight
+    }))
 
     # Remove _counted_ weight to see if there are other pair votes left...
     left_weight -= weight
@@ -266,7 +270,6 @@ def _byId(_id: uint256) -> VeNFT:
     rebase_amount: dist.claimable(_id),
     expires_at: expires_at,
     voted_at: voter.lastVoted(_id),
-    pairs: pairs,
     votes: votes,
 
     token: token.address,
