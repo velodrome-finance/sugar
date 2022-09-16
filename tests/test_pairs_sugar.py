@@ -31,9 +31,9 @@ def test_byIndex(sugar_contract, PairStruct):
     pair = PairStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
 
     assert pair is not None
-    assert len(pair) == 24
+    assert len(pair) == 25
     assert pair.pair_address is not None
-    assert pair.gauge == ADDRESS_ZERO
+    assert pair.gauge != ADDRESS_ZERO
 
 
 def test_byAddress(sugar_contract, PairStruct):
@@ -41,32 +41,29 @@ def test_byAddress(sugar_contract, PairStruct):
     pair = PairStruct(*sugar_contract.byAddress(second_pair[0], ADDRESS_ZERO))
 
     assert pair is not None
-    assert len(pair) == 24
+    assert len(pair) == 25
     assert pair.pair_address == second_pair.pair_address
     assert pair.gauge != ADDRESS_ZERO
 
 
 def test_all(sugar_contract, PairStruct):
-    account_addr = '0x7F4E5AFD8b68726D7b1453389fbeCf764b72407c'
     first_pair = PairStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
     second_pair = PairStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
     pairs = list(map(
         lambda _p: PairStruct(*_p),
-        sugar_contract.all(200, 0, account_addr)
+        sugar_contract.all(300, 0, ADDRESS_ZERO)
     ))
 
     assert pairs is not None
     assert len(pairs) > 1
 
-    pair1, pair2, pair3 = pairs[0:3]
+    pair1, pair2 = pairs[0:2]
 
     assert pair1.pair_address == first_pair.pair_address
     assert pair1.gauge == first_pair.gauge
 
     assert pair2.pair_address == second_pair.pair_address
     assert pair2.gauge == second_pair.gauge
-
-    assert pair3.account_balance > 0
 
 
 def test_all_limit_offset(sugar_contract, PairStruct):

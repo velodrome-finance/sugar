@@ -106,11 +106,15 @@ The returned data/struct of type `VeNFT` values represent:
   * `rebase_amount` - veNFT accrued reabses amount
   * `expires_at` - veNFT lock expiration timestamp
   * `voted_at` - veNFT last vote timestamp
-  * `pairs` - veNFT list of voted pair address
-  * `votes` - veNFT list of vote weights casted
+  * `votes` - veNFT list of pairs with vote weights casted in the form of
+    `PairVotes`
   * `token` - veNFT locked token address
   * `token_decimals` - veNFT locked token decimals
   * `token_symbol` - veNFT locked token symbol
+
+The pair votes struct values represent:
+  * `pair` - the pair address
+  * `weight` - the vote weights of the vote for the pair
 
 The available methods are:
 
