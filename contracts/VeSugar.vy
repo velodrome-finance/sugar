@@ -391,7 +391,7 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
     bribe_amount: uint256 = bribe.earned(bribe_token.address, _venft_id)
 
     if bribe_amount == 0:
-      break
+      continue
 
     col.append(
       Reward({
