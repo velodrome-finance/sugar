@@ -48,7 +48,7 @@ def test_byIndex(sugar_contract, PairStruct):
     pair = PairStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
 
     assert pair is not None
-    assert len(pair) == 25
+    assert len(pair) == 28
     assert pair.pair_address is not None
     assert pair.gauge != ADDRESS_ZERO
 
@@ -58,7 +58,7 @@ def test_byAddress(sugar_contract, PairStruct):
     pair = PairStruct(*sugar_contract.byAddress(second_pair[0], ADDRESS_ZERO))
 
     assert pair is not None
-    assert len(pair) == 25
+    assert len(pair) == 28
     assert pair.pair_address == second_pair.pair_address
     assert pair.gauge != ADDRESS_ZERO
 
