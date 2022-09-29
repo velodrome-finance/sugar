@@ -43,6 +43,9 @@ struct Pair:
 
   account_balance: uint256
   account_earned: uint256
+  account_staked: uint256
+  account_token0_balance: uint256
+  account_token1_balance: uint256
 
 struct PairEpochBribe:
   token: address
@@ -61,6 +64,7 @@ struct PairEpoch:
 interface IERC20:
   def decimals() -> uint8: view
   def symbol() -> String[100]: view
+  def balanceOf(_account: address) -> uint256: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
@@ -80,6 +84,7 @@ interface IPair:
   def symbol() -> String[100]: view
   def decimals() -> uint8: view
   def stable() -> bool: view
+  def balanceOf(_account: address) -> uint256: view
 
 interface IVoter:
   def _ve() -> address: view
@@ -218,12 +223,12 @@ def _byAddress(_address: address, _account: address) -> Pair:
   reserves: uint256[3] = pair.getReserves()
 
   earned: uint256 = 0
-  acc_balance: uint256 = 0
+  acc_staked: uint256 = 0
   gauge_total_supply: uint256 = 0
   emissions: uint256 = 0
 
   if gauge.address != empty(address):
-    acc_balance = gauge.balanceOf(_account)
+    acc_staked = gauge.balanceOf(_account)
     earned = gauge.earned(self.token, _account)
     gauge_total_supply = gauge.totalSupply()
     emissions = gauge.rewardRate(self.token)
@@ -258,8 +263,11 @@ def _byAddress(_address: address, _account: address) -> Pair:
     emissions_token: self.token,
     emissions_token_decimals: token.decimals(),
 
-    account_balance: acc_balance,
-    account_earned: earned
+    account_balance: pair.balanceOf(_account),
+    account_earned: earned,
+    account_staked: acc_staked,
+    account_token0_balance: token0.balanceOf(_account),
+    account_token1_balance: token1.balanceOf(_account)
   })
 
 @external

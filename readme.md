@@ -35,7 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pairs Data
 
-`PairsSugar.vy` is deployed at `0xBe5cbcD36cFBA87f91EE1c63dA266C3877b8c747`
+`PairsSugar.vy` is deployed at `0xC254E6B3D502EA760774a49780834D5a62F006d9`
 
 It allows fetching on-chain pairs data.
 The returned data/struct of type `Pair` values represent:
@@ -63,8 +63,13 @@ The returned data/struct of type `Pair` values represent:
  * `emissions` - pair emissions (per second)
  * `emissions_token` - pair emissions token address
  * `emissions_token_decimals` - pair emissions token decimals
- * `account_balance` - account pair staked balance
+ * `account_balance` - account LP tokens balance
  * `account_earned` - account earned emissions for this pair
+ * `account_staked` - account pair staked in gauge balance
+ * `account_token0_balance` - account 1st token balance
+ * `account_token1_balance` - account 2nd token balance
+
+---
 
 The available methods are:
  * `all(_limit: uint256, _offset: uint256, _account: address) -> Pair[]` -
@@ -73,6 +78,8 @@ The available methods are:
    `Pair` data for a specific index of a pair.
  * `byAddress(_address: address, _account: address) -> Pair` - returns the
    `Pair` data for a specific pair address.
+
+---
 
 For the pair epoch data, we return a struct of type `PairEpoch` with the
 following values:
@@ -116,6 +123,8 @@ The pair votes struct values represent:
   * `pair` - the pair address
   * `weight` - the vote weights of the vote for the pair
 
+---
+
 The available methods are:
 
  * `all(_limit: uint256, _offset: uint256) -> VeNFT[]` - returns a paginated
@@ -124,6 +133,8 @@ The available methods are:
    for a specific account.
  * `byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
    NFT id.
+
+---
 
 For the veNFT rewards, we return a struct of type `Reward` with the following
 values:
@@ -153,7 +164,6 @@ Next start the container with existing environment variables:
 ```sh
 docker run --env-file=env.example --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
 ```
-
 The environment has Brownie and Vyper already installed.
 
 To run the tests inside the container, use:
