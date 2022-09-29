@@ -45,6 +45,9 @@ struct Pair:
 
   account_balance: uint256
   account_earned: uint256
+  account_staked: uint256
+  account_token0_balance: uint256
+  account_token1_balance: uint256
 
 struct PairVotes:
   pair: address
