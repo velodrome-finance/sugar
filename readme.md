@@ -100,7 +100,7 @@ To fetch a list of epochs for a specific pair, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x46763309fcA5f35c669496a36A9404De9692F0f2`
+`VeSugar.vy` is deployed at `0x0541A9f74Bf67626056784b3Bc56d990F360FD58`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
