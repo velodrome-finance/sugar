@@ -68,6 +68,9 @@ struct VeNFT:
   token_decimals: uint8
   token_symbol: String[100]
 
+  voted: bool
+  attachments: uint256
+
 struct Reward:
   venft_id: uint256
   pair: address
@@ -102,6 +105,8 @@ interface IVotingEscrow:
   def balanceOfNFT(_venft_id: uint256) -> uint256: view
   def locked(_venft_id: uint256) -> (uint128, uint256): view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
+  def voted(_venft_id: uint256) -> bool: view
+  def attachments(_venft_id: uint256) -> uint256: view
 
 interface IBribe:
   def rewardsListLength() -> uint256: view
@@ -278,7 +283,10 @@ def _byId(_id: uint256) -> VeNFT:
 
     token: token.address,
     token_decimals: token.decimals(),
-    token_symbol: token.symbol()
+    token_symbol: token.symbol(),
+
+    voted: ve.voted(_id),
+    attachments: ve.attachments(_id)
   })
 
 @external
