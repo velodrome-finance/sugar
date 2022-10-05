@@ -107,6 +107,7 @@ interface IBribe:
   def rewardsListLength() -> uint256: view
   def rewards(_index: uint256) -> address: view
   def earned(_token: address, _venft_id: uint256) -> uint256: view
+  def periodFinish(_token: address) -> uint256: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
@@ -391,6 +392,11 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
       break
 
     bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
+
+    # If the token was never a bribe, skip it, or `earned()` will nuke...
+    if bribe.periodFinish(bribe_token.address) == 0:
+      continue
+
     bribe_amount: uint256 = bribe.earned(bribe_token.address, _venft_id)
 
     if bribe_amount == 0:
