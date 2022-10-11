@@ -195,7 +195,7 @@ def byAddress(_address: address, _account: address) -> Pair:
   @param _account The account to check the staked and earned balances
   @return Pair struct
   """
-  return self._byAddress(_address, _address)
+  return self._byAddress(_address, _account)
 
 @internal
 @view
