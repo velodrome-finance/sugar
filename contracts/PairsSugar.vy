@@ -75,9 +75,10 @@ interface IWrappedBribeFactory:
   def voter() -> address: view
 
 interface IPair:
-  def getReserves() -> uint256[3]: view
   def token0() -> address: view
   def token1() -> address: view
+  def reserve0() -> uint256: view
+  def reserve1() -> uint256: view
   def claimable0(_account: address) -> uint256: view
   def claimable1(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
@@ -220,7 +221,6 @@ def _byAddress(_address: address, _account: address) -> Pair:
 
   token0: IERC20 = IERC20(pair.token0())
   token1: IERC20 = IERC20(pair.token1())
-  reserves: uint256[3] = pair.getReserves()
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
@@ -243,13 +243,13 @@ def _byAddress(_address: address, _account: address) -> Pair:
     token0: token0.address,
     token0_symbol: token0.symbol(),
     token0_decimals: token0.decimals(),
-    reserve0: reserves[0],
+    reserve0: pair.reserve0(),
     claimable0: pair.claimable0(_account),
 
     token1: token1.address,
     token1_symbol: token1.symbol(),
     token1_decimals: token1.decimals(),
-    reserve1: reserves[1],
+    reserve1: pair.reserve1(),
     claimable1: pair.claimable1(_account),
 
     gauge: gauge.address,
