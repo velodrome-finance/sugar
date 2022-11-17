@@ -58,7 +58,7 @@ struct PairEpoch:
   pair_address: address
   votes: uint256
   bribes: DynArray[PairEpochBribe, MAX_REWARDS]
-  emissions: uint256
+  next_week_emissions: uint256
 
 # Our contracts / Interfaces
 
@@ -322,7 +322,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      emissions: supply_cp[1]/self.escrow.totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000)  )
+      next_week_emissions: supply_cp[1]/self.escrow.totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000) // WEEK + 1)
     }))
 
   return epochs
