@@ -285,6 +285,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   """
   pair: Pair = self._byAddress(_address, msg.sender)
   bribe: IBribe = IBribe(pair.bribe)
+  voter: IVoter = IVoter(self.voter)
 
   epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
     empty(DynArray[PairEpoch, MAX_EPOCHS])
@@ -321,7 +322,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      next_week_emissions: supply_cp[1]/IVotingEscrow(self.voter._ve()).totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000) / WEEK + 2)
+      next_week_emissions: supply_cp[1]/IVotingEscrow(voter._ve()).totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000) / WEEK + 2)
     }))
 
   return epochs
