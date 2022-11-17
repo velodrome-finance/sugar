@@ -97,7 +97,7 @@ interface IVoter:
 
 interface IVotingEscrow:
   def token() -> address: view
-  def totalSupplyAtT() -> uint256: view
+  def totalSupplyAtT(ts: uint256) -> uint256: view
 
 interface IGauge:
   def earned(_token: address, _account: address) -> uint256: view
