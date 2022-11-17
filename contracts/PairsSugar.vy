@@ -147,7 +147,6 @@ def setup(_voter: address, _wrapped_bribe_factory: address):
   self.voter = _voter
   self.pair_factory = voter.factory()
   self.token = IVotingEscrow(voter._ve()).token()
-  self.escrow = IVotingEscrow(voter._ve())
   self.wrapped_bribe_factory = _wrapped_bribe_factory
 
 @external
@@ -322,7 +321,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      next_week_emissions: supply_cp[1]/self.escrow.totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000) / WEEK + 2)
+      next_week_emissions: supply_cp[1]/IVotingEscrow(self.voter._ve()).totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000) / WEEK + 2)
     }))
 
   return epochs
