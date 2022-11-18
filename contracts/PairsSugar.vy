@@ -284,7 +284,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   """
   pair: Pair = self._byAddress(_address, msg.sender)
   bribe: IBribe = IBribe(pair.bribe)
-  gauge: IGauge = IGauge(voter.gauges(_address))
+  gauge: IGauge = IGauge(pair.gauge)
 
   epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
     empty(DynArray[PairEpoch, MAX_EPOCHS])
