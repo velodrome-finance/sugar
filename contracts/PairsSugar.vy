@@ -316,9 +316,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     emissions_cp: uint256[2] = gauge.getPriorRewardPerToken(
       self.token, epoch_end_ts
     )
-    gauge_supply_cp: uint256[2] = gauge.getPriorRewardPerToken(
-      self.token, emissions_cp[0]
-    )
+    gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints[gauge.getPriorSupplyIndex(emissions_cp[0])]
 
     if supply_index == bribe.getPriorSupplyIndex(epoch_start_ts - 1):
       break
