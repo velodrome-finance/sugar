@@ -300,6 +300,10 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
 
   # Start from future next week and move backwards in time...
   start_ts: uint256 = block.timestamp + 1 * WEEK
+  next_epoch_i: uint256 = (block.timestamp - _offset * WEEK - 1654128000) / WEEK + 2
+  emission: uint256 = 15000000
+  for i in range(next_epoch_i):
+     emission = emission * 99/100
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
     if len(epochs) == _limit or weeks >= MAX_EPOCHS:
@@ -322,8 +326,10 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      next_week_emissions: supply_cp[1]/IVotingEscrow(voter._ve()).totalSupplyAtT(epoch_end_ts) * (15000000*1e18) * 0.99^( (block.timestamp - weeks * WEEK - 1654128000) / WEEK + 2)
+      next_week_emissions: supply_cp[1] * emission / IVotingEscrow(voter._ve()).totalSupplyAtT(epoch_end_ts) 
     }))
+
+    emission = emission * 100/99
 
   return epochs
 
