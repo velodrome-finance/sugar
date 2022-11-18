@@ -302,8 +302,11 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   start_ts: uint256 = block.timestamp + 1 * WEEK
   next_epoch_i: uint256 = (block.timestamp - _offset * WEEK - 1654128000) / WEEK + 2
   emission: uint256 = 15000000
-  for i in range(0, next_epoch_i):
+  for i in range(500):
+     if i >= next_epoch_i:
+        break
      emission = emission * 99/100
+     
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
     if len(epochs) == _limit or weeks >= MAX_EPOCHS:
