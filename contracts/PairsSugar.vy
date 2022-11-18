@@ -58,7 +58,7 @@ struct PairEpoch:
   pair_address: address
   votes: uint256
   bribes: DynArray[PairEpochBribe, MAX_REWARDS]
-  next_week_emissions: uint256
+  emissions: uint256
 
 # Our contracts / Interfaces
 
@@ -97,7 +97,6 @@ interface IVoter:
 
 interface IVotingEscrow:
   def token() -> address: view
-  def totalSupplyAtT(ts: uint256) -> uint256: view
 
 interface IGauge:
   def earned(_token: address, _account: address) -> uint256: view
@@ -285,7 +284,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   """
   pair: Pair = self._byAddress(_address, msg.sender)
   bribe: IBribe = IBribe(pair.bribe)
-  voter: IVoter = IVoter(self.voter)
+  gauge: IGauge = IGauge(voter.gauges(_address))
 
   epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
     empty(DynArray[PairEpoch, MAX_EPOCHS])
@@ -300,13 +299,6 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
 
   # Start from future next week and move backwards in time...
   start_ts: uint256 = block.timestamp + 1 * WEEK
-  next_epoch_i: uint256 = (block.timestamp - _offset * WEEK - 1654128000) / WEEK + 2
-  emission: uint256 = 15000000
-  for i in range(500):
-     if i >= next_epoch_i:
-        break
-     emission = emission * 99/100
-     
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
     if len(epochs) == _limit or weeks >= MAX_EPOCHS:
@@ -321,6 +313,13 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_index)
     epoch_start_ts: uint256 = bribe.getEpochStart(supply_cp[0])
 
+    emissions_cp: uint256[2] = gauge.getPriorRewardPerToken(
+      self.token, epoch_end_ts
+    )
+    gauge_supply_cp: uint256[2] = gauge.getPriorRewardPerToken(
+      self.token, emissions_cp[0]
+    )
+
     if supply_index == bribe.getPriorSupplyIndex(epoch_start_ts - 1):
       break
 
@@ -329,10 +328,8 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      next_week_emissions: supply_cp[1] * emission / IVotingEscrow(voter._ve()).totalSupplyAtT(epoch_end_ts) 
+      emissions: emissions_cp[1] * gauge_supply_cp[1] * WEEK
     }))
-
-    emission = emission * 100/99
 
   return epochs
 
