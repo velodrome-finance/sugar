@@ -31,7 +31,7 @@ def PairEpochStruct(sugar_contract):
 @pytest.fixture
 def PairEpochBribeStruct(sugar_contract):
     pair_epoch_comp = sugar_contract.epochsByAddress.abi['outputs'][0]
-    pe_bribe_comp = pair_epoch_comp['components'][3]
+    pe_bribe_comp = pair_epoch_comp['components'][4]
     members = list(map(lambda _e: _e['name'], pe_bribe_comp['components']))
 
     yield namedtuple('PairEpochBribeStruct', members)
@@ -108,11 +108,11 @@ def test_epochsByAddress_limit_offset(
     first_pair = PairStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
     pair_epochs = list(map(
         lambda _p: PairEpochStruct(*_p),
-        sugar_contract.epochsByAddress(100, 0, first_pair.pair_address)
+        sugar_contract.epochsByAddress(100, 3, first_pair.pair_address)
     ))
 
     assert pair_epochs is not None
-    assert len(pair_epochs) > 16
+    assert len(pair_epochs) > 10
 
     epoch = pair_epochs[1]
     epoch_bribes = list(map(
@@ -122,6 +122,7 @@ def test_epochsByAddress_limit_offset(
 
     assert epoch.pair_address == first_pair.pair_address
     assert epoch.votes > 0
+    assert epoch.emissions > 0
 
     if len(epoch_bribes) > 0:
         assert epoch_bribes[0].amount > 0
