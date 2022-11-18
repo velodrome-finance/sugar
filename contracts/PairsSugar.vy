@@ -103,7 +103,11 @@ interface IGauge:
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def rewardRate(_token_addr: address) -> uint256: view
-
+  def getPriorRewardPerToken(_token_addr: address, _ts: uint256) \
+    -> uint256[2]: view
+  def supplyCheckpoints(_index: uint256) -> uint256[2]: view
+  def getPriorSupplyIndex(_ts: uint256) -> uint256: view
+    
 interface IBribe:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
   def supplyCheckpoints(_index: uint256) -> uint256[2]: view
@@ -316,7 +320,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     emissions_cp: uint256[2] = gauge.getPriorRewardPerToken(
       self.token, epoch_end_ts
     )
-    gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints[gauge.getPriorSupplyIndex(emissions_cp[0])]
+    gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints(gauge.getPriorSupplyIndex(emissions_cp[0]))
 
     if supply_index == bribe.getPriorSupplyIndex(epoch_start_ts - 1):
       break
