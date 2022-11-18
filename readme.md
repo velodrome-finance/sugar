@@ -81,12 +81,13 @@ The available methods are:
 
 ---
 
-For the pair epoch data, we return a struct of type `PairEpoch` with the
-following values:
+For the pair epoch data we return, starting with most recent epoch, a struct of
+type `PairEpoch` with the following values:
 
  * `ts` - the start of the epoch/week timestamp
  * `pair_address` - the pair address
  * `votes` - the amount of the votes for that epoch/week
+ * `emissions` - emissions per second for that epoch/week
  * `bribes` - a list of bribes data, it is a struct of type `PairEpochBribe` with
    the following values:
     * `token` - bribe token address

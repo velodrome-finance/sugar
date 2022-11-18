@@ -10,6 +10,9 @@ MAX_PAIRS: constant(uint256) = 1000
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
+PRECISION: constant(uint256) = 10**18
+# See: `RewardsDistributor::start_time()`
+EPOCHS_STARTED_AT: constant(uint256) = 1653523200
 
 struct Pair:
   pair_address: address
@@ -57,6 +60,7 @@ struct PairEpoch:
   ts: uint256
   pair_address: address
   votes: uint256
+  emissions: uint256
   bribes: DynArray[PairEpochBribe, MAX_REWARDS]
 
 # Our contracts / Interfaces
@@ -102,18 +106,19 @@ interface IGauge:
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def rewardRate(_token_addr: address) -> uint256: view
+  def getPriorRewardPerToken(_token_addr: address, _ts: uint256) \
+    -> uint256[2]: view
+  def getPriorSupplyIndex(_ts: uint256) -> uint256: view
+  def supplyCheckpoints(_index: uint256) -> uint256[2]: view
 
 interface IBribe:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
   def supplyCheckpoints(_index: uint256) -> uint256[2]: view
-  def supplyNumCheckpoints() -> uint256: view
   def tokenRewardsPerEpoch(_token: address, _epstart: uint256) -> uint256: view
-  def getEpochStart(_ts: uint256) -> uint256: view
   def rewardsListLength() -> uint256: view
   def rewards(_index: uint256) -> address: view
 
 # Vars
-
 pair_factory: public(address)
 voter: public(address)
 wrapped_bribe_factory: public(address)
@@ -282,44 +287,61 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   @return Array for PairEpoch structs
   """
   pair: Pair = self._byAddress(_address, msg.sender)
-  bribe: IBribe = IBribe(pair.bribe)
 
   epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
     empty(DynArray[PairEpoch, MAX_EPOCHS])
 
-  if pair.bribe == empty(address):
+  if pair.gauge == empty(address):
     return epochs
 
-  supplies_count: uint256 = bribe.supplyNumCheckpoints()
+  gauge: IGauge = IGauge(pair.gauge)
+  bribe: IBribe = IBribe(pair.bribe)
 
-  if supplies_count == 0:
-    return epochs
-
-  # Start from future next week and move backwards in time...
-  start_ts: uint256 = block.timestamp + 1 * WEEK
+  curr_epoch_start_ts: uint256 = block.timestamp - (block.timestamp % WEEK)
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
+    epoch_start_ts: uint256 = curr_epoch_start_ts - (weeks * WEEK)
+    epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
+
     if len(epochs) == _limit or weeks >= MAX_EPOCHS:
       break
 
-    # Basically next week start timestamp, minus one second...
-    # We need to find the checkpoint of the closest to the end of the
-    # week timestamp, and in the same time, look up for the start of the
-    # week timestamp to get the rewards!
-    epoch_end_ts: uint256 = bribe.getEpochStart(start_ts - weeks * WEEK) - 1
-    supply_index: uint256 = bribe.getPriorSupplyIndex(epoch_end_ts)
-    supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_index)
-    epoch_start_ts: uint256 = bribe.getEpochStart(supply_cp[0])
+    gauge_supply_index: uint256 = gauge.getPriorSupplyIndex(epoch_end_ts)
+    gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints(gauge_supply_index)
 
-    if supply_index == bribe.getPriorSupplyIndex(epoch_start_ts - 1):
-      break
+    bribe_supply_cp: uint256[2] = bribe.supplyCheckpoints(
+      bribe.getPriorSupplyIndex(epoch_end_ts)
+    )
+
+    # We need the closest latest two Gauge reward rate per token checkpoints
+    # since the reward rate per token is derived from:
+    #   prev_cp.rewardRatePerToken += (
+    #     curr_cp.timestamp - prev_cp.timestamp
+    #   ) * curr_rewardRate / curr_supply
+    rrpt_cp: uint256[2] = gauge.getPriorRewardPerToken(
+      self.token, gauge_supply_cp[0]
+    )
+    rrpt_prev_cp: uint256[2] = gauge.getPriorRewardPerToken(
+      self.token, gauge_supply_cp[0] - 1
+    )
+
+    ts_delta: uint256 = rrpt_cp[1] - rrpt_prev_cp[1]
+    rrpt_delta: uint256 = rrpt_cp[0] - rrpt_prev_cp[0]
+
+    if ts_delta == 0:
+      continue
 
     epochs.append(PairEpoch({
-      ts: epoch_end_ts,
+      ts: epoch_start_ts,
       pair_address: _address,
-      votes: supply_cp[1],
+      votes: bribe_supply_cp[1],
+      emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
     }))
+
+    # If we reach the last supply index...
+    if gauge_supply_index == 0:
+      break
 
   return epochs
 
@@ -347,12 +369,14 @@ def _epochBribes(_ts: uint256, _wrapped_bribe: address) \
     bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
     bribe_amount: uint256 = bribe.tokenRewardsPerEpoch(bribe_token.address, _ts)
 
-    if bribe_amount > 0:
-      bribes.append(PairEpochBribe({
-        token: bribe_token.address,
-        decimals: bribe_token.decimals(),
-        symbol: bribe_token.symbol(),
-        amount: bribe_amount
-      }))
+    if bribe_amount == 0:
+      continue
+
+    bribes.append(PairEpochBribe({
+      token: bribe_token.address,
+      decimals: bribe_token.decimals(),
+      symbol: bribe_token.symbol(),
+      amount: bribe_amount
+    }))
 
   return bribes
