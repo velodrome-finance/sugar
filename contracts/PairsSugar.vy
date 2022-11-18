@@ -330,7 +330,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      emissions: emissions_cp[1] * gauge_supply_cp[1] * WEEK
+      emissions: emissions_cp[1] / 1000000000000000000 * gauge_supply_cp[1] * WEEK 
     }))
 
   return epochs
