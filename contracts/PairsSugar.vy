@@ -317,10 +317,20 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     supply_cp: uint256[2] = bribe.supplyCheckpoints(supply_index)
     epoch_start_ts: uint256 = bribe.getEpochStart(supply_cp[0])
 
-    emissions_cp: uint256[2] = gauge.getPriorRewardPerToken(
+    ## rwPerToken, ts
+    last_reward_cp: uint256[2] = gauge.getPriorRewardPerToken(
       self.token, epoch_end_ts
     )
-    gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints(gauge.getPriorSupplyIndex(emissions_cp[0]))
+
+    second_last_reward_cp: uint256[2] = gauge.getPriorRewardPerToken(
+      self.token, last_reward_cp[1] - 1
+    )
+
+    t_delta: uint256 = last_reward_cp[1] - second_last_reward_cp[1]
+    rw_delta: uint256 = last_reward_cp[0] - second_last_reward_cp[0]
+
+    ## ts, supply
+    gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints(gauge.getPriorSupplyIndex(second_last_reward_cp[1]))
 
     if supply_index == bribe.getPriorSupplyIndex(epoch_start_ts - 1):
       break
@@ -330,7 +340,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: supply_cp[1],
       bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
-      emissions: (gauge_supply_cp[1] / 1000000000000 * emissions_cp[1] * WEEK ) /1000000
+      emissions: (rw_delta * gauge_supply_cp[1] * WEEK / t_delta)/10**36
     }))
 
   return epochs
