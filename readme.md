@@ -172,4 +172,3 @@ The environment has Brownie and Vyper already installed.
 To run the tests inside the container, use:
 ```sh
 brownie test --network=optimism-test
-```

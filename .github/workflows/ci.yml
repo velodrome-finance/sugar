@@ -13,4 +13,4 @@ jobs:
       run: docker build ./ -t velodrome/sugar
 
     - name: Runs code QA and tests
-      run: docker run --rm --env-file=env.example -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie networks modify optimism-main host=https://rpc.ankr.com/optimism && brownie test --network=optimism-main'
+      run: docker run --rm --env-file=env.example -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test --network=optimism-main'
