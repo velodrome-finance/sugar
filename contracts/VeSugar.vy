@@ -113,8 +113,6 @@ interface IBribe:
   def rewards(_index: uint256) -> address: view
   def earned(_token: address, _venft_id: uint256) -> uint256: view
   def periodFinish(_token: address) -> uint256: view
-  def supplyCheckpoints(_index: uint256) -> uint256[2]: view
-  def supplyNumCheckpoints() -> uint256: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
