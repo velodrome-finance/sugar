@@ -11,3 +11,4 @@ WORKDIR /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN brownie networks modify optimism-test host=https://goerli.optimism.io
+RUN brownie networks modify optimism-main host=https://optimism-mainnet.wallet.coinbase.com
