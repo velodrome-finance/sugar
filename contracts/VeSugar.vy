@@ -113,7 +113,6 @@ interface IBribe:
   def rewards(_index: uint256) -> address: view
   def earned(_token: address, _venft_id: uint256) -> uint256: view
   def periodFinish(_token: address) -> uint256: view
-  def underlying_bribe() -> address: view
   def supplyCheckpoints(_index: uint256) -> uint256[2]: view
   def supplyNumCheckpoints() -> uint256: view
 
@@ -397,32 +396,14 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
   bribe: IBribe = IBribe(_pair.wrapped_bribe)
   bribes_len: uint256 = bribe.rewardsListLength()
 
+  orig_bribe: IBribe = IBribe(_pair.bribe)
+
   # Bribes have a 16 max rewards limit anyway...
   for bindex in range(MAX_PAIRS):
     if bindex >= bribes_len:
       break
 
     bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
-
-    # TODO: Cleanup with the next release of wrapped bribes...
-    orig_bribe: IBribe = IBribe(bribe.underlying_bribe())
-    zero_supply_epochs: uint256 = 0
-    supplies_count: uint256 = orig_bribe.supplyNumCheckpoints()
-
-    for cpindex in range(MAX_RESULTS):
-      if cpindex >= supplies_count:
-        break
-
-      cp: uint256[2] = orig_bribe.supplyCheckpoints(cpindex)
-
-      # ... aka last checkpoint supply...
-      if cp[1] == 0:
-        zero_supply_epochs += 1
-
-    # If the token was never a bribe, skip it, or `earned()` will nuke...
-    if zero_supply_epochs > 0:
-      continue
-
     bribe_amount: uint256 = bribe.earned(bribe_token.address, _venft_id)
 
     if bribe_amount == 0:
