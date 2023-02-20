@@ -304,9 +304,10 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
 
   pairs_count: uint256 = IPairFactory(self.pair_factory).allPairsLength()
+  counted: uint256 = 0
 
   for pindex in range(_offset, _offset + MAX_RESULTS):
-    if len(col) == _limit or pindex >= pairs_count:
+    if counted == _limit or pindex >= pairs_count:
       break
 
     # Do not send the `msg.sender` to save gas...
@@ -320,6 +321,8 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
         break
 
       col.append(pcol[cindex])
+
+    counted += 1
 
   return col
 
