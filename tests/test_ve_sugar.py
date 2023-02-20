@@ -96,7 +96,7 @@ def test_all_limit_offset(sugar_contract, VeNFTStruct):
 def test_rewards(sugar_contract, RewardStruct):
     rewards = list(map(
         lambda _r: RewardStruct(*_r),
-        sugar_contract.rewards(1, 0, 1)
+        sugar_contract.rewards(100, 0, 1)
     ))
 
     assert len(rewards) > 0
