@@ -62,6 +62,7 @@ struct PairEpoch:
   votes: uint256
   emissions: uint256
   bribes: DynArray[PairEpochBribe, MAX_REWARDS]
+  fees: DynArray[PairEpochBribe, MAX_REWARDS]
 
 # Our contracts / Interfaces
 
@@ -115,6 +116,8 @@ interface IBribe:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
   def supplyCheckpoints(_index: uint256) -> uint256[2]: view
   def tokenRewardsPerEpoch(_token: address, _epstart: uint256) -> uint256: view
+  def getPriorRewardPerToken(_token: address, _epstart: uint256) \
+    -> uint256[2]: view
   def rewardsListLength() -> uint256: view
   def rewards(_index: uint256) -> address: view
 
@@ -286,16 +289,23 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   @param _address The address to lookup
   @return Array for PairEpoch structs
   """
-  pair: Pair = self._byAddress(_address, msg.sender)
+  assert _address != empty(address), 'Invalid address!'
 
   epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
     empty(DynArray[PairEpoch, MAX_EPOCHS])
 
-  if pair.gauge == empty(address):
+  voter: IVoter = IVoter(self.voter)
+  gauge: IGauge = IGauge(voter.gauges(_address))
+
+  if gauge.address == empty(address):
     return epochs
 
-  gauge: IGauge = IGauge(pair.gauge)
-  bribe: IBribe = IBribe(pair.bribe)
+  bribe: IBribe = IBribe(voter.external_bribes(gauge.address))
+
+  wrapped_bribe_factory: IWrappedBribeFactory = \
+    IWrappedBribeFactory(self.wrapped_bribe_factory)
+  wrapped_bribe_addr: address = \
+    wrapped_bribe_factory.oldBribeToNew(bribe.address)
 
   curr_epoch_start_ts: uint256 = block.timestamp - (block.timestamp % WEEK)
 
@@ -336,7 +346,10 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       pair_address: _address,
       votes: bribe_supply_cp[1],
       emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
-      bribes: self._epochBribes(epoch_start_ts, pair.wrapped_bribe),
+      bribes: self._epochBribes(epoch_start_ts, wrapped_bribe_addr),
+      fees: self._epochFees(
+        epoch_start_ts, voter.internal_bribes(gauge.address)
+      )
     }))
 
     # If we reach the last supply index...
@@ -350,16 +363,19 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
 def _epochBribes(_ts: uint256, _wrapped_bribe: address) \
     -> DynArray[PairEpochBribe, MAX_REWARDS]:
   """
-  @notice Updates a pair epoch data with bribes data
+  @notice Returns pair bribes
   @param _ts The pair epoch start timestamp
   @param _wrapped_bribe The pair wrapped bribe address
   @return An array of `PairEpoch` structs
   """
-  bribe: IBribe = IBribe(_wrapped_bribe)
-  bribes_len: uint256 = bribe.rewardsListLength()
-
   bribes: DynArray[PairEpochBribe, MAX_REWARDS] = \
     empty(DynArray[PairEpochBribe, MAX_REWARDS])
+
+  if _wrapped_bribe == empty(address):
+    return bribes
+
+  bribe: IBribe = IBribe(_wrapped_bribe)
+  bribes_len: uint256 = bribe.rewardsListLength()
 
   # Bribes have a 16 max rewards limit anyway...
   for bindex in range(MAX_REWARDS):
@@ -380,3 +396,38 @@ def _epochBribes(_ts: uint256, _wrapped_bribe: address) \
     }))
 
   return bribes
+
+@internal
+@view
+def _epochFees(_ts: uint256, _fee: address) \
+    -> DynArray[PairEpochBribe, MAX_REWARDS]:
+  """
+  @notice Returns pair fees
+  @param _ts The pair epoch start timestamp
+  @param _fee The pair fee address
+  @return An array of `PairEpochBribe` structs
+  """
+  fees: DynArray[PairEpochBribe, MAX_REWARDS] = \
+    empty(DynArray[PairEpochBribe, MAX_REWARDS])
+
+  if _fee == empty(address):
+    return fees
+
+  fee: IBribe = IBribe(_fee)
+  fees_len: uint256 = fee.rewardsListLength()
+
+  for findex in range(2):
+    fee_token: IERC20 = IERC20(fee.rewards(findex))
+    fee_data: uint256[2] = fee.getPriorRewardPerToken(fee_token.address, _ts)
+
+    if fee_data[0] == 0:
+      continue
+
+    fees.append(PairEpochBribe({
+      token: fee_token.address,
+      decimals: fee_token.decimals(),
+      symbol: fee_token.symbol(),
+      amount: fee_data[0]
+    }))
+
+  return fees
