@@ -280,7 +280,117 @@ def _byAddress(_address: address, _account: address) -> Pair:
 
 @external
 @view
+def epochsLatest(_limit: uint256, _offset: uint256) \
+    -> DynArray[PairEpoch, MAX_PAIRS]:
+  """
+  @notice Returns all pairs latest epoch data (up to 200 items)
+  @param _limit The max amount of pairs to check for epochs
+  @param _offset The amount of pairs to skip
+  @return Array for PairEpoch structs
+  """
+  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  pairs_count: uint256 = pair_factory.allPairsLength()
+  counted: uint256 = 0
+
+  col: DynArray[PairEpoch, MAX_PAIRS] = empty(DynArray[PairEpoch, MAX_PAIRS])
+
+  for index in range(_offset, _offset + MAX_PAIRS):
+    if counted == _limit or index >= pairs_count:
+      break
+
+    pair_addr: address = pair_factory.allPairs(index)
+
+    latest: PairEpoch = self._epochLatestByAddress(pair_addr)
+
+    if latest.ts != 0:
+      col.append(latest)
+      counted += 1
+
+  return col
+
+@external
+@view
 def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
+    -> DynArray[PairEpoch, MAX_EPOCHS]:
+  """
+  @notice Returns all pair epoch data based on the address
+  @param _limit The max amount of epochs to return
+  @param _offset The number of epochs to skip
+  @param _address The address to lookup
+  @return Array for PairEpoch structs
+  """
+  return self._epochsByAddress(_limit, _offset, _address)
+
+@internal
+@view
+def _epochLatestByAddress(_address: address) -> PairEpoch:
+  """
+  @notice Returns latest pair epoch data based on the address
+  @param _address The address to lookup
+  @return A PairEpoch struct
+  """
+  assert _address != empty(address), 'Invalid address!'
+
+  voter: IVoter = IVoter(self.voter)
+  gauge: IGauge = IGauge(voter.gauges(_address))
+
+  if gauge.address == empty(address):
+    return empty(PairEpoch)
+
+  bribe: IBribe = IBribe(voter.external_bribes(gauge.address))
+
+  wrapped_bribe_factory: IWrappedBribeFactory = \
+    IWrappedBribeFactory(self.wrapped_bribe_factory)
+  wrapped_bribe_addr: address = \
+    wrapped_bribe_factory.oldBribeToNew(bribe.address)
+
+  # TODO: DRY things up
+  epoch_start_ts: uint256 = block.timestamp - (block.timestamp % WEEK)
+  epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
+
+  gauge_supply_index: uint256 = gauge.getPriorSupplyIndex(epoch_end_ts)
+
+  if gauge_supply_index == 0:
+    return empty(PairEpoch)
+
+  gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints(gauge_supply_index)
+
+  bribe_supply_cp: uint256[2] = bribe.supplyCheckpoints(
+    bribe.getPriorSupplyIndex(epoch_end_ts)
+  )
+
+  # We need the closest latest two Gauge reward rate per token checkpoints
+  # since the reward rate per token is derived from:
+  #   prev_cp.rewardRatePerToken += (
+  #     curr_cp.timestamp - prev_cp.timestamp
+  #   ) * curr_rewardRate / curr_supply
+  rrpt_cp: uint256[2] = gauge.getPriorRewardPerToken(
+    self.token, gauge_supply_cp[0]
+  )
+  rrpt_prev_cp: uint256[2] = gauge.getPriorRewardPerToken(
+    self.token, gauge_supply_cp[0] - 1
+  )
+
+  ts_delta: uint256 = rrpt_cp[1] - rrpt_prev_cp[1]
+  rrpt_delta: uint256 = rrpt_cp[0] - rrpt_prev_cp[0]
+
+  if ts_delta == 0:
+    return empty(PairEpoch)
+
+  return PairEpoch({
+    ts: epoch_start_ts,
+    pair_address: _address,
+    votes: bribe_supply_cp[1],
+    emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
+    bribes: self._epochBribes(epoch_start_ts, wrapped_bribe_addr),
+    fees: self._epochFees(
+      epoch_start_ts, voter.internal_bribes(gauge.address)
+    )
+  })
+
+@internal
+@view
+def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     -> DynArray[PairEpoch, MAX_EPOCHS]:
   """
   @notice Returns all pair epoch data based on the address
@@ -310,6 +420,7 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   curr_epoch_start_ts: uint256 = block.timestamp - (block.timestamp % WEEK)
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
+    # TODO: DRY things up
     epoch_start_ts: uint256 = curr_epoch_start_ts - (weeks * WEEK)
     epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
 
@@ -420,14 +531,12 @@ def _epochFees(_ts: uint256, _fee: address) \
     fee_token: IERC20 = IERC20(fee.rewards(findex))
     fee_data: uint256[2] = fee.getPriorRewardPerToken(fee_token.address, _ts)
 
-    if fee_data[0] == 0:
-      continue
-
-    fees.append(PairEpochBribe({
-      token: fee_token.address,
-      decimals: fee_token.decimals(),
-      symbol: fee_token.symbol(),
-      amount: fee_data[0]
-    }))
+    if fee_data[0] > 0:
+      fees.append(PairEpochBribe({
+        token: fee_token.address,
+        decimals: fee_token.decimals(),
+        symbol: fee_token.symbol(),
+        amount: fee_data[0]
+      }))
 
   return fees

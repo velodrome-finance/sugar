@@ -133,3 +133,29 @@ def test_epochsByAddress_limit_offset(
 
     if len(epoch_fees) > 0:
         assert epoch_fees[0].amount > 0
+
+
+def test_epochsLatest_limit_offset(
+        sugar_contract,
+        PairStruct,
+        PairEpochStruct,
+        PairEpochBribeStruct
+        ):
+    second_pair = PairStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    pair_epoch = list(map(
+        lambda _p: PairEpochStruct(*_p),
+        sugar_contract.epochsByAddress(1, 0, second_pair.pair_address)
+    ))
+    latest_epoch = list(map(
+        lambda _p: PairEpochStruct(*_p),
+        sugar_contract.epochsLatest(1, 1)
+    ))
+
+    assert pair_epoch is not None
+    assert len(latest_epoch) == 1
+
+    pepoch = PairEpochStruct(*pair_epoch[0])
+    lepoch = PairEpochStruct(*latest_epoch[0])
+
+    assert lepoch.pair_address == pepoch.pair_address
+    assert lepoch.ts == pepoch.ts
