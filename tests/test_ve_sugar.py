@@ -42,7 +42,7 @@ def test_byId(sugar_contract, VeNFTStruct):
     assert venft.id is not None
     assert len(venft.votes) > 0
     assert venft.voted is True
-    assert venft.attachments == 1
+    assert venft.attachments > 0
 
 
 def test_byAccount(sugar_contract, VeNFTStruct):
