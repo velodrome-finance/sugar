@@ -119,6 +119,10 @@ def test_epochsByAddress_limit_offset(
         lambda _b: PairEpochBribeStruct(*_b),
         epoch.bribes
     ))
+    epoch_fees = list(map(
+        lambda _f: PairEpochBribeStruct(*_f),
+        epoch.fees
+    ))
 
     assert epoch.pair_address == first_pair.pair_address
     assert epoch.votes > 0
@@ -126,3 +130,6 @@ def test_epochsByAddress_limit_offset(
 
     if len(epoch_bribes) > 0:
         assert epoch_bribes[0].amount > 0
+
+    if len(epoch_fees) > 0:
+        assert epoch_fees[0].amount > 0

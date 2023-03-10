@@ -94,6 +94,8 @@ type `PairEpoch` with the following values:
     * `token_decimals` - bribe token decimals
     * `token_symbol` - bribe token symbol
     * `amount` - bribe amount
+ * `fees` - a list of fees data, it is a struct of type `PairEpochBribe`,
+   just like the `bribes` list
 
 To fetch a list of epochs for a specific pair, this method is available:
 
