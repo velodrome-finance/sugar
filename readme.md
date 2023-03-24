@@ -131,7 +131,6 @@ The returned data/struct of type `VeNFT` values represent:
   * `votes` - veNFT list of pairs with vote weights casted in the form of
     `PairVotes`
   * `token` - veNFT locked token address
-  * `voted` - veNFT vote status
   * `attachments` - veNFT nr. of attachments (aka gauges it is attached to)
 
 The pair votes struct values represent:
