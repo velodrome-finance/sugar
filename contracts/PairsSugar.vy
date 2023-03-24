@@ -7,12 +7,21 @@
 # Structs
 
 MAX_PAIRS: constant(uint256) = 1000
+MAX_TOKENS: constant(uint256) = 2000
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 PRECISION: constant(uint256) = 10**18
 # See: `RewardsDistributor::start_time()`
 EPOCHS_STARTED_AT: constant(uint256) = 1653523200
+
+struct Token:
+  token_address: address
+  symbol: String[100]
+  decimals: uint8
+  account_balance: uint256
+  price: uint256
+  price_decimals: uint8
 
 struct Pair:
   pair_address: address
@@ -70,6 +79,11 @@ interface IERC20:
   def decimals() -> uint8: view
   def symbol() -> String[100]: view
   def balanceOf(_account: address) -> uint256: view
+
+interface IOracle:
+  def getRateWithConnectors(
+    _token_with_connectors: DynArray[address, MAX_TOKENS]
+  ) -> uint256: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
@@ -154,6 +168,97 @@ def setup(_voter: address, _wrapped_bribe_factory: address):
   self.pair_factory = voter.factory()
   self.token = IVotingEscrow(voter._ve()).token()
   self.wrapped_bribe_factory = _wrapped_bribe_factory
+
+@external
+@view
+def tokens(
+    _limit: uint256,
+    _offset: uint256,
+    _account: address,
+    _oracle: address,
+    _oracle_connectors: DynArray[address, MAX_TOKENS]
+  ) -> DynArray[Token, MAX_TOKENS]:
+  """
+  @notice Returns a collection of tokens data based on available pairs
+  @param _limit The max amount of tokens to return
+  @param _offset The amount of pairs to skip
+  @param _account The account to check the balances
+  @return Array for Token structs
+  """
+  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  counted: uint256 = pair_factory.allPairsLength()
+
+  col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
+  found: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
+
+  for index in range(_offset, _offset + MAX_TOKENS):
+    if len(col) == _limit or index >= counted:
+      break
+
+    pair_addr: address = pair_factory.allPairs(index)
+
+    pair: IPair = IPair(pair_addr)
+    token0: address = pair.token0()
+    token1: address = pair.token1()
+
+    if token0 not in found:
+      col.append(self._token(token0, _account, _oracle, _oracle_connectors))
+      found.append(token0)
+
+    if token1 not in found:
+      col.append(self._token(token1, _account, _oracle, _oracle_connectors))
+      found.append(token1)
+
+  return col
+
+@internal
+@view
+def _prepend(
+    _address: address,
+    _to: DynArray[address, MAX_TOKENS],
+  ) -> DynArray[address, MAX_TOKENS]:
+  """Concatenates two arrays of addresses."""
+  all: DynArray[address, MAX_TOKENS] = [_address]
+  to_len: uint256 = len(_to)
+
+  for index in range(0, MAX_TOKENS):
+    if index >= to_len:
+      break
+
+    all.append(_to[index])
+
+  return all
+
+@internal
+@view
+def _token(
+    _address: address,
+    _account: address,
+    _oracle: address,
+    _oracle_connectors: DynArray[address, MAX_TOKENS]
+  ) -> Token:
+  token: IERC20 = IERC20(_address)
+  bal: uint256 = empty(uint256)
+  price: uint256 = empty(uint256)
+  conns_len: uint256 = len(_oracle_connectors)
+
+  if _oracle != empty(address) and conns_len > 0:
+    conns: DynArray[address, MAX_TOKENS] = self._prepend(
+      _address, _oracle_connectors
+    )
+    price = IOracle(_oracle).getRateWithConnectors(conns)
+
+  if _account != empty(address):
+    bal = token.balanceOf(_account)
+
+  return Token({
+    token_address: _address,
+    symbol: token.symbol(),
+    decimals: token.decimals(),
+    account_balance: bal,
+    price: price,
+    price_decimals: 18
+  })
 
 @external
 @view
