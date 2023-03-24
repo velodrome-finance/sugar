@@ -117,6 +117,8 @@ interface IVotingEscrow:
   def token() -> address: view
 
 interface IGauge:
+  def fees0() -> uint256: view
+  def fees1() -> uint256: view
   def earned(_token: address, _account: address) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
@@ -489,7 +491,9 @@ def _epochLatestByAddress(_address: address) -> PairEpoch:
     emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
     bribes: self._epochBribes(epoch_start_ts, wrapped_bribe_addr),
     fees: self._epochFees(
-      epoch_start_ts, voter.internal_bribes(gauge.address)
+      epoch_start_ts,
+      voter.internal_bribes(gauge.address),
+      gauge.address
     )
   })
 
@@ -557,6 +561,11 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     if ts_delta == 0:
       continue
 
+    # Do not report gauge fees for previous epochs, already distributed
+    gauge_address: address = empty(address)
+    if len(epochs) == 0:
+      gauge_address = gauge.address
+
     epochs.append(PairEpoch({
       ts: epoch_start_ts,
       pair_address: _address,
@@ -564,7 +573,9 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
       bribes: self._epochBribes(epoch_start_ts, wrapped_bribe_addr),
       fees: self._epochFees(
-        epoch_start_ts, voter.internal_bribes(gauge.address)
+        epoch_start_ts,
+        voter.internal_bribes(gauge.address),
+        gauge_address
       )
     }))
 
@@ -615,12 +626,12 @@ def _epochBribes(_ts: uint256, _wrapped_bribe: address) \
 
 @internal
 @view
-def _epochFees(_ts: uint256, _fee: address) \
+def _epochFees(_ts: uint256, _fee: address, _gauge: address) \
     -> DynArray[PairEpochBribe, MAX_REWARDS]:
   """
   @notice Returns pair fees
   @param _ts The pair epoch start timestamp
-  @param _fee The pair fee address
+  @param _fee The pair gauge address
   @return An array of `PairEpochBribe` structs
   """
   fees: DynArray[PairEpochBribe, MAX_REWARDS] = \
@@ -632,6 +643,14 @@ def _epochFees(_ts: uint256, _fee: address) \
   fee: IBribe = IBribe(_fee)
   fees_len: uint256 = fee.rewardsListLength()
 
+  # Fetch _to be distributed_ fees from the Gauge
+  gauge_fees: uint256[2] = [0, 0]
+  if _gauge != empty(address):
+    gauge_fees = [
+      IGauge(_gauge).fees0(),
+      IGauge(_gauge).fees1()
+    ]
+
   for findex in range(2):
     fee_token: IERC20 = IERC20(fee.rewards(findex))
     fee_data: uint256[2] = fee.getPriorRewardPerToken(fee_token.address, _ts)
@@ -641,7 +660,7 @@ def _epochFees(_ts: uint256, _fee: address) \
         token: fee_token.address,
         decimals: fee_token.decimals(),
         symbol: fee_token.symbol(),
-        amount: fee_data[0]
+        amount: fee_data[0] + gauge_fees[findex]
       }))
 
   return fees
