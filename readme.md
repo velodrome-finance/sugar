@@ -35,7 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pairs Data
 
-`PairsSugar.vy` is deployed at `0x7a64B8C3451487b7b74043334Fb986FfEcD3430e`
+`PairsSugar.vy` is deployed at `0xC27C5a1947b33DEC908B396bc7845d355b6D44A9`
 
 It allows fetching on-chain pairs data.
 The returned data/struct of type `Pair` values represent:
@@ -115,7 +115,7 @@ To fetch the token list this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x95ff9B539D5A5D7eCBF02FDe77A6A47F93dEF5FE`
+`VeSugar.vy` is deployed at `0x925A0d9d2000c4919e7BF0a0d5F2995a2bfE8542`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
