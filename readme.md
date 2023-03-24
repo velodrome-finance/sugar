@@ -53,6 +53,7 @@ The returned data/struct of type `Pair` values represent:
  * `claimable1` - claimable 2nd token from fees (for unstaked positions)
  * `gauge` - pair gauge address
  * `gauge_total_supply` - pair staked tokens (less/eq than/to pair total supply)
+ * `gauge_alive` - indicates if the gauge is still active
  * `fee` - pair fees contract address
  * `bribe` - pair bribes contract address
  * `wrapped_bribe` - pair wrapped bribe contract address
