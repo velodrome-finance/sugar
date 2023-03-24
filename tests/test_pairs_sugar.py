@@ -13,6 +13,14 @@ def sugar_contract(PairsSugar, accounts):
 
 
 @pytest.fixture
+def TokenStruct(sugar_contract):
+    method_output = sugar_contract.tokens.abi['outputs'][0]
+    members = list(map(lambda _e: _e['name'], method_output['components']))
+
+    yield namedtuple('TokenStruct', members)
+
+
+@pytest.fixture
 def PairStruct(sugar_contract):
     method_output = sugar_contract.byAddress.abi['outputs'][0]
     members = list(map(lambda _e: _e['name'], method_output['components']))
@@ -61,6 +69,55 @@ def test_byAddress(sugar_contract, PairStruct):
     assert len(pair) == 28
     assert pair.pair_address == second_pair.pair_address
     assert pair.gauge != ADDRESS_ZERO
+
+
+def test_tokens(sugar_contract, TokenStruct):
+    first_pair = PairStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
+    second_pair = PairStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    tokens = list(map(
+        lambda _p: PairStruct(*_p),
+        sugar_contract.tokens(2000, 0, ADDRESS_ZERO, ADDRESS_ZERO, [])
+    ))
+
+    assert tokens is not None
+    assert len(tokens) > 1
+
+    token0, token1, token2 = tokens[0: 3]
+
+    assert token0.token_address == first_pair.token0
+    assert token0.symbol == first_pair.token0_symbol
+    assert token0.decimals == first_pair.token0_decimals
+    assert token0.account_balance == first_pair.account_token0_balance
+    assert token0.price == 0
+
+    assert token1.token_address == first_pair.token1
+    assert token1.account_balance == first_pair.account_token1_balance
+
+    assert token2.token_address == second_pair.token0
+    assert token2.account_balance == first_pair.account_token0_balance
+
+
+def test_tokens_with_oracle_prices(sugar_contract, TokenStruct):
+    tokens = list(map(
+        lambda _p: PairStruct(*_p),
+        sugar_contract.tokens(
+            2,
+            0,
+            ADDRESS_ZERO,
+            os.getenv('ORACLE_ADDRESS'),
+            os.getenv('ORACLE_CONNECTORS').split(',')
+        )
+    ))
+
+    assert tokens is not None
+    assert len(tokens) == 2
+
+    _token0, token1 = tokens[0: 2]
+
+    assert token1.token_address == os.getenv('ORACLE_CONNECTORS').split(',')[0]
+    assert token1.symbol == 'USDC'
+    assert token1.price / 10**token1.price_decimals < 1
+    assert token1.price / 10**token1.price_decimals > 0.9
 
 
 def test_all(sugar_contract, PairStruct):
