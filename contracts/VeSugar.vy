@@ -21,14 +21,10 @@ struct Pair:
   total_supply: uint256
 
   token0: address
-  token0_symbol: String[100]
-  token0_decimals: uint8
   reserve0: uint256
   claimable0: uint256
 
   token1: address
-  token1_symbol: String[100]
-  token1_decimals: uint8
   reserve1: uint256
   claimable1: uint256
 
@@ -41,13 +37,10 @@ struct Pair:
 
   emissions: uint256
   emissions_token: address
-  emissions_token_decimals: uint8
 
   account_balance: uint256
   account_earned: uint256
   account_staked: uint256
-  account_token0_balance: uint256
-  account_token1_balance: uint256
 
 struct PairVotes:
   pair: address
@@ -65,8 +58,6 @@ struct VeNFT:
   votes: DynArray[PairVotes, MAX_PAIRS]
 
   token: address
-  token_decimals: uint8
-  token_symbol: String[100]
 
   voted: bool
   attachments: uint256
@@ -76,16 +67,10 @@ struct Reward:
   pair: address
   amount: uint256
   token: address
-  token_symbol: String[100]
-  token_decimals: uint8
   fee: address
   bribe: address
 
 # Our contracts / Interfaces
-
-interface IERC20:
-  def decimals() -> uint8: view
-  def symbol() -> String[100]: view
 
 interface IVoter:
   def _ve() -> address: view
@@ -239,7 +224,6 @@ def _byId(_id: uint256) -> VeNFT:
 
   voter: IVoter = IVoter(self.voter)
   dist: IRewardsDistributor = IRewardsDistributor(self.rewards_distributor)
-  token: IERC20 = IERC20(self.token)
 
   votes: DynArray[PairVotes, MAX_PAIRS] = []
   amount: uint128 = 0
@@ -281,9 +265,7 @@ def _byId(_id: uint256) -> VeNFT:
     voted_at: voter.lastVoted(_id),
     votes: votes,
 
-    token: token.address,
-    token_decimals: token.decimals(),
-    token_symbol: token.symbol(),
+    token: self.token,
 
     voted: ve.voted(_id),
     attachments: ve.attachments(_id)
@@ -370,8 +352,6 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
         pair: _pair.pair_address,
         amount: fee0_amount,
         token: _pair.token0,
-        token_symbol: _pair.token0_symbol,
-        token_decimals: _pair.token0_decimals,
         fee: _pair.fee,
         bribe: empty(address)
       })
@@ -384,8 +364,6 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
         pair: _pair.pair_address,
         amount: fee1_amount,
         token: _pair.token1,
-        token_symbol: _pair.token1_symbol,
-        token_decimals: _pair.token1_decimals,
         fee: _pair.fee,
         bribe: empty(address)
       })
@@ -404,8 +382,8 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
     if bindex >= bribes_len:
       break
 
-    bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
-    bribe_amount: uint256 = bribe.earned(bribe_token.address, _venft_id)
+    bribe_token: address = bribe.rewards(bindex)
+    bribe_amount: uint256 = bribe.earned(bribe_token, _venft_id)
 
     if bribe_amount == 0:
       continue
@@ -415,9 +393,7 @@ def _pairRewards(_venft_id: uint256, _pair: Pair) \
         venft_id: _venft_id,
         pair: _pair.pair_address,
         amount: bribe_amount,
-        token: bribe_token.address,
-        token_symbol: bribe_token.symbol(),
-        token_decimals: bribe_token.decimals(),
+        token: bribe_token,
         fee: empty(address),
         bribe: _pair.wrapped_bribe
       })

@@ -46,13 +46,9 @@ The returned data/struct of type `Pair` values represent:
  * `stable` - pair pool type (`stable = false`, means it's a variable type of pool)
  * `total_supply` - pair tokens supply
  * `token0` - pair 1st token address
- * `token0_symbol` - pair 1st token symbol
- * `token0_decimals` - pair 1st token decimals
  * `reserve0` - pair 1st token reserves (nr. of tokens in the contract)
  * `claimable0` - claimable 1st token from fees (for unstaked positions)
  * `token1` - pair 2nd token address
- * `token1_symbol` - pair 2nd token symbol
- * `token1_decimals` - pair 2nd token decimals
  * `reserve1` - pair 2nd token reserves (nr. of tokens in the contract)
  * `claimable1` - claimable 2nd token from fees (for unstaked positions)
  * `gauge` - pair gauge address
@@ -62,12 +58,9 @@ The returned data/struct of type `Pair` values represent:
  * `wrapped_bribe` - pair wrapped bribe contract address
  * `emissions` - pair emissions (per second)
  * `emissions_token` - pair emissions token address
- * `emissions_token_decimals` - pair emissions token decimals
  * `account_balance` - account LP tokens balance
  * `account_earned` - account earned emissions for this pair
  * `account_staked` - account pair staked in gauge balance
- * `account_token0_balance` - account 1st token balance
- * `account_token1_balance` - account 2nd token balance
 
 ---
 
@@ -91,8 +84,6 @@ type `PairEpoch` with the following values:
  * `bribes` - a list of bribes data, it is a struct of type `PairEpochBribe` with
    the following values:
     * `token` - bribe token address
-    * `token_decimals` - bribe token decimals
-    * `token_symbol` - bribe token symbol
     * `amount` - bribe amount
  * `fees` - a list of fees data, it is a struct of type `PairEpochBribe`,
    just like the `bribes` list
@@ -139,8 +130,6 @@ The returned data/struct of type `VeNFT` values represent:
   * `votes` - veNFT list of pairs with vote weights casted in the form of
     `PairVotes`
   * `token` - veNFT locked token address
-  * `token_decimals` - veNFT locked token decimals
-  * `token_symbol` - veNFT locked token symbol
   * `voted` - veNFT vote status
   * `attachments` - veNFT nr. of attachments (aka gauges it is attached to)
 
@@ -168,8 +157,6 @@ values:
  * `pair` - the pair address representing the source of the reward
  * `amount` - the amount of the tokens accrued
  * `token` - the reward token address
- * `token_symbol` - the reward token symbol
- * `token_decimals` - the reward token decimals
  * `fee` - the fee contract address (if the reward comes from fees)
  * `bribe` - the bribe contract address (if the reward comes from bribes)
 

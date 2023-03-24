@@ -20,8 +20,6 @@ struct Token:
   symbol: String[100]
   decimals: uint8
   account_balance: uint256
-  price: uint256
-  price_decimals: uint8
 
 struct Pair:
   pair_address: address
@@ -31,14 +29,10 @@ struct Pair:
   total_supply: uint256
 
   token0: address
-  token0_symbol: String[100]
-  token0_decimals: uint8
   reserve0: uint256
   claimable0: uint256
 
   token1: address
-  token1_symbol: String[100]
-  token1_decimals: uint8
   reserve1: uint256
   claimable1: uint256
 
@@ -51,18 +45,13 @@ struct Pair:
 
   emissions: uint256
   emissions_token: address
-  emissions_token_decimals: uint8
 
   account_balance: uint256
   account_earned: uint256
   account_staked: uint256
-  account_token0_balance: uint256
-  account_token1_balance: uint256
 
 struct PairEpochBribe:
   token: address
-  decimals: uint8
-  symbol: String[100]
   amount: uint256
 
 struct PairEpoch:
@@ -79,11 +68,6 @@ interface IERC20:
   def decimals() -> uint8: view
   def symbol() -> String[100]: view
   def balanceOf(_account: address) -> uint256: view
-
-interface IOracle:
-  def getRateWithConnectors(
-    _token_with_connectors: DynArray[address, MAX_TOKENS]
-  ) -> uint256: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
@@ -173,13 +157,8 @@ def setup(_voter: address, _wrapped_bribe_factory: address):
 
 @external
 @view
-def tokens(
-    _limit: uint256,
-    _offset: uint256,
-    _account: address,
-    _oracle: address,
-    _oracle_connectors: DynArray[address, MAX_TOKENS]
-  ) -> DynArray[Token, MAX_TOKENS]:
+def tokens(_limit: uint256, _offset: uint256, _account: address)\
+  -> DynArray[Token, MAX_TOKENS]:
   """
   @notice Returns a collection of tokens data based on available pairs
   @param _limit The max amount of tokens to return
@@ -204,51 +183,20 @@ def tokens(
     token1: address = pair.token1()
 
     if token0 not in found:
-      col.append(self._token(token0, _account, _oracle, _oracle_connectors))
+      col.append(self._token(token0, _account))
       found.append(token0)
 
     if token1 not in found:
-      col.append(self._token(token1, _account, _oracle, _oracle_connectors))
+      col.append(self._token(token1, _account))
       found.append(token1)
 
   return col
 
 @internal
 @view
-def _prepend(
-    _address: address,
-    _to: DynArray[address, MAX_TOKENS],
-  ) -> DynArray[address, MAX_TOKENS]:
-  """Concatenates two arrays of addresses."""
-  all: DynArray[address, MAX_TOKENS] = [_address]
-  to_len: uint256 = len(_to)
-
-  for index in range(0, MAX_TOKENS):
-    if index >= to_len:
-      break
-
-    all.append(_to[index])
-
-  return all
-
-@internal
-@view
-def _token(
-    _address: address,
-    _account: address,
-    _oracle: address,
-    _oracle_connectors: DynArray[address, MAX_TOKENS]
-  ) -> Token:
+def _token(_address: address, _account: address) -> Token:
   token: IERC20 = IERC20(_address)
   bal: uint256 = empty(uint256)
-  price: uint256 = empty(uint256)
-  conns_len: uint256 = len(_oracle_connectors)
-
-  if _oracle != empty(address) and conns_len > 0:
-    conns: DynArray[address, MAX_TOKENS] = self._prepend(
-      _address, _oracle_connectors
-    )
-    price = IOracle(_oracle).getRateWithConnectors(conns)
 
   if _account != empty(address):
     bal = token.balanceOf(_account)
@@ -257,9 +205,7 @@ def _token(
     token_address: _address,
     symbol: token.symbol(),
     decimals: token.decimals(),
-    account_balance: bal,
-    price: price,
-    price_decimals: 18
+    account_balance: bal
   })
 
 @external
@@ -326,16 +272,12 @@ def _byAddress(_address: address, _account: address) -> Pair:
   voter: IVoter = IVoter(self.voter)
   wrapped_bribe_factory: IWrappedBribeFactory = \
     IWrappedBribeFactory(self.wrapped_bribe_factory)
-  token: IERC20 = IERC20(self.token)
 
   pair: IPair = IPair(_address)
   gauge: IGauge = IGauge(voter.gauges(_address))
   bribe_addr: address = voter.external_bribes(gauge.address)
   wrapped_bribe_addr: address = \
     wrapped_bribe_factory.oldBribeToNew(bribe_addr)
-
-  token0: IERC20 = IERC20(pair.token0())
-  token1: IERC20 = IERC20(pair.token1())
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
@@ -355,15 +297,11 @@ def _byAddress(_address: address, _account: address) -> Pair:
     stable: pair.stable(),
     total_supply: pair.totalSupply(),
 
-    token0: token0.address,
-    token0_symbol: token0.symbol(),
-    token0_decimals: token0.decimals(),
+    token0: pair.token0(),
     reserve0: pair.reserve0(),
     claimable0: pair.claimable0(_account),
 
-    token1: token1.address,
-    token1_symbol: token1.symbol(),
-    token1_decimals: token1.decimals(),
+    token1: pair.token1(),
     reserve1: pair.reserve1(),
     claimable1: pair.claimable1(_account),
 
@@ -376,13 +314,10 @@ def _byAddress(_address: address, _account: address) -> Pair:
 
     emissions: emissions,
     emissions_token: self.token,
-    emissions_token_decimals: token.decimals(),
 
     account_balance: pair.balanceOf(_account),
     account_earned: earned,
-    account_staked: acc_staked,
-    account_token0_balance: token0.balanceOf(_account),
-    account_token1_balance: token1.balanceOf(_account)
+    account_staked: acc_staked
   })
 
 @external
@@ -609,16 +544,14 @@ def _epochBribes(_ts: uint256, _wrapped_bribe: address) \
     if bindex >= bribes_len:
       break
 
-    bribe_token: IERC20 = IERC20(bribe.rewards(bindex))
-    bribe_amount: uint256 = bribe.tokenRewardsPerEpoch(bribe_token.address, _ts)
+    bribe_token: address = bribe.rewards(bindex)
+    bribe_amount: uint256 = bribe.tokenRewardsPerEpoch(bribe_token, _ts)
 
     if bribe_amount == 0:
       continue
 
     bribes.append(PairEpochBribe({
-      token: bribe_token.address,
-      decimals: bribe_token.decimals(),
-      symbol: bribe_token.symbol(),
+      token: bribe_token,
       amount: bribe_amount
     }))
 
@@ -652,14 +585,12 @@ def _epochFees(_ts: uint256, _fee: address, _gauge: address) \
     ]
 
   for findex in range(2):
-    fee_token: IERC20 = IERC20(fee.rewards(findex))
-    fee_data: uint256[2] = fee.getPriorRewardPerToken(fee_token.address, _ts)
+    fee_token: address = fee.rewards(findex)
+    fee_data: uint256[2] = fee.getPriorRewardPerToken(fee_token, _ts)
 
     if fee_data[0] > 0:
       fees.append(PairEpochBribe({
-        token: fee_token.address,
-        decimals: fee_token.decimals(),
-        symbol: fee_token.symbol(),
+        token: fee_token,
         amount: fee_data[0] + gauge_fees[findex]
       }))
 
