@@ -379,7 +379,7 @@ def _epochLatestByAddress(_address: address) -> PairEpoch:
   voter: IVoter = IVoter(self.voter)
   gauge: IGauge = IGauge(voter.gauges(_address))
 
-  if gauge.address == empty(address):
+  if voter.isAlive(gauge.address) == False:
     return empty(PairEpoch)
 
   bribe: IBribe = IBribe(voter.external_bribes(gauge.address))
@@ -390,7 +390,7 @@ def _epochLatestByAddress(_address: address) -> PairEpoch:
     wrapped_bribe_factory.oldBribeToNew(bribe.address)
 
   # TODO: DRY things up
-  epoch_start_ts: uint256 = block.timestamp - (block.timestamp % WEEK)
+  epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
   epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
 
   gauge_supply_index: uint256 = gauge.getPriorSupplyIndex(epoch_end_ts)
@@ -454,7 +454,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   voter: IVoter = IVoter(self.voter)
   gauge: IGauge = IGauge(voter.gauges(_address))
 
-  if gauge.address == empty(address):
+  if voter.isAlive(gauge.address) == False:
     return epochs
 
   bribe: IBribe = IBribe(voter.external_bribes(gauge.address))
@@ -464,7 +464,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   wrapped_bribe_addr: address = \
     wrapped_bribe_factory.oldBribeToNew(bribe.address)
 
-  curr_epoch_start_ts: uint256 = block.timestamp - (block.timestamp % WEEK)
+  curr_epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
 
   for weeks in range(_offset, _offset + MAX_EPOCHS):
     # TODO: DRY things up
