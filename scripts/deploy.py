@@ -14,13 +14,15 @@ def main():
             os.getenv('WRAPPED_BRIBE_FACTORY'),
             {'from': account}
         )
-    elif 've' in contract_name:
+
+    if 've' in contract_name:
         vesugar = VeSugar.deploy({'from': account})
         vesugar.setup(
             os.getenv('VOTER_ADDRESS'),
+            os.getenv('WRAPPED_BRIBE_FACTORY'),
             os.getenv('REWARDS_DIST_ADDRESS'),
-            os.getenv('PAIRS_SUGAR_ADDRESS'),
             {'from': account}
         )
-    else:
+
+    if 've' not in contract_name or 'pairs' not in contract_name:
         print('Set the `CONTRACT` environment variable to deploy a contract.')
