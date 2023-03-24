@@ -105,6 +105,22 @@ To fetch a list of latest epochs data for a every pair, this method is available
 
  * `epochsLatest(_limit: uint256, _offset: uint256) -> PairEpoch[]`
 
+---
+
+The pairs token list (compiled from all the pools `token0`/`token1`) uses the type
+`Token` with the following values:
+
+ * `token_address` - the token address
+ * `symbol` - the token symbol
+ * `decimals` - the token decimals
+ * `account_balance` - the provided account/wallet balance
+ * `price` - the on-chain price of the token (if oracle attributes were provided)
+ * `price_decimals` - the price decimals
+
+To fetch the token list this method is available:
+
+ * `tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
+
 ### Vote-Escrow Locked NFT (veNFT) Data
 
 `VeSugar.vy` is deployed at `0x95ff9B539D5A5D7eCBF02FDe77A6A47F93dEF5FE`
