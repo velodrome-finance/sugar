@@ -38,6 +38,7 @@ struct Pair:
 
   gauge: address
   gauge_total_supply: uint256
+  gauge_alive: bool
 
   fee: address
   bribe: address
@@ -96,6 +97,7 @@ interface IVoter:
   def gauges(_pair_addr: address) -> address: view
   def external_bribes(_gauge_addr: address) -> address: view
   def internal_bribes(_gauge_addr: address) -> address: view
+  def isAlive(_gauge_addr: address) -> bool: view
 
 interface IVotingEscrow:
   def token() -> address: view
@@ -307,6 +309,7 @@ def _byAddress(_address: address, _account: address) -> Pair:
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
+    gauge_alive: voter.isAlive(gauge.address),
 
     fee: voter.internal_bribes(gauge.address),
     bribe: bribe_addr,
