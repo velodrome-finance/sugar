@@ -35,7 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pairs Data
 
-`PairsSugar.vy` is deployed at `0xC27C5a1947b33DEC908B396bc7845d355b6D44A9`
+`PairsSugar.vy` is deployed at `0x999abd60d58797D75CB7F1eF16619842e37A2954`
 
 It allows fetching on-chain pairs data.
 The returned data/struct of type `Pair` values represent:
