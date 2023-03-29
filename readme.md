@@ -106,8 +106,7 @@ The pairs token list (compiled from all the pools `token0`/`token1`) uses the ty
  * `symbol` - the token symbol
  * `decimals` - the token decimals
  * `account_balance` - the provided account/wallet balance
- * `price` - the on-chain price of the token (if oracle attributes were provided)
- * `price_decimals` - the price decimals
+ * `listed` - indicates if the token was listed for gauge voting rewards
 
 To fetch the token list this method is available:
 

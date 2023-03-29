@@ -20,6 +20,7 @@ struct Token:
   symbol: String[100]
   decimals: uint8
   account_balance: uint256
+  listed: bool
 
 struct Pair:
   pair_address: address
@@ -98,6 +99,7 @@ interface IVoter:
   def external_bribes(_gauge_addr: address) -> address: view
   def internal_bribes(_gauge_addr: address) -> address: view
   def isAlive(_gauge_addr: address) -> bool: view
+  def isWhitelisted(_token_addr: address) -> bool: view
 
 interface IVotingEscrow:
   def token() -> address: view
@@ -197,6 +199,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
 @internal
 @view
 def _token(_address: address, _account: address) -> Token:
+  voter: IVoter = IVoter(self.voter)
   token: IERC20 = IERC20(_address)
   bal: uint256 = empty(uint256)
 
@@ -207,7 +210,8 @@ def _token(_address: address, _account: address) -> Token:
     token_address: _address,
     symbol: token.symbol(),
     decimals: token.decimals(),
-    account_balance: bal
+    account_balance: bal,
+    listed: voter.isWhitelisted(_address)
   })
 
 @external
