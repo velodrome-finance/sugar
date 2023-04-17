@@ -9,17 +9,12 @@ def main():
 
     if 'pairs' in contract_name:
         psugar = PairsSugar.deploy({'from': account})
-        psugar.setup(
-            os.getenv('VOTER_ADDRESS'),
-            os.getenv('WRAPPED_BRIBE_FACTORY'),
-            {'from': account}
-        )
+        psugar.setup(os.getenv('VOTER_ADDRESS'), {'from': account})
 
     if 've' in contract_name:
         vesugar = VeSugar.deploy({'from': account})
         vesugar.setup(
             os.getenv('VOTER_ADDRESS'),
-            os.getenv('WRAPPED_BRIBE_FACTORY'),
             os.getenv('REWARDS_DIST_ADDRESS'),
             {'from': account}
         )
