@@ -1,13 +1,11 @@
 # @version >=0.3.6 <0.4.0
 
-# @title Velodrome Finance veNFT Sugar v1
+# @title Velodrome Finance veNFT Sugar v2
 # @author stas
 # @notice Makes it nicer to work with our vote-escrow NFTs.
-# @dev Refactor pair-related stuff when library modules support is released:
-#       https://github.com/vyperlang/vyper/pull/2888
 
 MAX_RESULTS: constant(uint256) = 1000
-# Basically max attachments/gauges for a veNFT, this one is tricky, but
+# Basically max gauges for a veNFT, this one is tricky, but
 # we can't go crazy with it due to memory limitations...
 MAX_PAIRS: constant(uint256) = 30
 
@@ -25,9 +23,7 @@ struct VeNFT:
   expires_at: uint256
   voted_at: uint256
   votes: DynArray[PairVotes, MAX_PAIRS]
-
   token: address
-  attachments: uint256
 
 struct Reward:
   venft_id: uint256
@@ -43,8 +39,8 @@ interface IVoter:
   def _ve() -> address: view
   def factory() -> address: view
   def gauges(_pair_addr: address) -> address: view
-  def external_bribes(_gauge_addr: address) -> address: view
-  def internal_bribes(_gauge_addr: address) -> address: view
+  def gaugeToBribe(_gauge_addr: address) -> address: view
+  def gaugeToFees(_gauge_addr: address) -> address: view
   def lastVoted(_venft_id: uint256) -> uint256: view
   def poolVote(_venft_id: uint256, _index: uint256) -> address: view
   def votes(_venft_id: uint256, _pair: address) -> uint256: view
@@ -65,21 +61,16 @@ interface IVotingEscrow:
   def balanceOfNFT(_venft_id: uint256) -> uint256: view
   def locked(_venft_id: uint256) -> (uint128, uint256): view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
-  def attachments(_venft_id: uint256) -> uint256: view
 
-interface IBribe:
+interface IReward:
   def rewardsListLength() -> uint256: view
   def rewards(_index: uint256) -> address: view
   def earned(_token: address, _venft_id: uint256) -> uint256: view
-  def periodFinish(_token: address) -> uint256: view
 
 interface IPairFactory:
   def allPairsLength() -> uint256: view
   def allPairs(_index: uint256) -> address: view
 
-interface IWrappedBribeFactory:
-  def oldBribeToNew(_external_bribe_addr: address) -> address: view
-  def voter() -> address: view
 
 # Vars
 
@@ -88,7 +79,6 @@ token: public(address)
 ve: public(address)
 rewards_distributor: public(address)
 pair_factory: public(address)
-wrapped_bribe_factory: public(address)
 owner: public(address)
 
 # Methods
@@ -101,11 +91,7 @@ def __init__():
   self.owner = msg.sender
 
 @external
-def setup(
-    _voter: address,
-    _wrapped_bribe_factory: address,
-    _rewards_distributor: address
-  ):
+def setup(_voter: address, _rewards_distributor: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -114,10 +100,7 @@ def setup(
   voter: IVoter = IVoter(_voter)
   rewards_distributor: IRewardsDistributor = \
     IRewardsDistributor(_rewards_distributor)
-  wrapped_bribe_factory: IWrappedBribeFactory = \
-    IWrappedBribeFactory(_wrapped_bribe_factory)
 
-  assert wrapped_bribe_factory.voter() == _voter, 'Voter mismatch!'
   assert rewards_distributor.voting_escrow() == voter._ve(), 'VE mismatch!'
 
   self.voter = _voter
@@ -125,7 +108,6 @@ def setup(
   self.token = IVotingEscrow(self.ve).token()
   self.rewards_distributor = _rewards_distributor
   self.pair_factory = voter.factory()
-  self.wrapped_bribe_factory = _wrapped_bribe_factory
 
 @external
 @view
@@ -242,7 +224,6 @@ def _byId(_id: uint256) -> VeNFT:
     voted_at: voter.lastVoted(_id),
     votes: votes,
     token: self.token,
-    attachments: ve.attachments(_id)
   })
 
 @external
@@ -305,8 +286,6 @@ def _pairRewards(_venft_id: uint256, _pair: address) \
   """
   pair: IPair = IPair(_pair)
   voter: IVoter = IVoter(self.voter)
-  wrapped_bribe_factory: IWrappedBribeFactory = \
-    IWrappedBribeFactory(self.wrapped_bribe_factory)
 
   col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
 
@@ -318,9 +297,8 @@ def _pairRewards(_venft_id: uint256, _pair: address) \
   if gauge == empty(address):
     return col
 
-  fee: IBribe = IBribe(voter.internal_bribes(gauge))
-  bribe_addr: address = voter.external_bribes(gauge)
-  bribe: IBribe = IBribe(wrapped_bribe_factory.oldBribeToNew(bribe_addr))
+  fee: IReward = IReward(voter.gaugeToFees(gauge))
+  bribe: IReward = IReward(voter.gaugeToFees(gauge))
 
   token0: address = pair.token0()
   token1: address = pair.token1()

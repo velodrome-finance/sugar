@@ -56,7 +56,6 @@ The returned data/struct of type `Pair` values represent:
  * `gauge_alive` - indicates if the gauge is still active
  * `fee` - pair fees contract address
  * `bribe` - pair bribes contract address
- * `wrapped_bribe` - pair wrapped bribe contract address
  * `emissions` - pair emissions (per second)
  * `emissions_token` - pair emissions token address
  * `account_balance` - account LP tokens balance
@@ -130,7 +129,6 @@ The returned data/struct of type `VeNFT` values represent:
   * `votes` - veNFT list of pairs with vote weights casted in the form of
     `PairVotes`
   * `token` - veNFT locked token address
-  * `attachments` - veNFT nr. of attachments (aka gauges it is attached to)
 
 The pair votes struct values represent:
   * `pair` - the pair address
