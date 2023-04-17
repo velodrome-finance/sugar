@@ -398,10 +398,6 @@ def _epochLatestByAddress(_address: address) -> PairEpoch:
   epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
 
   gauge_supply_index: uint256 = gauge.getPriorSupplyIndex(epoch_end_ts)
-
-  if gauge_supply_index == 0:
-    return empty(PairEpoch)
-
   gauge_supply_cp: uint256[2] = gauge.supplyCheckpoints(gauge_supply_index)
 
   bribe_supply_cp: uint256[2] = bribe.supplyCheckpoints(
@@ -423,14 +419,15 @@ def _epochLatestByAddress(_address: address) -> PairEpoch:
   ts_delta: uint256 = rrpt_cp[1] - rrpt_prev_cp[1]
   rrpt_delta: uint256 = rrpt_cp[0] - rrpt_prev_cp[0]
 
-  if ts_delta == 0:
-    return empty(PairEpoch)
+  emissions: uint256 = 0
+  if ts_delta > 0:
+    emissions = rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION
 
   return PairEpoch({
     ts: epoch_start_ts,
     pair_address: _address,
     votes: bribe_supply_cp[1],
-    emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
+    emissions: emissions,
     bribes: self._epochBribes(epoch_start_ts, wrapped_bribe_addr),
     fees: self._epochFees(
       epoch_start_ts,
@@ -500,8 +497,9 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     ts_delta: uint256 = rrpt_cp[1] - rrpt_prev_cp[1]
     rrpt_delta: uint256 = rrpt_cp[0] - rrpt_prev_cp[0]
 
-    if ts_delta == 0:
-      continue
+    emissions: uint256 = 0
+    if ts_delta > 0:
+      emissions = rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION
 
     # Do not report gauge fees for previous epochs, already distributed
     gauge_address: address = empty(address)
@@ -512,7 +510,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       ts: epoch_start_ts,
       pair_address: _address,
       votes: bribe_supply_cp[1],
-      emissions: rrpt_delta * gauge_supply_cp[1] / ts_delta / PRECISION,
+      emissions: emissions,
       bribes: self._epochBribes(epoch_start_ts, wrapped_bribe_addr),
       fees: self._epochFees(
         epoch_start_ts,
