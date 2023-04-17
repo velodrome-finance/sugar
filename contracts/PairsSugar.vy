@@ -337,6 +337,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pairs to skip
   @return Array for PairEpoch structs
   """
+  voter: IVoter = IVoter(self.voter)
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
   pairs_count: uint256 = pair_factory.allPairsLength()
   counted: uint256 = 0
@@ -348,12 +349,14 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
       break
 
     pair_addr: address = pair_factory.allPairs(index)
+    gauge_addr: address = voter.gauges(pair_addr)
 
-    latest: PairEpoch = self._epochLatestByAddress(pair_addr)
+    if voter.isAlive(gauge_addr) == False:
+      continue
 
-    if latest.ts != 0:
-      col.append(latest)
-      counted += 1
+    col.append(self._epochLatestByAddress(pair_addr, gauge_addr))
+
+    counted += 1
 
   return col
 
@@ -372,20 +375,15 @@ def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
 
 @internal
 @view
-def _epochLatestByAddress(_address: address) -> PairEpoch:
+def _epochLatestByAddress(_address: address, _gauge: address) -> PairEpoch:
   """
   @notice Returns latest pair epoch data based on the address
-  @param _address The address to lookup
+  @param _address The pair address
+  @param _gauge The pair gauge
   @return A PairEpoch struct
   """
-  assert _address != empty(address), 'Invalid address!'
-
   voter: IVoter = IVoter(self.voter)
-  gauge: IGauge = IGauge(voter.gauges(_address))
-
-  if voter.isAlive(gauge.address) == False:
-    return empty(PairEpoch)
-
+  gauge: IGauge = IGauge(_gauge)
   bribe: IBribe = IBribe(voter.external_bribes(gauge.address))
 
   wrapped_bribe_factory: IWrappedBribeFactory = \
@@ -412,9 +410,12 @@ def _epochLatestByAddress(_address: address) -> PairEpoch:
   rrpt_cp: uint256[2] = gauge.getPriorRewardPerToken(
     self.token, gauge_supply_cp[0]
   )
-  rrpt_prev_cp: uint256[2] = gauge.getPriorRewardPerToken(
-    self.token, gauge_supply_cp[0] - 1
-  )
+
+  rrpt_prev_cp: uint256[2] = [0, 0]
+  if gauge_supply_cp[0] > 0:
+    rrpt_prev_cp = gauge.getPriorRewardPerToken(
+      self.token, gauge_supply_cp[0] - 1
+    )
 
   ts_delta: uint256 = rrpt_cp[1] - rrpt_prev_cp[1]
   rrpt_delta: uint256 = rrpt_cp[0] - rrpt_prev_cp[0]
@@ -490,9 +491,12 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     rrpt_cp: uint256[2] = gauge.getPriorRewardPerToken(
       self.token, gauge_supply_cp[0]
     )
-    rrpt_prev_cp: uint256[2] = gauge.getPriorRewardPerToken(
-      self.token, gauge_supply_cp[0] - 1
-    )
+
+    rrpt_prev_cp: uint256[2] = [0, 0]
+    if gauge_supply_cp[0] > 0:
+      rrpt_prev_cp = gauge.getPriorRewardPerToken(
+        self.token, gauge_supply_cp[0] - 1
+      )
 
     ts_delta: uint256 = rrpt_cp[1] - rrpt_prev_cp[1]
     rrpt_delta: uint256 = rrpt_cp[0] - rrpt_prev_cp[0]
