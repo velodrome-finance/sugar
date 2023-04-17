@@ -35,7 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pairs Data
 
-`PairsSugar.vy` is deployed at `0x999abd60d58797D75CB7F1eF16619842e37A2954`
+`PairsSugar.vy` is deployed at `0x8b70c5e53235abbd1415957f7110fbfe5d0529d4`
 
 It allows fetching on-chain pairs data.
 The returned data/struct of type `Pair` values represent:
@@ -180,3 +180,9 @@ The environment has Brownie and Vyper already installed.
 To run the tests inside the container, use:
 ```sh
 brownie test --network=optimism-test
+```
+
+## Why the contracts are not verified?
+
+Sugar is written in Vyper, and Optimistic Etherscan fails at times to
+generate the same bytecode (probably because of the hardcoded `evm_version`).

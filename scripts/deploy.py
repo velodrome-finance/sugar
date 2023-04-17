@@ -24,5 +24,5 @@ def main():
             {'from': account}
         )
 
-    if 've' not in contract_name or 'pairs' not in contract_name:
+    if 've' not in contract_name and 'pairs' not in contract_name:
         print('Set the `CONTRACT` environment variable to deploy a contract.')
