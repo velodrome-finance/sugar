@@ -36,8 +36,7 @@ struct Reward:
 # Our contracts / Interfaces
 
 interface IVoter:
-  def _ve() -> address: view
-  def factory() -> address: view
+  def ve() -> address: view
   def gauges(_pair_addr: address) -> address: view
   def gaugeToBribe(_gauge_addr: address) -> address: view
   def gaugeToFees(_gauge_addr: address) -> address: view
@@ -51,7 +50,7 @@ interface IPair:
   def token1() -> address: view
 
 interface IRewardsDistributor:
-  def voting_escrow() -> address: view
+  def ve() -> address: view
   def claimable(_venft_id: uint256) -> uint256: view
 
 interface IVotingEscrow:
@@ -68,8 +67,8 @@ interface IReward:
   def earned(_token: address, _venft_id: uint256) -> uint256: view
 
 interface IPairFactory:
-  def allPairsLength() -> uint256: view
-  def allPairs(_index: uint256) -> address: view
+  def allPoolsLength() -> uint256: view
+  def allPools(_index: uint256) -> address: view
 
 
 # Vars
@@ -91,7 +90,7 @@ def __init__():
   self.owner = msg.sender
 
 @external
-def setup(_voter: address, _rewards_distributor: address):
+def setup(_voter: address, _rewards_distributor: address, _factory: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -101,13 +100,13 @@ def setup(_voter: address, _rewards_distributor: address):
   rewards_distributor: IRewardsDistributor = \
     IRewardsDistributor(_rewards_distributor)
 
-  assert rewards_distributor.voting_escrow() == voter._ve(), 'VE mismatch!'
+  assert rewards_distributor.ve() == voter.ve(), 'VE mismatch!'
 
   self.voter = _voter
-  self.ve = voter._ve()
+  self.ve = voter.ve()
   self.token = IVotingEscrow(self.ve).token()
   self.rewards_distributor = _rewards_distributor
-  self.pair_factory = voter.factory()
+  self.pair_factory = _factory
 
 @external
 @view
@@ -238,7 +237,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   @return Array for VeNFT Reward structs
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  pairs_count: uint256 = pair_factory.allPairsLength()
+  pairs_count: uint256 = pair_factory.allPoolsLength()
   counted: uint256 = 0
 
   col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
@@ -247,7 +246,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
     if counted == _limit or pindex >= pairs_count:
       break
 
-    pair_addr: address = pair_factory.allPairs(pindex)
+    pair_addr: address = pair_factory.allPools(pindex)
     pcol: DynArray[Reward, MAX_RESULTS] = \
       self._pairRewards(_venft_id, pair_addr)
 
@@ -298,7 +297,7 @@ def _pairRewards(_venft_id: uint256, _pair: address) \
     return col
 
   fee: IReward = IReward(voter.gaugeToFees(gauge))
-  bribe: IReward = IReward(voter.gaugeToFees(gauge))
+  bribe: IReward = IReward(voter.gaugeToBribe(gauge))
 
   token0: address = pair.token0()
   token1: address = pair.token1()
