@@ -68,8 +68,8 @@ interface IERC20:
   def balanceOf(_account: address) -> uint256: view
 
 interface IPairFactory:
-  def allPairsLength() -> uint256: view
-  def allPairs(_index: uint256) -> address: view
+  def allPoolsLength() -> uint256: view
+  def allPools(_index: uint256) -> address: view
 
 interface IPair:
   def token0() -> address: view
@@ -85,13 +85,11 @@ interface IPair:
   def balanceOf(_account: address) -> uint256: view
 
 interface IVoter:
-  def _ve() -> address: view
-  def factory() -> address: view
   def gauges(_pair_addr: address) -> address: view
   def gaugeToBribe(_gauge_addr: address) -> address: view
   def gaugeToFees(_gauge_addr: address) -> address: view
   def isAlive(_gauge_addr: address) -> bool: view
-  def isWhitelisted(_token_addr: address) -> bool: view
+  def isWhitelistedToken(_token_addr: address) -> bool: view
 
 interface IVotingEscrow:
   def token() -> address: view
@@ -99,7 +97,7 @@ interface IVotingEscrow:
 interface IGauge:
   def fees0() -> uint256: view
   def fees1() -> uint256: view
-  def earned(_token: address, _account: address) -> uint256: view
+  def earned(_account: address) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def rewardRate() -> uint256: view
@@ -128,16 +126,15 @@ def __init__():
   self.owner = msg.sender
 
 @external
-def setup(_voter: address):
+def setup(_voter: address, _factory: address):
   """
   @dev Sets up our external contract addresses
   """
   assert self.owner == msg.sender, 'Not allowed!'
 
-  voter: IVoter = IVoter(_voter)
-
   self.voter = _voter
-  self.pair_factory = voter.factory()
+  # TODO: Use the factory registry when it allows iterating through factories
+  self.pair_factory = _factory
 
 @external
 @view
@@ -151,7 +148,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
   @return Array for Token structs
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  counted: uint256 = pair_factory.allPairsLength()
+  counted: uint256 = pair_factory.allPoolsLength()
 
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
   found: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
@@ -160,7 +157,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
     if len(col) == _limit or index >= counted:
       break
 
-    pair_addr: address = pair_factory.allPairs(index)
+    pair_addr: address = pair_factory.allPools(index)
 
     pair: IPair = IPair(pair_addr)
     token0: address = pair.token0()
@@ -191,7 +188,7 @@ def _token(_address: address, _account: address) -> Token:
     symbol: token.symbol(),
     decimals: token.decimals(),
     account_balance: bal,
-    listed: voter.isWhitelisted(_address)
+    listed: voter.isWhitelistedToken(_address)
   })
 
 @external
@@ -206,7 +203,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @return Array for Pair structs
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  counted: uint256 = pair_factory.allPairsLength()
+  counted: uint256 = pair_factory.allPoolsLength()
 
   col: DynArray[Pair, MAX_PAIRS] = empty(DynArray[Pair, MAX_PAIRS])
 
@@ -214,7 +211,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     if len(col) == _limit or index >= counted:
       break
 
-    pair_addr: address = pair_factory.allPairs(index)
+    pair_addr: address = pair_factory.allPools(index)
 
     col.append(self._byAddress(pair_addr, _account))
 
@@ -231,7 +228,7 @@ def byIndex(_index: uint256, _account: address) -> Pair:
   """
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
 
-  return self._byAddress(pair_factory.allPairs(_index), _account)
+  return self._byAddress(pair_factory.allPools(_index), _account)
 
 @external
 @view
@@ -263,12 +260,14 @@ def _byAddress(_address: address, _account: address) -> Pair:
   acc_staked: uint256 = 0
   gauge_total_supply: uint256 = 0
   emissions: uint256 = 0
+  emissions_token: address = empty(address)
 
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
-    earned = gauge.earned(gauge.rewardToken(), _account)
+    earned = gauge.earned(_account)
     gauge_total_supply = gauge.totalSupply()
     emissions = gauge.rewardRate()
+    emissions_token = gauge.rewardToken()
 
   return Pair({
     pair_address: _address,
@@ -293,7 +292,7 @@ def _byAddress(_address: address, _account: address) -> Pair:
     bribe: voter.gaugeToBribe(gauge.address),
 
     emissions: emissions,
-    emissions_token: gauge.rewardToken(),
+    emissions_token: emissions_token,
 
     account_balance: pair.balanceOf(_account),
     account_earned: earned,
@@ -312,7 +311,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   """
   voter: IVoter = IVoter(self.voter)
   pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  pairs_count: uint256 = pair_factory.allPairsLength()
+  pairs_count: uint256 = pair_factory.allPoolsLength()
   counted: uint256 = 0
 
   col: DynArray[PairEpoch, MAX_PAIRS] = empty(DynArray[PairEpoch, MAX_PAIRS])
@@ -321,7 +320,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
     if counted == _limit or index >= pairs_count:
       break
 
-    pair_addr: address = pair_factory.allPairs(index)
+    pair_addr: address = pair_factory.allPools(index)
     gauge_addr: address = voter.gauges(pair_addr)
 
     if voter.isAlive(gauge_addr) == False:
