@@ -21,6 +21,7 @@ struct Token:
   listed: bool
 
 struct Pair:
+  factory: address
   pair_address: address
   symbol: String[100]
   decimals: uint8
@@ -207,11 +208,12 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
   @return Array for Token structs
   """
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools_count: uint256 = len(pools)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
   seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
 
   for index in range(_offset, _offset + MAX_TOKENS):
-    if len(col) >= _limit or index >= len(pools):
+    if len(col) >= _limit or index >= pools_count:
       break
 
     pool_data: address[3] = pools[index]
@@ -259,18 +261,15 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @param _account The account to check the staked and earned balances
   @return Array for Pair structs
   """
-  pair_factory: IPoolFactory = IPoolFactory(self.registry)
-  counted: uint256 = pair_factory.allPoolsLength()
-
   col: DynArray[Pair, MAX_POOLS] = empty(DynArray[Pair, MAX_POOLS])
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools_count: uint256 = len(pools)
 
   for index in range(_offset, _offset + MAX_POOLS):
-    if len(col) == _limit or index >= counted:
+    if len(col) == _limit or index >= pools_count:
       break
 
-    pair_addr: address = pair_factory.allPools(index)
-
-    col.append(self._byAddress(pair_addr, _account))
+    col.append(self._byData(pools[index], _account))
 
   return col
 
@@ -283,35 +282,22 @@ def byIndex(_index: uint256, _account: address) -> Pair:
   @param _account The account to check the staked and earned balances
   @return Pair struct
   """
-  pair_factory: IPoolFactory = IPoolFactory(self.registry)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
 
-  return self._byAddress(pair_factory.allPools(_index), _account)
-
-@external
-@view
-def byAddress(_address: address, _account: address) -> Pair:
-  """
-  @notice Returns pair data based on the address
-  @param _address The address to lookup
-  @param _account The account to check the staked and earned balances
-  @return Pair struct
-  """
-  return self._byAddress(_address, _account)
+  return self._byData(pools[_index], _account)
 
 @internal
 @view
-def _byAddress(_address: address, _account: address) -> Pair:
+def _byData(_data: address[3], _account: address) -> Pair:
   """
-  @notice Returns pair data based on the address
-  @param _address The address to lookup
+  @notice Returns pair data based on the factory, pair and gauge addresses
+  @param _address The addresses to lookup
   @param _account The user account
   @return Pair struct
   """
-  assert _address != empty(address), 'Invalid address!'
-
   voter: IVoter = IVoter(self.voter)
-  pair: IPool = IPool(_address)
-  gauge: IGauge = IGauge(voter.gauges(_address))
+  pool: IPool = IPool(_data[1])
+  gauge: IGauge = IGauge(_data[2])
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
@@ -327,19 +313,20 @@ def _byAddress(_address: address, _account: address) -> Pair:
     emissions_token = gauge.rewardToken()
 
   return Pair({
-    pair_address: _address,
-    symbol: pair.symbol(),
-    decimals: pair.decimals(),
-    stable: pair.stable(),
-    total_supply: pair.totalSupply(),
+    factory: _data[0],
+    pair_address: _data[1],
+    symbol: pool.symbol(),
+    decimals: pool.decimals(),
+    stable: pool.stable(),
+    total_supply: pool.totalSupply(),
 
-    token0: pair.token0(),
-    reserve0: pair.reserve0(),
-    claimable0: pair.claimable0(_account),
+    token0: pool.token0(),
+    reserve0: pool.reserve0(),
+    claimable0: pool.claimable0(_account),
 
-    token1: pair.token1(),
-    reserve1: pair.reserve1(),
-    claimable1: pair.claimable1(_account),
+    token1: pool.token1(),
+    reserve1: pool.reserve1(),
+    claimable1: pool.claimable1(_account),
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
@@ -351,7 +338,7 @@ def _byAddress(_address: address, _account: address) -> Pair:
     emissions: emissions,
     emissions_token: emissions_token,
 
-    account_balance: pair.balanceOf(_account),
+    account_balance: pool.balanceOf(_account),
     account_earned: earned,
     account_staked: acc_staked
   })
@@ -367,23 +354,22 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @return Array for PairEpoch structs
   """
   voter: IVoter = IVoter(self.voter)
-  pair_factory: IPoolFactory = IPoolFactory(self.registry)
-  pairs_count: uint256 = pair_factory.allPoolsLength()
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
   col: DynArray[PairEpoch, MAX_POOLS] = empty(DynArray[PairEpoch, MAX_POOLS])
 
   for index in range(_offset, _offset + MAX_POOLS):
-    if counted == _limit or index >= pairs_count:
+    if counted == _limit or index >= pools_count:
       break
 
-    pair_addr: address = pair_factory.allPools(index)
-    gauge_addr: address = voter.gauges(pair_addr)
+    pool_data: address[3] = pools[index]
 
-    if voter.isAlive(gauge_addr) == False:
+    if voter.isAlive(pool_data[2]) == False:
       continue
 
-    col.append(self._epochLatestByAddress(pair_addr, gauge_addr))
+    col.append(self._epochLatestByAddress(pool_data[1], pool_data[2]))
 
     counted += 1
 

@@ -40,6 +40,7 @@ Below is the list of datasets we support.
 It allows fetching on-chain pairs data.
 The returned data/struct of type `Pair` values represent:
 
+ * `factory` - pair factory address
  * `pair_address` - pair contract address
  * `symbol` - pair symbol
  * `decimals` - pair decimals
