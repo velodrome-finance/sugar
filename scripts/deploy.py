@@ -1,17 +1,18 @@
 import os
 
-from brownie import accounts, VeSugar, PairsSugar
+from brownie import accounts, VeSugar, LpSugar
 
 
 def main():
     contract_name = str(os.getenv('CONTRACT')).lower()
     account = accounts.load('sugar')
 
-    if 'pairs' in contract_name:
-        psugar = PairsSugar.deploy({'from': account})
-        psugar.setup(
+    if 'lp' in contract_name:
+        lpsugar = LpSugar.deploy({'from': account})
+        lpsugar.setup(
             os.getenv('VOTER_ADDRESS'),
-            os.getenv('FACTORY_ADDRESS'),
+            os.getenv('REGISTRY_ADDRESS'),
+            os.getenv('V1_FACTORY_ADDRESS'),
             {'from': account}
         )
 
@@ -20,9 +21,8 @@ def main():
         vesugar.setup(
             os.getenv('VOTER_ADDRESS'),
             os.getenv('DIST_ADDRESS'),
-            os.getenv('FACTORY_ADDRESS'),
             {'from': account}
         )
 
-    if 've' not in contract_name and 'pairs' not in contract_name:
+    if 've' not in contract_name and 'lp' not in contract_name:
         print('Set the `CONTRACT` environment variable to deploy a contract.')
