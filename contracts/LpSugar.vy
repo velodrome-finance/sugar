@@ -1,8 +1,8 @@
 # @version >=0.3.6 <0.4.0
 
-# @title Velodrome Finance Liquidity Pairs Sugar v2
+# @title Velodrome Finance LP Sugar v2
 # @author stas
-# @notice Makes it nicer to work with the liquidity pairs.
+# @notice Makes it nicer to work with the liquidity pools.
 
 # Structs
 
@@ -20,9 +20,9 @@ struct Token:
   account_balance: uint256
   listed: bool
 
-struct Pair:
+struct Lp:
   factory: address
-  pair_address: address
+  lp: address
   symbol: String[100]
   decimals: uint8
   stable: bool
@@ -50,17 +50,26 @@ struct Pair:
   account_earned: uint256
   account_staked: uint256
 
-struct PairEpochReward:
+struct LpEpochReward:
   token: address
   amount: uint256
 
-struct PairEpoch:
+struct LpEpoch:
   ts: uint256
-  pair_address: address
+  lp: address
   votes: uint256
   emissions: uint256
-  bribes: DynArray[PairEpochReward, MAX_REWARDS]
-  fees: DynArray[PairEpochReward, MAX_REWARDS]
+  bribes: DynArray[LpEpochReward, MAX_REWARDS]
+  fees: DynArray[LpEpochReward, MAX_REWARDS]
+
+struct Reward:
+  venft_id: uint256
+  lp: address
+  amount: uint256
+  token: address
+  fee: address
+  bribe: address
+
 
 # Our contracts / Interfaces
 
@@ -95,7 +104,7 @@ interface IPool:
   def balanceOf(_account: address) -> uint256: view
 
 interface IVoter:
-  def gauges(_pair_addr: address) -> address: view
+  def gauges(_pool_addr: address) -> address: view
   def gaugeToBribe(_gauge_addr: address) -> address: view
   def gaugeToFees(_gauge_addr: address) -> address: view
   def isAlive(_gauge_addr: address) -> bool: view
@@ -120,6 +129,7 @@ interface IReward:
   def tokenRewardsPerEpoch(_token: address, _epstart: uint256) -> uint256: view
   def rewardsListLength() -> uint256: view
   def rewards(_index: uint256) -> address: view
+  def earned(_token: address, _venft_id: uint256) -> uint256: view
 
 # Vars
 registry: public(address)
@@ -201,9 +211,9 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
 def tokens(_limit: uint256, _offset: uint256, _account: address)\
   -> DynArray[Token, MAX_TOKENS]:
   """
-  @notice Returns a collection of tokens data based on available pairs
+  @notice Returns a collection of tokens data based on available pools
   @param _limit The max amount of tokens to return
-  @param _offset The amount of pairs to skip
+  @param _offset The amount of pools to skip
   @param _account The account to check the balances
   @return Array for Token structs
   """
@@ -253,15 +263,15 @@ def _token(_address: address, _account: address) -> Token:
 @external
 @view
 def all(_limit: uint256, _offset: uint256, _account: address) \
-    -> DynArray[Pair, MAX_POOLS]:
+    -> DynArray[Lp, MAX_POOLS]:
   """
-  @notice Returns a collection of pair data
-  @param _limit The max amount of pairs to return
-  @param _offset The amount of pairs to skip
+  @notice Returns a collection of pool data
+  @param _limit The max amount of pools to return
+  @param _offset The amount of pools to skip
   @param _account The account to check the staked and earned balances
-  @return Array for Pair structs
+  @return Array for Lp structs
   """
-  col: DynArray[Pair, MAX_POOLS] = empty(DynArray[Pair, MAX_POOLS])
+  col: DynArray[Lp, MAX_POOLS] = empty(DynArray[Lp, MAX_POOLS])
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
 
@@ -275,12 +285,12 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
 
 @external
 @view
-def byIndex(_index: uint256, _account: address) -> Pair:
+def byIndex(_index: uint256, _account: address) -> Lp:
   """
-  @notice Returns pair data at a specific stored index
+  @notice Returns pool data at a specific stored index
   @param _index The index to lookup
   @param _account The account to check the staked and earned balances
-  @return Pair struct
+  @return Lp struct
   """
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
 
@@ -288,12 +298,12 @@ def byIndex(_index: uint256, _account: address) -> Pair:
 
 @internal
 @view
-def _byData(_data: address[3], _account: address) -> Pair:
+def _byData(_data: address[3], _account: address) -> Lp:
   """
-  @notice Returns pair data based on the factory, pair and gauge addresses
+  @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
   @param _account The user account
-  @return Pair struct
+  @return Lp struct
   """
   voter: IVoter = IVoter(self.voter)
   pool: IPool = IPool(_data[1])
@@ -312,9 +322,9 @@ def _byData(_data: address[3], _account: address) -> Pair:
     emissions = gauge.rewardRate()
     emissions_token = gauge.rewardToken()
 
-  return Pair({
+  return Lp({
     factory: _data[0],
-    pair_address: _data[1],
+    lp: _data[1],
     symbol: pool.symbol(),
     decimals: pool.decimals(),
     stable: pool.stable(),
@@ -346,19 +356,19 @@ def _byData(_data: address[3], _account: address) -> Pair:
 @external
 @view
 def epochsLatest(_limit: uint256, _offset: uint256) \
-    -> DynArray[PairEpoch, MAX_POOLS]:
+    -> DynArray[LpEpoch, MAX_POOLS]:
   """
-  @notice Returns all pairs latest epoch data (up to 200 items)
-  @param _limit The max amount of pairs to check for epochs
-  @param _offset The amount of pairs to skip
-  @return Array for PairEpoch structs
+  @notice Returns all pools latest epoch data (up to 200 items)
+  @param _limit The max amount of pools to check for epochs
+  @param _offset The amount of pools to skip
+  @return Array for LpEpoch structs
   """
   voter: IVoter = IVoter(self.voter)
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
-  col: DynArray[PairEpoch, MAX_POOLS] = empty(DynArray[PairEpoch, MAX_POOLS])
+  col: DynArray[LpEpoch, MAX_POOLS] = empty(DynArray[LpEpoch, MAX_POOLS])
 
   for index in range(_offset, _offset + MAX_POOLS):
     if counted == _limit or index >= pools_count:
@@ -378,24 +388,24 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
 @external
 @view
 def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
-    -> DynArray[PairEpoch, MAX_EPOCHS]:
+    -> DynArray[LpEpoch, MAX_EPOCHS]:
   """
-  @notice Returns all pair epoch data based on the address
+  @notice Returns all pool epoch data based on the address
   @param _limit The max amount of epochs to return
   @param _offset The number of epochs to skip
   @param _address The address to lookup
-  @return Array for PairEpoch structs
+  @return Array for LpEpoch structs
   """
   return self._epochsByAddress(_limit, _offset, _address)
 
 @internal
 @view
-def _epochLatestByAddress(_address: address, _gauge: address) -> PairEpoch:
+def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   """
-  @notice Returns latest pair epoch data based on the address
-  @param _address The pair address
-  @param _gauge The pair gauge
-  @return A PairEpoch struct
+  @notice Returns latest pool epoch data based on the address
+  @param _address The pool address
+  @param _gauge The pool gauge
+  @return A LpEpoch struct
   """
   voter: IVoter = IVoter(self.voter)
   gauge: IGauge = IGauge(_gauge)
@@ -408,9 +418,9 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> PairEpoch:
     bribe.getPriorSupplyIndex(epoch_end_ts)
   )
 
-  return PairEpoch({
+  return LpEpoch({
     ts: epoch_start_ts,
-    pair_address: _address,
+    lp: _address,
     votes: bribe_supply_cp[1],
     emissions: gauge.rewardRateByEpoch(epoch_start_ts),
     bribes: self._epochRewards(epoch_start_ts, bribe.address),
@@ -420,18 +430,18 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> PairEpoch:
 @internal
 @view
 def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
-    -> DynArray[PairEpoch, MAX_EPOCHS]:
+    -> DynArray[LpEpoch, MAX_EPOCHS]:
   """
-  @notice Returns all pair epoch data based on the address
+  @notice Returns all pool epoch data based on the address
   @param _limit The max amount of epochs to return
   @param _offset The number of epochs to skip
   @param _address The address to lookup
-  @return Array for PairEpoch structs
+  @return Array for LpEpoch structs
   """
   assert _address != empty(address), 'Invalid address!'
 
-  epochs: DynArray[PairEpoch, MAX_EPOCHS] = \
-    empty(DynArray[PairEpoch, MAX_EPOCHS])
+  epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
+    empty(DynArray[LpEpoch, MAX_EPOCHS])
 
   voter: IVoter = IVoter(self.voter)
   gauge: IGauge = IGauge(voter.gauges(_address))
@@ -453,9 +463,9 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     bribe_supply_index: uint256 = bribe.getPriorSupplyIndex(epoch_end_ts)
     bribe_supply_cp: uint256[2] = bribe.supplyCheckpoints(bribe_supply_index)
 
-    epochs.append(PairEpoch({
+    epochs.append(LpEpoch({
       ts: epoch_start_ts,
-      pair_address: _address,
+      lp: _address,
       votes: bribe_supply_cp[1],
       emissions: gauge.rewardRateByEpoch(epoch_start_ts),
       bribes: self._epochRewards(epoch_start_ts, bribe.address),
@@ -473,15 +483,15 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
 @internal
 @view
 def _epochRewards(_ts: uint256, _reward: address) \
-    -> DynArray[PairEpochReward, MAX_REWARDS]:
+    -> DynArray[LpEpochReward, MAX_REWARDS]:
   """
-  @notice Returns pair rewards
-  @param _ts The pair epoch start timestamp
+  @notice Returns pool rewards
+  @param _ts The pool epoch start timestamp
   @param _bribe The reward address
-  @return An array of `PairEpochReward` structs
+  @return An array of `LpEpochReward` structs
   """
-  rewards: DynArray[PairEpochReward, MAX_REWARDS] = \
-    empty(DynArray[PairEpochReward, MAX_REWARDS])
+  rewards: DynArray[LpEpochReward, MAX_REWARDS] = \
+    empty(DynArray[LpEpochReward, MAX_REWARDS])
 
   if _reward == empty(address):
     return rewards
@@ -500,9 +510,140 @@ def _epochRewards(_ts: uint256, _reward: address) \
     if reward_amount == 0:
       continue
 
-    rewards.append(PairEpochReward({
+    rewards.append(LpEpochReward({
       token: reward_token,
       amount: reward_amount
     }))
 
   return rewards
+
+@external
+@view
+def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
+    -> DynArray[Reward, MAX_POOLS]:
+  """
+  @notice Returns a collection of veNFT rewards data
+  @param _limit The max amount of pools to check for rewards
+  @param _offset The amount of pools to skip checking for rewards
+  @param _venft_id The veNFT ID to get rewards for
+  @return Array for VeNFT Reward structs
+  """
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools_count: uint256 = len(pools)
+  counted: uint256 = 0
+
+  col: DynArray[Reward, MAX_POOLS] = empty(DynArray[Reward, MAX_POOLS])
+
+  for pindex in range(_offset, _offset + MAX_POOLS):
+    if counted == _limit or pindex >= pools_count:
+      break
+
+    pool_data: address[3] = pools[pindex]
+    pcol: DynArray[Reward, MAX_POOLS] = \
+      self._poolRewards(_venft_id, pool_data[1], pool_data[2])
+
+    # Basically merge pool rewards to the rest of the rewards...
+    for cindex in range(MAX_POOLS):
+      if cindex >= len(pcol):
+        break
+
+      col.append(pcol[cindex])
+
+    counted += 1
+
+  return col
+
+@external
+@view
+def rewardsByAddress(_venft_id: uint256, _pool: address) \
+    -> DynArray[Reward, MAX_POOLS]:
+  """
+  @notice Returns a collection of veNFT rewards data for a specific pool
+  @param _venft_id The veNFT ID to get rewards for
+  @param _pool The pool address to get rewards for
+  @return Array for VeNFT Reward structs
+  """
+  gauge_addr: address = IVoter(self.voter).gauges(_pool)
+
+  return self._poolRewards(_venft_id, _pool, gauge_addr)
+
+@internal
+@view
+def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
+    -> DynArray[Reward, MAX_POOLS]:
+  """
+  @notice Returns a collection with veNFT pool rewards
+  @param _venft_id The veNFT ID to get rewards for
+  @param _pool The pool address
+  @param _gauge The pool gauge address
+  @param _col The array of `Reward` sturcts to update
+  """
+  pool: IPool = IPool(_pool)
+  voter: IVoter = IVoter(self.voter)
+
+  col: DynArray[Reward, MAX_POOLS] = empty(DynArray[Reward, MAX_POOLS])
+
+  if _pool == empty(address) or _gauge == empty(address):
+    return col
+
+  fee: IReward = IReward(voter.gaugeToFees(_gauge))
+  bribe: IReward = IReward(voter.gaugeToBribe(_gauge))
+
+  token0: address = pool.token0()
+  token1: address = pool.token1()
+
+  fee0_amount: uint256 = fee.earned(token0, _venft_id)
+  fee1_amount: uint256 = fee.earned(token1, _venft_id)
+
+  if fee0_amount > 0:
+    col.append(
+      Reward({
+        venft_id: _venft_id,
+        lp: pool.address,
+        amount: fee0_amount,
+        token: token0,
+        fee: fee.address,
+        bribe: empty(address)
+      })
+    )
+
+  if fee1_amount > 0:
+    col.append(
+      Reward({
+        venft_id: _venft_id,
+        lp: pool.address,
+        amount: fee1_amount,
+        token: token1,
+        fee: fee.address,
+        bribe: empty(address)
+      })
+    )
+
+  if bribe.address == empty(address):
+    return col
+
+  bribes_len: uint256 = bribe.rewardsListLength()
+
+  # Bribes have a 16 max rewards limit anyway...
+  for bindex in range(MAX_REWARDS):
+    if bindex >= bribes_len:
+      break
+
+    bribe_token: address = bribe.rewards(bindex)
+    bribe_amount: uint256 = bribe.earned(bribe_token, _venft_id)
+
+    if bribe_amount == 0:
+      continue
+
+    col.append(
+      Reward({
+        venft_id: _venft_id,
+        lp: pool.address,
+        amount: bribe_amount,
+        token: bribe_token,
+        fee: empty(address),
+        bribe: bribe.address
+      })
+    )
+
+  return col
