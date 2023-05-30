@@ -9,8 +9,8 @@ MAX_RESULTS: constant(uint256) = 1000
 # we can't go crazy with it due to memory limitations...
 MAX_PAIRS: constant(uint256) = 30
 
-struct PairVotes:
-  pair: address
+struct LpVotes:
+  lp: address
   weight: uint256
 
 struct VeNFT:
@@ -22,32 +22,20 @@ struct VeNFT:
   rebase_amount: uint256
   expires_at: uint256
   voted_at: uint256
-  votes: DynArray[PairVotes, MAX_PAIRS]
+  votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
-
-struct Reward:
-  venft_id: uint256
-  pair: address
-  amount: uint256
-  token: address
-  fee: address
-  bribe: address
 
 # Our contracts / Interfaces
 
 interface IVoter:
   def ve() -> address: view
-  def gauges(_pair_addr: address) -> address: view
+  def gauges(_lp: address) -> address: view
   def gaugeToBribe(_gauge_addr: address) -> address: view
   def gaugeToFees(_gauge_addr: address) -> address: view
   def lastVoted(_venft_id: uint256) -> uint256: view
   def poolVote(_venft_id: uint256, _index: uint256) -> address: view
-  def votes(_venft_id: uint256, _pair: address) -> uint256: view
+  def votes(_venft_id: uint256, _lp: address) -> uint256: view
   def usedWeights(_venft_id: uint256) -> uint256: view
-
-interface IPair:
-  def token0() -> address: view
-  def token1() -> address: view
 
 interface IRewardsDistributor:
   def ve() -> address: view
@@ -61,23 +49,12 @@ interface IVotingEscrow:
   def locked(_venft_id: uint256) -> (uint128, uint256): view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
 
-interface IReward:
-  def rewardsListLength() -> uint256: view
-  def rewards(_index: uint256) -> address: view
-  def earned(_token: address, _venft_id: uint256) -> uint256: view
-
-interface IPairFactory:
-  def allPoolsLength() -> uint256: view
-  def allPools(_index: uint256) -> address: view
-
-
 # Vars
 
 voter: public(address)
 token: public(address)
 ve: public(address)
 rewards_distributor: public(address)
-pair_factory: public(address)
 owner: public(address)
 
 # Methods
@@ -90,7 +67,7 @@ def __init__():
   self.owner = msg.sender
 
 @external
-def setup(_voter: address, _rewards_distributor: address, _factory: address):
+def setup(_voter: address, _rewards_distributor: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -106,7 +83,6 @@ def setup(_voter: address, _rewards_distributor: address, _factory: address):
   self.ve = voter.ve()
   self.token = IVotingEscrow(self.ve).token()
   self.rewards_distributor = _rewards_distributor
-  self.pair_factory = _factory
 
 @external
 @view
@@ -183,32 +159,32 @@ def _byId(_id: uint256) -> VeNFT:
   voter: IVoter = IVoter(self.voter)
   dist: IRewardsDistributor = IRewardsDistributor(self.rewards_distributor)
 
-  votes: DynArray[PairVotes, MAX_PAIRS] = []
+  votes: DynArray[LpVotes, MAX_PAIRS] = []
   amount: uint128 = 0
   expires_at: uint256 = 0
   amount, expires_at = ve.locked(_id)
 
   vote_weight: uint256 = voter.usedWeights(_id)
-  # Since we don't have a way to see how many pairs we voted...
+  # Since we don't have a way to see how many pools we voted...
   left_weight: uint256 = vote_weight
 
   for index in range(MAX_PAIRS):
     if left_weight == 0:
       break
 
-    pair_address: address = voter.poolVote(_id, index)
+    lp: address = voter.poolVote(_id, index)
 
-    if pair_address == empty(address):
+    if lp == empty(address):
       break
 
-    weight: uint256 = voter.votes(_id, pair_address)
+    weight: uint256 = voter.votes(_id, lp)
 
-    votes.append(PairVotes({
-      pair: pair_address,
+    votes.append(LpVotes({
+      lp: lp,
       weight: weight
     }))
 
-    # Remove _counted_ weight to see if there are other pair votes left...
+    # Remove _counted_ weight to see if there are other pool votes left...
     left_weight -= weight
 
   return VeNFT({
@@ -224,136 +200,3 @@ def _byId(_id: uint256) -> VeNFT:
     votes: votes,
     token: self.token,
   })
-
-@external
-@view
-def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
-    -> DynArray[Reward, MAX_RESULTS]:
-  """
-  @notice Returns a collection of veNFT rewards data
-  @param _limit The max amount of pairs to check for rewards
-  @param _offset The amount of pairs to skip checking for rewards
-  @param _venft_id The veNFT ID to get rewards for
-  @return Array for VeNFT Reward structs
-  """
-  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  pairs_count: uint256 = pair_factory.allPoolsLength()
-  counted: uint256 = 0
-
-  col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
-
-  for pindex in range(_offset, _offset + MAX_RESULTS):
-    if counted == _limit or pindex >= pairs_count:
-      break
-
-    pair_addr: address = pair_factory.allPools(pindex)
-    pcol: DynArray[Reward, MAX_RESULTS] = \
-      self._pairRewards(_venft_id, pair_addr)
-
-    # Basically merge pair rewards to the rest of the rewards...
-    for cindex in range(MAX_RESULTS):
-      if cindex >= len(pcol):
-        break
-
-      col.append(pcol[cindex])
-
-    counted += 1
-
-  return col
-
-@external
-@view
-def rewardsByPair(_venft_id: uint256, _pair: address) \
-    -> DynArray[Reward, MAX_RESULTS]:
-  """
-  @notice Returns a collection of veNFT rewards data for a specific pair
-  @param _venft_id The veNFT ID to get rewards for
-  @param _pair The pair address to get rewards for
-  @return Array for VeNFT Reward structs
-  """
-  return self._pairRewards(_venft_id, _pair)
-
-@internal
-@view
-def _pairRewards(_venft_id: uint256, _pair: address) \
-    -> DynArray[Reward, MAX_RESULTS]:
-  """
-  @notice Returns a collection with veNFT pair rewards
-  @param _venft_id The veNFT ID to get rewards for
-  @param _pair The pair address
-  @param _col The array of `Reward` sturcts to update
-  """
-  pair: IPair = IPair(_pair)
-  voter: IVoter = IVoter(self.voter)
-
-  col: DynArray[Reward, MAX_RESULTS] = empty(DynArray[Reward, MAX_RESULTS])
-
-  if _pair == empty(address):
-    return col
-
-  gauge: address = voter.gauges(_pair)
-
-  if gauge == empty(address):
-    return col
-
-  fee: IReward = IReward(voter.gaugeToFees(gauge))
-  bribe: IReward = IReward(voter.gaugeToBribe(gauge))
-
-  token0: address = pair.token0()
-  token1: address = pair.token1()
-
-  fee0_amount: uint256 = fee.earned(token0, _venft_id)
-  fee1_amount: uint256 = fee.earned(token1, _venft_id)
-
-  if fee0_amount > 0:
-    col.append(
-      Reward({
-        venft_id: _venft_id,
-        pair: pair.address,
-        amount: fee0_amount,
-        token: token0,
-        fee: fee.address,
-        bribe: empty(address)
-      })
-    )
-
-  if fee1_amount > 0:
-    col.append(
-      Reward({
-        venft_id: _venft_id,
-        pair: pair.address,
-        amount: fee1_amount,
-        token: token1,
-        fee: fee.address,
-        bribe: empty(address)
-      })
-    )
-
-  if bribe.address == empty(address):
-    return col
-
-  bribes_len: uint256 = bribe.rewardsListLength()
-
-  # Bribes have a 16 max rewards limit anyway...
-  for bindex in range(MAX_PAIRS):
-    if bindex >= bribes_len:
-      break
-
-    bribe_token: address = bribe.rewards(bindex)
-    bribe_amount: uint256 = bribe.earned(bribe_token, _venft_id)
-
-    if bribe_amount == 0:
-      continue
-
-    col.append(
-      Reward({
-        venft_id: _venft_id,
-        pair: pair.address,
-        amount: bribe_amount,
-        token: bribe_token,
-        fee: empty(address),
-        bribe: bribe.address
-      })
-    )
-
-  return col

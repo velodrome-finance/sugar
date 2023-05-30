@@ -5,13 +5,13 @@ Sugar comes with contracts to help working with Velodrome Finance data!
 ## How come?!
 
 The idea is pretty simple, instead of relying on our API for a structured
-data set of liquidity pairs data, these contracts can be called in an
+data set of liquidity pool data, these contracts can be called in an
 efficient way to directly fetch the same data off-chain.
 
 What normally would require:
-  1. fetching the number of liquidity pairs
-  2. querying every pair address at it's index
-  3. querying pair tokens data
+  1. fetching the number of liquidity pools
+  2. querying every pool address at it's index
+  3. querying pool tokens data
   4. querying gauge addresses and reward rate
 
 Takes a single call with _sugar_!
@@ -33,73 +33,73 @@ and normalize it based on it's relevancy.
 
 Below is the list of datasets we support.
 
-### Liquidity Pairs Data
+### Liquidity Pools Data
 
-`PairsSugar.vy` is deployed at `0x8b70c5e53235abbd1415957f7110fbfe5d0529d4`
+`LpSugar.vy` is deployed at `0x8b70c5e53235abbd1415957f7110fbfe5d0529d4`
 
-It allows fetching on-chain pairs data.
-The returned data/struct of type `Pair` values represent:
+It allows fetching on-chain pools data.
+The returned data/struct of type `Lp` values represent:
 
- * `factory` - pair factory address
- * `pair_address` - pair contract address
- * `symbol` - pair symbol
- * `decimals` - pair decimals
- * `stable` - pair pool type (`stable = false`, means it's a variable type of pool)
- * `total_supply` - pair tokens supply
- * `token0` - pair 1st token address
- * `reserve0` - pair 1st token reserves (nr. of tokens in the contract)
+ * `factory` - pool factory address
+ * `lp` - pool contract address
+ * `symbol` - pool symbol
+ * `decimals` - pool decimals
+ * `stable` - pool type (`stable = false`, means it's a variable type of pool)
+ * `total_supply` - pool tokens supply
+ * `token0` - pool 1st token address
+ * `reserve0` - pool 1st token reserves (nr. of tokens in the contract)
  * `claimable0` - claimable 1st token from fees (for unstaked positions)
- * `token1` - pair 2nd token address
- * `reserve1` - pair 2nd token reserves (nr. of tokens in the contract)
+ * `token1` - pool 2nd token address
+ * `reserve1` - pool 2nd token reserves (nr. of tokens in the contract)
  * `claimable1` - claimable 2nd token from fees (for unstaked positions)
- * `gauge` - pair gauge address
- * `gauge_total_supply` - pair staked tokens (less/eq than/to pair total supply)
+ * `gauge` - pool gauge address
+ * `gauge_total_supply` - pool staked tokens (less/eq than/to pool total supply)
  * `gauge_alive` - indicates if the gauge is still active
- * `fee` - pair fees contract address
- * `bribe` - pair bribes contract address
- * `emissions` - pair emissions (per second)
- * `emissions_token` - pair emissions token address
- * `account_balance` - account LP tokens balance
- * `account_earned` - account earned emissions for this pair
- * `account_staked` - account pair staked in gauge balance
+ * `fee` - pool fees contract address
+ * `bribe` - pool bribes contract address
+ * `emissions` - pool emissions (per second)
+ * `emissions_token` - pool emissions token address
+ * `account_balance` - account Lp tokens balance
+ * `account_earned` - account earned emissions for this pool
+ * `account_staked` - account pool staked in gauge balance
 
 ---
 
 The available methods are:
- * `all(_limit: uint256, _offset: uint256, _account: address) -> Pair[]` -
-   returns a paginated list of `Pair` structs.
- * `byIndex(_index: uint256, _account: address) -> Pair` - returns the
-   `Pair` data for a specific index of a pair.
- * `byAddress(_address: address, _account: address) -> Pair` - returns the
-   `Pair` data for a specific pair address.
+ * `all(_limit: uint256, _offset: uint256, _account: address) -> Lp[]` -
+   returns a paginated list of `Lp` structs.
+ * `byIndex(_index: uint256, _account: address) -> Lp` - returns the
+   `Lp` data for a specific index of a pool.
+ * `byAddress(_address: address, _account: address) -> Lp` - returns the
+   `Lp` data for a specific pool address.
 
 ---
 
-For the pair epoch data we return, starting with most recent epoch, a struct of
-type `PairEpoch` with the following values:
+For the pool epoch data we return, starting with most recent epoch, a struct of
+type `LpEpoch` with the following values:
 
  * `ts` - the start of the epoch/week timestamp
- * `pair_address` - the pair address
+ * `lp` - the pool address
  * `votes` - the amount of the votes for that epoch/week
  * `emissions` - emissions per second for that epoch/week
- * `bribes` - a list of bribes data, it is a struct of type `PairEpochBribe` with
+ * `bribes` - a list of bribes data, it is a struct of type `LpEpochBribe` with
    the following values:
     * `token` - bribe token address
     * `amount` - bribe amount
- * `fees` - a list of fees data, it is a struct of type `PairEpochBribe`,
+ * `fees` - a list of fees data, it is a struct of type `LpEpochBribe`,
    just like the `bribes` list
 
-To fetch a list of epochs for a specific pair, this method is available:
+To fetch a list of epochs for a specific pool, this method is available:
 
- * `epochsByAddress(_limit: uint256, _offset: uint256, _address: address) -> PairEpoch[]`
+ * `epochsByAddress(_limit: uint256, _offset: uint256, _address: address) -> LpEpoch[]`
 
-To fetch a list of latest epochs data for a every pair, this method is available:
+To fetch a list of latest epochs data for a every pool, this method is available:
 
- * `epochsLatest(_limit: uint256, _offset: uint256) -> PairEpoch[]`
+ * `epochsLatest(_limit: uint256, _offset: uint256) -> LpEpoch[]`
 
 ---
 
-The pairs token list (compiled from all the pools `token0`/`token1`) uses the type
+The pools token list (compiled from all the pools `token0`/`token1`) uses the type
 `Token` with the following values:
 
  * `token_address` - the token address
@@ -111,6 +111,23 @@ The pairs token list (compiled from all the pools `token0`/`token1`) uses the ty
 To fetch the token list this method is available:
 
  * `tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
+
+---
+
+For the rewards, we return a struct of type `Reward` with the following
+values:
+
+ * `venft_id` - the veNFT id it belongs to
+ * `lp` - the pool address representing the source of the reward
+ * `amount` - the amount of the tokens accrued
+ * `token` - the reward token address
+ * `fee` - the fee contract address (if the reward comes from fees)
+ * `bribe` - the bribe contract address (if the reward comes from bribes)
+
+To fetch a list of rewards for a specific veNFT, this method is available:
+
+ * `rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) -> Reward[]`
+ * `rewardsByAddress(_venft_id: uint256, _pool: address) -> Reward[]`
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
@@ -127,13 +144,13 @@ The returned data/struct of type `VeNFT` values represent:
   * `rebase_amount` - veNFT accrued reabses amount
   * `expires_at` - veNFT lock expiration timestamp
   * `voted_at` - veNFT last vote timestamp
-  * `votes` - veNFT list of pairs with vote weights casted in the form of
-    `PairVotes`
+  * `votes` - veNFT list of pools with vote weights casted in the form of
+    `LpVotes`
   * `token` - veNFT locked token address
 
-The pair votes struct values represent:
-  * `pair` - the pair address
-  * `weight` - the vote weights of the vote for the pair
+The pool votes struct values represent:
+  * `lp` - the pool address
+  * `weight` - the vote weights of the vote for the pool
 
 ---
 
@@ -145,23 +162,6 @@ The available methods are:
    for a specific account.
  * `byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
    NFT id.
-
----
-
-For the veNFT rewards, we return a struct of type `Reward` with the following
-values:
-
- * `venft_id` - the veNFT id it belongs to
- * `pair` - the pair address representing the source of the reward
- * `amount` - the amount of the tokens accrued
- * `token` - the reward token address
- * `fee` - the fee contract address (if the reward comes from fees)
- * `bribe` - the bribe contract address (if the reward comes from bribes)
-
-To fetch a list of rewards for a specific veNFT, this method is available:
-
- * `rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) -> Reward[]`
- * `rewardsByPair(_venft_id: uint256, _pair: address) -> Reward[]`
 
 ## Development
 
