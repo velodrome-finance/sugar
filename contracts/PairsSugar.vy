@@ -6,7 +6,8 @@
 
 # Structs
 
-MAX_PAIRS: constant(uint256) = 1000
+MAX_FACTORIES: constant(uint256) = 10
+MAX_POOLS: constant(uint256) = 1000
 MAX_TOKENS: constant(uint256) = 2000
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
@@ -67,11 +68,19 @@ interface IERC20:
   def symbol() -> String[100]: view
   def balanceOf(_account: address) -> uint256: view
 
-interface IPairFactory:
+interface IFactoryRegistry:
+  def fallbackPoolFactory() -> address: view
+  def poolFactories() -> DynArray[address, MAX_FACTORIES]: view
+  def poolFactoriesLength() -> uint256: view
+
+interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
+  # Backwards compatibility with V1
+  def allPairsLength() -> uint256: view
+  def allPairs(_index: uint256) -> address: view
 
-interface IPair:
+interface IPool:
   def token0() -> address: view
   def token1() -> address: view
   def reserve0() -> uint256: view
@@ -112,9 +121,10 @@ interface IReward:
   def rewards(_index: uint256) -> address: view
 
 # Vars
-pair_factory: public(address)
+registry: public(address)
 voter: public(address)
 owner: public(address)
+v1_factory: public(address)
 
 # Methods
 
@@ -126,15 +136,64 @@ def __init__():
   self.owner = msg.sender
 
 @external
-def setup(_voter: address, _factory: address):
+def setup(_voter: address, _registry: address, _v1_factory: address):
   """
   @dev Sets up our external contract addresses
   """
   assert self.owner == msg.sender, 'Not allowed!'
 
   self.voter = _voter
-  # TODO: Use the factory registry when it allows iterating through factories
-  self.pair_factory = _factory
+  self.registry = _registry
+  self.v1_factory = _v1_factory
+
+
+@internal
+@view
+def _pools() -> DynArray[address[3], MAX_POOLS]:
+  """
+  @notice Returns a compiled list of pool and its factory and gauge
+  @return Array of three addresses (factory, pool, gauge)
+  """
+  registry: IFactoryRegistry = IFactoryRegistry(self.registry)
+  factories_count: uint256 = registry.poolFactoriesLength()
+  factories: DynArray[address, MAX_FACTORIES] = registry.poolFactories()
+
+  pools: DynArray[address[3], MAX_POOLS] = \
+    empty(DynArray[address[3], MAX_POOLS])
+
+  for index in range(0, MAX_FACTORIES):
+    if index >= factories_count:
+      break
+
+    factory: IPoolFactory = IPoolFactory(factories[index])
+    pools_count: uint256 = 0
+    legacy: bool = factory.address == self.v1_factory
+
+    if legacy:
+      pools_count = factory.allPairsLength()
+    else:
+      pools_count = factory.allPoolsLength()
+
+    for pindex in range(0, MAX_POOLS):
+      if pindex >= pools_count:
+        break
+
+      pool_addr: address = empty(address)
+
+      if legacy:
+        pool_addr = factory.allPairs(pindex)
+      else:
+        pool_addr = factory.allPools(pindex)
+
+      gauge_addr: address = IVoter(self.voter).gauges(pool_addr)
+
+      # Keep only legacy pools with gauges...
+      if legacy == True and gauge_addr == empty(address):
+        continue
+
+      pools.append([factory.address, pool_addr, gauge_addr])
+
+  return pools
 
 @external
 @view
@@ -147,29 +206,27 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
-  counted: uint256 = pair_factory.allPoolsLength()
-
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
-  found: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
+  seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
 
   for index in range(_offset, _offset + MAX_TOKENS):
-    if len(col) == _limit or index >= counted:
+    if len(col) >= _limit or index >= len(pools):
       break
 
-    pair_addr: address = pair_factory.allPools(index)
+    pool_data: address[3] = pools[index]
 
-    pair: IPair = IPair(pair_addr)
-    token0: address = pair.token0()
-    token1: address = pair.token1()
+    pool: IPool = IPool(pool_data[1])
+    token0: address = pool.token0()
+    token1: address = pool.token1()
 
-    if token0 not in found:
+    if token0 not in seen:
       col.append(self._token(token0, _account))
-      found.append(token0)
+      seen.append(token0)
 
-    if token1 not in found:
+    if token1 not in seen:
       col.append(self._token(token1, _account))
-      found.append(token1)
+      seen.append(token1)
 
   return col
 
@@ -194,7 +251,7 @@ def _token(_address: address, _account: address) -> Token:
 @external
 @view
 def all(_limit: uint256, _offset: uint256, _account: address) \
-    -> DynArray[Pair, MAX_PAIRS]:
+    -> DynArray[Pair, MAX_POOLS]:
   """
   @notice Returns a collection of pair data
   @param _limit The max amount of pairs to return
@@ -202,12 +259,12 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @param _account The account to check the staked and earned balances
   @return Array for Pair structs
   """
-  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  pair_factory: IPoolFactory = IPoolFactory(self.registry)
   counted: uint256 = pair_factory.allPoolsLength()
 
-  col: DynArray[Pair, MAX_PAIRS] = empty(DynArray[Pair, MAX_PAIRS])
+  col: DynArray[Pair, MAX_POOLS] = empty(DynArray[Pair, MAX_POOLS])
 
-  for index in range(_offset, _offset + MAX_PAIRS):
+  for index in range(_offset, _offset + MAX_POOLS):
     if len(col) == _limit or index >= counted:
       break
 
@@ -226,7 +283,7 @@ def byIndex(_index: uint256, _account: address) -> Pair:
   @param _account The account to check the staked and earned balances
   @return Pair struct
   """
-  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  pair_factory: IPoolFactory = IPoolFactory(self.registry)
 
   return self._byAddress(pair_factory.allPools(_index), _account)
 
@@ -253,7 +310,7 @@ def _byAddress(_address: address, _account: address) -> Pair:
   assert _address != empty(address), 'Invalid address!'
 
   voter: IVoter = IVoter(self.voter)
-  pair: IPair = IPair(_address)
+  pair: IPool = IPool(_address)
   gauge: IGauge = IGauge(voter.gauges(_address))
 
   earned: uint256 = 0
@@ -302,7 +359,7 @@ def _byAddress(_address: address, _account: address) -> Pair:
 @external
 @view
 def epochsLatest(_limit: uint256, _offset: uint256) \
-    -> DynArray[PairEpoch, MAX_PAIRS]:
+    -> DynArray[PairEpoch, MAX_POOLS]:
   """
   @notice Returns all pairs latest epoch data (up to 200 items)
   @param _limit The max amount of pairs to check for epochs
@@ -310,13 +367,13 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @return Array for PairEpoch structs
   """
   voter: IVoter = IVoter(self.voter)
-  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  pair_factory: IPoolFactory = IPoolFactory(self.registry)
   pairs_count: uint256 = pair_factory.allPoolsLength()
   counted: uint256 = 0
 
-  col: DynArray[PairEpoch, MAX_PAIRS] = empty(DynArray[PairEpoch, MAX_PAIRS])
+  col: DynArray[PairEpoch, MAX_POOLS] = empty(DynArray[PairEpoch, MAX_POOLS])
 
-  for index in range(_offset, _offset + MAX_PAIRS):
+  for index in range(_offset, _offset + MAX_POOLS):
     if counted == _limit or index >= pairs_count:
       break
 
