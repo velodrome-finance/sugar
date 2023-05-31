@@ -5,11 +5,13 @@ from brownie import accounts, VeSugar, LpSugar
 
 def main():
     contract_name = str(os.getenv('CONTRACT')).lower()
-    account = accounts.load('sugar')
+    account = accounts[0]
+
+    if os.getenv('PROD'):
+        account = accounts.load('sugar')
 
     if 'lp' in contract_name:
-        lpsugar = LpSugar.deploy({'from': account})
-        lpsugar.setup(
+        LpSugar.deploy(
             os.getenv('VOTER_ADDRESS'),
             os.getenv('REGISTRY_ADDRESS'),
             os.getenv('V1_FACTORY_ADDRESS'),
@@ -17,8 +19,7 @@ def main():
         )
 
     if 've' in contract_name:
-        vesugar = VeSugar.deploy({'from': account})
-        vesugar.setup(
+        VeSugar.deploy(
             os.getenv('VOTER_ADDRESS'),
             os.getenv('DIST_ADDRESS'),
             {'from': account}
