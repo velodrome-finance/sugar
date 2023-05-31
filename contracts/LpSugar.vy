@@ -132,29 +132,19 @@ interface IReward:
   def earned(_token: address, _venft_id: uint256) -> uint256: view
 
 # Vars
-registry: public(address)
-voter: public(address)
-owner: public(address)
+registry: public(IFactoryRegistry)
+voter: public(IVoter)
 v1_factory: public(address)
 
 # Methods
 
 @external
-def __init__():
-  """
-  @dev Sets up our contract management address
-  """
-  self.owner = msg.sender
-
-@external
-def setup(_voter: address, _registry: address, _v1_factory: address):
+def __init__(_voter: address, _registry: address, _v1_factory: address):
   """
   @dev Sets up our external contract addresses
   """
-  assert self.owner == msg.sender, 'Not allowed!'
-
-  self.voter = _voter
-  self.registry = _registry
+  self.voter = IVoter(_voter)
+  self.registry = IFactoryRegistry(_registry)
   self.v1_factory = _v1_factory
 
 
@@ -165,9 +155,8 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of three addresses (factory, pool, gauge)
   """
-  registry: IFactoryRegistry = IFactoryRegistry(self.registry)
-  factories_count: uint256 = registry.poolFactoriesLength()
-  factories: DynArray[address, MAX_FACTORIES] = registry.poolFactories()
+  factories_count: uint256 = self.registry.poolFactoriesLength()
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
 
   pools: DynArray[address[3], MAX_POOLS] = \
     empty(DynArray[address[3], MAX_POOLS])
@@ -196,7 +185,7 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
       else:
         pool_addr = factory.allPools(pindex)
 
-      gauge_addr: address = IVoter(self.voter).gauges(pool_addr)
+      gauge_addr: address = self.voter.gauges(pool_addr)
 
       # Keep only legacy pools with gauges...
       if legacy == True and gauge_addr == empty(address):
@@ -245,7 +234,6 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
 @internal
 @view
 def _token(_address: address, _account: address) -> Token:
-  voter: IVoter = IVoter(self.voter)
   token: IERC20 = IERC20(_address)
   bal: uint256 = empty(uint256)
 
@@ -257,7 +245,7 @@ def _token(_address: address, _account: address) -> Token:
     symbol: token.symbol(),
     decimals: token.decimals(),
     account_balance: bal,
-    listed: voter.isWhitelistedToken(_address)
+    listed: self.voter.isWhitelistedToken(_address)
   })
 
 @external
@@ -305,7 +293,6 @@ def _byData(_data: address[3], _account: address) -> Lp:
   @param _account The user account
   @return Lp struct
   """
-  voter: IVoter = IVoter(self.voter)
   pool: IPool = IPool(_data[1])
   gauge: IGauge = IGauge(_data[2])
 
@@ -340,10 +327,10 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
-    gauge_alive: voter.isAlive(gauge.address),
+    gauge_alive: self.voter.isAlive(gauge.address),
 
-    fee: voter.gaugeToFees(gauge.address),
-    bribe: voter.gaugeToBribe(gauge.address),
+    fee: self.voter.gaugeToFees(gauge.address),
+    bribe: self.voter.gaugeToBribe(gauge.address),
 
     emissions: emissions,
     emissions_token: emissions_token,
@@ -363,7 +350,6 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
   """
-  voter: IVoter = IVoter(self.voter)
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
@@ -376,7 +362,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
 
     pool_data: address[3] = pools[index]
 
-    if voter.isAlive(pool_data[2]) == False:
+    if self.voter.isAlive(pool_data[2]) == False:
       continue
 
     col.append(self._epochLatestByAddress(pool_data[1], pool_data[2]))
@@ -407,9 +393,8 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   @param _gauge The pool gauge
   @return A LpEpoch struct
   """
-  voter: IVoter = IVoter(self.voter)
   gauge: IGauge = IGauge(_gauge)
-  bribe: IReward = IReward(voter.gaugeToBribe(gauge.address))
+  bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
 
   epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
   epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
@@ -424,7 +409,9 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
     votes: bribe_supply_cp[1],
     emissions: gauge.rewardRateByEpoch(epoch_start_ts),
     bribes: self._epochRewards(epoch_start_ts, bribe.address),
-    fees: self._epochRewards(epoch_start_ts, voter.gaugeToFees(gauge.address))
+    fees: self._epochRewards(
+      epoch_start_ts, self.voter.gaugeToFees(gauge.address)
+    )
   })
 
 @internal
@@ -443,13 +430,12 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
     empty(DynArray[LpEpoch, MAX_EPOCHS])
 
-  voter: IVoter = IVoter(self.voter)
-  gauge: IGauge = IGauge(voter.gauges(_address))
+  gauge: IGauge = IGauge(self.voter.gauges(_address))
 
-  if voter.isAlive(gauge.address) == False:
+  if self.voter.isAlive(gauge.address) == False:
     return epochs
 
-  bribe: IReward = IReward(voter.gaugeToBribe(gauge.address))
+  bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
 
   curr_epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
 
@@ -470,7 +456,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       emissions: gauge.rewardRateByEpoch(epoch_start_ts),
       bribes: self._epochRewards(epoch_start_ts, bribe.address),
       fees: self._epochRewards(
-        epoch_start_ts, voter.gaugeToFees(gauge.address)
+        epoch_start_ts, self.voter.gaugeToFees(gauge.address)
       )
     }))
 
@@ -563,7 +549,7 @@ def rewardsByAddress(_venft_id: uint256, _pool: address) \
   @param _pool The pool address to get rewards for
   @return Array for VeNFT Reward structs
   """
-  gauge_addr: address = IVoter(self.voter).gauges(_pool)
+  gauge_addr: address = self.voter.gauges(_pool)
 
   return self._poolRewards(_venft_id, _pool, gauge_addr)
 
@@ -579,15 +565,14 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
   @param _col The array of `Reward` sturcts to update
   """
   pool: IPool = IPool(_pool)
-  voter: IVoter = IVoter(self.voter)
 
   col: DynArray[Reward, MAX_POOLS] = empty(DynArray[Reward, MAX_POOLS])
 
   if _pool == empty(address) or _gauge == empty(address):
     return col
 
-  fee: IReward = IReward(voter.gaugeToFees(_gauge))
-  bribe: IReward = IReward(voter.gaugeToBribe(_gauge))
+  fee: IReward = IReward(self.voter.gaugeToFees(_gauge))
+  bribe: IReward = IReward(self.voter.gaugeToBribe(_gauge))
 
   token0: address = pool.token0()
   token1: address = pool.token1()

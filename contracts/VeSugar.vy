@@ -51,38 +51,22 @@ interface IVotingEscrow:
 
 # Vars
 
-voter: public(address)
+voter: public(IVoter)
 token: public(address)
-ve: public(address)
-rewards_distributor: public(address)
-owner: public(address)
+ve: public(IVotingEscrow)
+dist: public(IRewardsDistributor)
 
 # Methods
 
 @external
-def __init__():
-  """
-  @dev Sets up our contract management address
-  """
-  self.owner = msg.sender
-
-@external
-def setup(_voter: address, _rewards_distributor: address):
+def __init__(_voter: address, _rewards_distributor: address):
   """
   @dev Sets up our external contract addresses
   """
-  assert self.owner == msg.sender, 'Not allowed!'
-
-  voter: IVoter = IVoter(_voter)
-  rewards_distributor: IRewardsDistributor = \
-    IRewardsDistributor(_rewards_distributor)
-
-  assert rewards_distributor.ve() == voter.ve(), 'VE mismatch!'
-
-  self.voter = _voter
-  self.ve = voter.ve()
-  self.token = IVotingEscrow(self.ve).token()
-  self.rewards_distributor = _rewards_distributor
+  self.voter = IVoter(_voter)
+  self.ve = IVotingEscrow(self.voter.ve())
+  self.token = self.ve.token()
+  self.dist = IRewardsDistributor(_rewards_distributor)
 
 @external
 @view
@@ -93,14 +77,13 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[VeNFT, MAX_RESULTS]:
   @param _offset The amount of veNFTs to skip
   @return Array for VeNFT structs
   """
-  ve: IVotingEscrow = IVotingEscrow(self.ve)
   col: DynArray[VeNFT, MAX_RESULTS] = empty(DynArray[VeNFT, MAX_RESULTS])
 
   for index in range(_offset, _offset + MAX_RESULTS):
     if len(col) == _limit:
       break
 
-    if ve.ownerOf(index) == empty(address):
+    if self.ve.ownerOf(index) == empty(address):
       continue
 
     col.append(self._byId(index))
@@ -116,13 +99,12 @@ def byAccount(_account: address) -> DynArray[VeNFT, MAX_RESULTS]:
   @return Array for VeNFT structs
   """
   col: DynArray[VeNFT, MAX_RESULTS] = empty(DynArray[VeNFT, MAX_RESULTS])
-  ve: IVotingEscrow = IVotingEscrow(self.ve)
 
   if _account == empty(address):
     return col
 
   for index in range(MAX_RESULTS):
-    venft_id: uint256 = ve.tokenOfOwnerByIndex(_account, index)
+    venft_id: uint256 = self.ve.tokenOfOwnerByIndex(_account, index)
 
     if venft_id == 0:
       break
@@ -149,22 +131,17 @@ def _byId(_id: uint256) -> VeNFT:
   @param _id The index/ID to lookup
   @return VeNFT struct
   """
-  ve: IVotingEscrow = IVotingEscrow(self.ve)
-
-  account: address = ve.ownerOf(_id)
+  account: address = self.ve.ownerOf(_id)
 
   if account == empty(address):
     return empty(VeNFT)
 
-  voter: IVoter = IVoter(self.voter)
-  dist: IRewardsDistributor = IRewardsDistributor(self.rewards_distributor)
-
   votes: DynArray[LpVotes, MAX_PAIRS] = []
   amount: uint128 = 0
   expires_at: uint256 = 0
-  amount, expires_at = ve.locked(_id)
+  amount, expires_at = self.ve.locked(_id)
 
-  vote_weight: uint256 = voter.usedWeights(_id)
+  vote_weight: uint256 = self.voter.usedWeights(_id)
   # Since we don't have a way to see how many pools we voted...
   left_weight: uint256 = vote_weight
 
@@ -172,12 +149,12 @@ def _byId(_id: uint256) -> VeNFT:
     if left_weight == 0:
       break
 
-    lp: address = voter.poolVote(_id, index)
+    lp: address = self.voter.poolVote(_id, index)
 
     if lp == empty(address):
       break
 
-    weight: uint256 = voter.votes(_id, lp)
+    weight: uint256 = self.voter.votes(_id, lp)
 
     votes.append(LpVotes({
       lp: lp,
@@ -190,13 +167,13 @@ def _byId(_id: uint256) -> VeNFT:
   return VeNFT({
     id: _id,
     account: account,
-    decimals: ve.decimals(),
+    decimals: self.ve.decimals(),
 
     amount: amount,
-    voting_amount: ve.balanceOfNFT(_id),
-    rebase_amount: dist.claimable(_id),
+    voting_amount: self.ve.balanceOfNFT(_id),
+    rebase_amount: self.dist.claimable(_id),
     expires_at: expires_at,
-    voted_at: voter.lastVoted(_id),
+    voted_at: self.voter.lastVoted(_id),
     votes: votes,
     token: self.token,
   })
