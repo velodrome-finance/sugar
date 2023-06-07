@@ -47,7 +47,7 @@ interface IVotingEscrow:
   def ownerOf(_venft_id: uint256) -> address: view
   def balanceOfNFT(_venft_id: uint256) -> uint256: view
   def locked(_venft_id: uint256) -> (uint128, uint256): view
-  def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
+  def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
 
 # Vars
 
@@ -104,7 +104,7 @@ def byAccount(_account: address) -> DynArray[VeNFT, MAX_RESULTS]:
     return col
 
   for index in range(MAX_RESULTS):
-    venft_id: uint256 = self.ve.tokenOfOwnerByIndex(_account, index)
+    venft_id: uint256 = self.ve.ownerToNFTokenIdList(_account, index)
 
     if venft_id == 0:
       break
