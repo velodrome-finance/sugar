@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 # @version >=0.3.6 <0.4.0
 
 # @title Velodrome Finance veNFT Sugar v2
