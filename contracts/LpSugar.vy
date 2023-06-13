@@ -86,9 +86,6 @@ interface IFactoryRegistry:
 interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
-  # Backwards compatibility with V1
-  def allPairsLength() -> uint256: view
-  def allPairs(_index: uint256) -> address: view
 
 interface IPool:
   def token0() -> address: view
@@ -152,7 +149,7 @@ def __init__(_voter: address, _registry: address, _v1_factory: address):
 @view
 def _pools() -> DynArray[address[3], MAX_POOLS]:
   """
-  @notice Returns a compiled list of pool and its factory and gauge
+  @notice Returns a compiled list of pool and its factory and gauge (sans v1)
   @return Array of three addresses (factory, pool, gauge)
   """
   factories_count: uint256 = self.registry.poolFactoriesLength()
@@ -166,30 +163,18 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
-    pools_count: uint256 = 0
-    legacy: bool = factory.address == self.v1_factory
 
-    if legacy:
-      pools_count = factory.allPairsLength()
-    else:
-      pools_count = factory.allPoolsLength()
+    if factory.address == self.v1_factory:
+      continue
+
+    pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(0, MAX_POOLS):
       if pindex >= pools_count:
         break
 
-      pool_addr: address = empty(address)
-
-      if legacy:
-        pool_addr = factory.allPairs(pindex)
-      else:
-        pool_addr = factory.allPools(pindex)
-
+      pool_addr: address = factory.allPools(pindex)
       gauge_addr: address = self.voter.gauges(pool_addr)
-
-      # Keep only legacy pools with gauges...
-      if legacy == True and gauge_addr == empty(address):
-        continue
 
       pools.append([factory.address, pool_addr, gauge_addr])
 
