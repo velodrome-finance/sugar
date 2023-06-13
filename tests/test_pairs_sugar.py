@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 import os
 import pytest
 from collections import namedtuple
