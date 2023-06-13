@@ -40,7 +40,6 @@ Below is the list of datasets we support.
 It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
 
- * `factory` - pool factory address
  * `lp` - pool contract address
  * `symbol` - pool symbol
  * `decimals` - pool decimals
@@ -57,6 +56,7 @@ The returned data/struct of type `Lp` values represent:
  * `gauge_alive` - indicates if the gauge is still active
  * `fee` - pool fees contract address
  * `bribe` - pool bribes contract address
+ * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
  * `emissions_token` - pool emissions token address
  * `account_balance` - account Lp tokens balance

@@ -21,7 +21,6 @@ struct Token:
   listed: bool
 
 struct Lp:
-  factory: address
   lp: address
   symbol: String[100]
   decimals: uint8
@@ -42,6 +41,7 @@ struct Lp:
 
   fee: address
   bribe: address
+  factory: address
 
   emissions: uint256
   emissions_token: address
@@ -295,7 +295,6 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions_token = gauge.rewardToken()
 
   return Lp({
-    factory: _data[0],
     lp: _data[1],
     symbol: pool.symbol(),
     decimals: pool.decimals(),
@@ -316,6 +315,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
     fee: self.voter.gaugeToFees(gauge.address),
     bribe: self.voter.gaugeToBribe(gauge.address),
+    factory: _data[0],
 
     emissions: emissions,
     emissions_token: emissions_token,
