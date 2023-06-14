@@ -21,6 +21,13 @@ struct Token:
   account_balance: uint256
   listed: bool
 
+struct SwapLp:
+  lp: address
+  stable: bool
+  token0: address
+  token1: address
+  factory: address
+
 struct Lp:
   lp: address
   symbol: String[100]
@@ -87,6 +94,9 @@ interface IFactoryRegistry:
 interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
+  # Backwards compatibility with V1
+  def allPairsLength() -> uint256: view
+  def allPairs(_index: uint256) -> address: view
 
 interface IPool:
   def token0() -> address: view
@@ -178,6 +188,59 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
       gauge_addr: address = self.voter.gauges(pool_addr)
 
       pools.append([factory.address, pool_addr, gauge_addr])
+
+  return pools
+
+@external
+@view
+def forSwaps() -> DynArray[SwapLp, MAX_POOLS]:
+  """
+  @notice Returns a compiled list of pools for swaps from all pool factories
+  @return `SwapLp` structs
+  """
+  factories_count: uint256 = self.registry.poolFactoriesLength()
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+
+  pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
+
+  for index in range(0, MAX_FACTORIES):
+    if index >= factories_count:
+      break
+
+    factory: IPoolFactory = IPoolFactory(factories[index])
+
+    pools_count: uint256 = 0
+    legacy: bool = factory.address == self.v1_factory
+
+    if legacy:
+      pools_count = factory.allPairsLength()
+    else:
+      pools_count = factory.allPoolsLength()
+
+    for pindex in range(0, MAX_POOLS):
+      if pindex >= pools_count:
+        break
+
+      pool_addr: address = empty(address)
+
+      if legacy:
+        pool_addr = factory.allPairs(pindex)
+      else:
+        pool_addr = factory.allPools(pindex)
+
+      pool: IPool = IPool(pool_addr)
+
+      reserve0: uint256 = pool.reserve0()
+      reserve1: uint256 = pool.reserve1()
+
+      if reserve0 > 0 and reserve1 > 0:
+        pools.append(SwapLp({
+          lp: pool_addr,
+          stable: pool.stable(),
+          token0: pool.token0(),
+          token1: pool.token1(),
+          factory: factory.address
+        }))
 
   return pools
 
