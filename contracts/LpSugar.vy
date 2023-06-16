@@ -117,9 +117,11 @@ interface IVoter:
   def gaugeToFees(_gauge_addr: address) -> address: view
   def isAlive(_gauge_addr: address) -> bool: view
   def isWhitelistedToken(_token_addr: address) -> bool: view
+  def v1Factory() -> address: view
 
-interface IVotingEscrow:
-  def token() -> address: view
+interface IGaugeV1:
+  def earned(_token:address, _account: address) -> uint256: view
+  def rewardRate(_token:address) -> uint256: view
 
 interface IGauge:
   def fees0() -> uint256: view
@@ -142,8 +144,10 @@ interface IReward:
 # Vars
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
-v1_factory: public(address)
 convertor: public(address)
+v1_voter: public(IVoter)
+v1_factory: public(address)
+v1_token: public(address)
 
 # Methods
 
@@ -151,17 +155,19 @@ convertor: public(address)
 def __init__(
     _voter: address,
     _registry: address,
-    _v1_factory: address,
+    _v1_voter: address,
     _convertor: address
   ):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
+  self.v1_voter = IVoter(_v1_voter)
   self.registry = IFactoryRegistry(_registry)
-  self.v1_factory = _v1_factory
   self.convertor = _convertor
 
+  self.v1_factory = self.voter.v1Factory()
+  self.v1_token = IPool(self.convertor).token0()
 
 @internal
 @view
@@ -199,6 +205,79 @@ def _pools(with_convertor: bool) -> DynArray[address[3], MAX_POOLS]:
       gauge_addr: address = self.voter.gauges(pool_addr)
 
       pools.append([factory.address, pool_addr, gauge_addr])
+
+  return pools
+
+@external
+@view
+def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
+  """
+  @notice Returns a collection of pool data to be migrated (from v1)
+  @return `LP` structs
+  """
+  pools: DynArray[Lp, MAX_POOLS] = empty(DynArray[Lp, MAX_POOLS])
+
+  if _account ==  empty(address):
+    return pools
+
+  factory: IPoolFactory = IPoolFactory(self.v1_factory)
+  pools_count: uint256 = factory.allPairsLength()
+
+  for pindex in range(0, MAX_POOLS):
+    if pindex >= pools_count:
+      break
+
+    pool: IPool = IPool(factory.allPairs(pindex))
+    gauge: IGauge = IGauge(self.v1_voter.gauges(pool.address))
+
+    account_balance: uint256 = pool.balanceOf(_account)
+    account_staked: uint256 = 0
+    gauge_total_supply: uint256 = 0
+    earned: uint256 = 0
+    emissions: uint256 = 0
+
+    if gauge.address != empty(address):
+      account_staked = gauge.balanceOf(_account)
+
+    if account_balance == 0 and account_staked == 0:
+      continue
+
+    if account_staked > 0:
+      earned = IGaugeV1(gauge.address).earned(self.v1_token, _account)
+      gauge_total_supply = gauge.totalSupply()
+      emissions = IGaugeV1(gauge.address).rewardRate(self.v1_token)
+
+    pools.append(Lp({
+      lp: pool.address,
+      symbol: pool.symbol(),
+      decimals: pool.decimals(),
+      stable: pool.stable(),
+      total_supply: pool.totalSupply(),
+
+      token0: pool.token0(),
+      reserve0: pool.reserve0(),
+      claimable0: pool.claimable0(_account),
+
+      token1: pool.token1(),
+      reserve1: pool.reserve1(),
+      claimable1: pool.claimable1(_account),
+
+      gauge: gauge.address,
+      gauge_total_supply: gauge_total_supply,
+      # Save gas...
+      gauge_alive: False,
+
+      fee: empty(address),
+      bribe: empty(address),
+      factory: self.v1_factory,
+
+      emissions: emissions,
+      emissions_token: self.v1_token,
+
+      account_balance: pool.balanceOf(_account),
+      account_earned: earned,
+      account_staked: account_staked
+    }))
 
   return pools
 
