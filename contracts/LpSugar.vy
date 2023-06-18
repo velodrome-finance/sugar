@@ -58,6 +58,8 @@ struct Lp:
   account_earned: uint256
   account_staked: uint256
 
+  fee_level: uint256
+
 struct LpEpochReward:
   token: address
   amount: uint256
@@ -94,9 +96,11 @@ interface IFactoryRegistry:
 interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
+  def getFee(pool: address, _stable: bool) -> uint256: view
   # Backwards compatibility with V1
   def allPairsLength() -> uint256: view
   def allPairs(_index: uint256) -> address: view
+  def getFee(_stable: bool) -> uint256: view
 
 interface IPool:
   def token0() -> address: view
@@ -448,6 +452,11 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions = gauge.rewardRate()
     emissions_token = gauge.rewardToken()
 
+  if _data[0] != self.v1_factory:
+    retrieved_fee = _data[0].getFee(_data1, pool.stable())
+  else:
+    retrieved_fee = _data[0].getFee(pool.stable())
+
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
@@ -476,7 +485,9 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
     account_balance: pool.balanceOf(_account),
     account_earned: earned,
-    account_staked: acc_staked
+    account_staked: acc_staked,
+
+    fee_level: retrieved_fee
   })
 
 @external
