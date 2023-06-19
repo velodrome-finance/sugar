@@ -58,7 +58,7 @@ struct Lp:
   account_earned: uint256
   account_staked: uint256
 
-  fee_level: uint256
+  pool_fee: uint256
 
 struct LpEpochReward:
   token: address
@@ -96,7 +96,7 @@ interface IFactoryRegistry:
 interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
-  def getFee(pool: address, _stable: bool) -> uint256: view
+  def getFee(_pool_addr: address, _stable: bool) -> uint256: view
   # Backwards compatibility with V1
   def allPairsLength() -> uint256: view
   def allPairs(_index: uint256) -> address: view
@@ -281,7 +281,7 @@ def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
       account_earned: earned,
       account_staked: account_staked,
 
-      fee_level: 0
+      pool_fee: 0
     }))
 
   return pools
@@ -439,13 +439,14 @@ def _byData(_data: address[3], _account: address) -> Lp:
   """
   pool: IPool = IPool(_data[1])
   gauge: IGauge = IGauge(_data[2])
-  pool_factory: IPoolFactory = IPoolFactory(_data[0])
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
   gauge_total_supply: uint256 = 0
   emissions: uint256 = 0
   emissions_token: address = empty(address)
+  is_stable: bool = pool.stable()
+  pool_fee: uint256 = 0
 
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
@@ -454,16 +455,14 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions = gauge.rewardRate()
     emissions_token = gauge.rewardToken()
 
-  retrieved_fee: uint256 = 0
-
   if _data[0] != self.v1_factory:
-    retrieved_fee = pool_factory.getFee(_data[1], pool.stable())
+    pool_fee = IPoolFactory(_data[0]).getFee(_data[1], is_stable)
 
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
     decimals: pool.decimals(),
-    stable: pool.stable(),
+    stable: is_stable,
     total_supply: pool.totalSupply(),
 
     token0: pool.token0(),
@@ -489,7 +488,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
     account_earned: earned,
     account_staked: acc_staked,
 
-    fee_level: retrieved_fee
+    pool_fee: pool_fee
   })
 
 @external
