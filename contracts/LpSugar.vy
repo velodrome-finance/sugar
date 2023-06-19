@@ -100,7 +100,6 @@ interface IPoolFactory:
   # Backwards compatibility with V1
   def allPairsLength() -> uint256: view
   def allPairs(_index: uint256) -> address: view
-  def getFee(_stable: bool) -> uint256: view
 
 interface IPool:
   def token0() -> address: view
@@ -280,7 +279,9 @@ def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
 
       account_balance: pool.balanceOf(_account),
       account_earned: earned,
-      account_staked: account_staked
+      account_staked: account_staked,
+
+      fee_level: 0
     }))
 
   return pools
@@ -438,6 +439,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
   """
   pool: IPool = IPool(_data[1])
   gauge: IGauge = IGauge(_data[2])
+  pool_factory: IPoolFactory = IPoolFactory(_data[0])
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
@@ -452,10 +454,10 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions = gauge.rewardRate()
     emissions_token = gauge.rewardToken()
 
+  retrieved_fee: uint256 = 0
+
   if _data[0] != self.v1_factory:
-    retrieved_fee = _data[0].getFee(_data1, pool.stable())
-  else:
-    retrieved_fee = _data[0].getFee(pool.stable())
+    retrieved_fee = pool_factory.getFee(_data[1], pool.stable())
 
   return Lp({
     lp: _data[1],
