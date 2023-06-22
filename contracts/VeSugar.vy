@@ -27,7 +27,7 @@ struct VeNFT:
   votes: DynArray[PairVotes, MAX_PAIRS]
 
   token: address
-  attachments: uint256
+  attachments: DynArray[address, MAX_PAIRS]
 
 struct Reward:
   venft_id: uint256
@@ -65,7 +65,9 @@ interface IVotingEscrow:
   def balanceOfNFT(_venft_id: uint256) -> uint256: view
   def locked(_venft_id: uint256) -> (uint128, uint256): view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
-  def attachments(_venft_id: uint256) -> uint256: view
+
+interface IGauge:
+  def tokenIds(_account: address) -> uint256: view
 
 interface IBribe:
   def rewardsListLength() -> uint256: view
@@ -242,7 +244,7 @@ def _byId(_id: uint256) -> VeNFT:
     voted_at: voter.lastVoted(_id),
     votes: votes,
     token: self.token,
-    attachments: ve.attachments(_id)
+    attachments: self._attachments(_id, account)
   })
 
 @external
@@ -292,6 +294,38 @@ def rewardsByPair(_venft_id: uint256, _pair: address) \
   @return Array for VeNFT Reward structs
   """
   return self._pairRewards(_venft_id, _pair)
+
+@internal
+@view
+def _attachments(_venft_id: uint256, _account: address) \
+    -> DynArray[address, MAX_PAIRS]:
+  """
+  @notice Returns a list of gauges where the veNFT is attached
+  @param _venft_id The veNFT ID to get rewards for
+  """
+  voter: IVoter = IVoter(self.voter)
+  pair_factory: IPairFactory = IPairFactory(self.pair_factory)
+  pairs_count: uint256 = pair_factory.allPairsLength()
+
+  col: DynArray[address, MAX_PAIRS] = empty(DynArray[address, MAX_PAIRS])
+
+  for pindex in range(0, MAX_RESULTS):
+    if pindex >= pairs_count:
+      break
+
+    pair_addr: address = pair_factory.allPairs(pindex)
+    gauge: IGauge = IGauge(voter.gauges(pair_addr))
+
+    if gauge.address == empty(address):
+      continue
+
+    tokenId: uint256 = gauge.tokenIds(_account)
+
+    if tokenId == _venft_id:
+      col.append(gauge.address)
+
+  return col
+
 
 @internal
 @view
