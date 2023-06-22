@@ -6,10 +6,11 @@ from brownie import accounts, VeSugar, LpSugar
 
 def main():
     contract_name = str(os.getenv('CONTRACT')).lower()
-    account = accounts[0]
 
     if os.getenv('PROD'):
         account = accounts.load('sugar')
+    else:
+        account = accounts[0]
 
     if 'lp' in contract_name:
         LpSugar.deploy(
