@@ -49,6 +49,7 @@ interface IVotingEscrow:
   def balanceOfNFT(_venft_id: uint256) -> uint256: view
   def locked(_venft_id: uint256) -> (uint128, uint256): view
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
+  def voted(_venft_id: uint256) -> bool: view
 
 # Vars
 
@@ -141,6 +142,10 @@ def _byId(_id: uint256) -> VeNFT:
   amount: uint128 = 0
   expires_at: uint256 = 0
   amount, expires_at = self.ve.locked(_id)
+  last_voted: uint256 = 0
+
+  if self.ve.voted(_id):
+    last_voted = self.voter.lastVoted(_id)
 
   vote_weight: uint256 = self.voter.usedWeights(_id)
   # Since we don't have a way to see how many pools we voted...
@@ -174,7 +179,7 @@ def _byId(_id: uint256) -> VeNFT:
     voting_amount: self.ve.balanceOfNFT(_id),
     rebase_amount: self.dist.claimable(_id),
     expires_at: expires_at,
-    voted_at: self.voter.lastVoted(_id),
+    voted_at: last_voted,
     votes: votes,
     token: self.token,
   })
