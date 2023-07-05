@@ -59,6 +59,8 @@ struct Lp:
   account_staked: uint256
 
   pool_fee: uint256
+  token0_fees: uint256
+  token1_fees: uint256
 
 struct LpEpochReward:
   token: address
@@ -113,6 +115,7 @@ interface IPool:
   def decimals() -> uint8: view
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
+  def poolFees() -> address: view
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -281,7 +284,9 @@ def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
       account_earned: earned,
       account_staked: account_staked,
 
-      pool_fee: 0
+      pool_fee: 0,
+      token0_fees: 0,
+      token1_fees: 0
     }))
 
   return pools
@@ -447,6 +452,9 @@ def _byData(_data: address[3], _account: address) -> Lp:
   emissions_token: address = empty(address)
   is_stable: bool = pool.stable()
   pool_fee: uint256 = 0
+  pool_fees: address = pool.poolFees()
+  token0: IERC20 = IERC20(pool.token0())
+  token1: IERC20 = IERC20(pool.token1())
 
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
@@ -465,11 +473,11 @@ def _byData(_data: address[3], _account: address) -> Lp:
     stable: is_stable,
     total_supply: pool.totalSupply(),
 
-    token0: pool.token0(),
+    token0: token0.address,
     reserve0: pool.reserve0(),
     claimable0: pool.claimable0(_account),
 
-    token1: pool.token1(),
+    token1: token1.address,
     reserve1: pool.reserve1(),
     claimable1: pool.claimable1(_account),
 
@@ -488,7 +496,9 @@ def _byData(_data: address[3], _account: address) -> Lp:
     account_earned: earned,
     account_staked: acc_staked,
 
-    pool_fee: pool_fee
+    pool_fee: pool_fee,
+    token0_fees: token0.balanceOf(pool_fees),
+    token1_fees: token1.balanceOf(pool_fees)
   })
 
 @external
