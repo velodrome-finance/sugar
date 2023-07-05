@@ -35,7 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pools Data
 
-`LpSugar.vy` is deployed at `0x8b70c5e53235abbd1415957f7110fbfe5d0529d4`
+`LpSugar.vy` is deployed at `0xD2B1D1B75a0f226722b3A174dAE54e6dD14af1a1`
 
 It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
@@ -54,14 +54,17 @@ The returned data/struct of type `Lp` values represent:
  * `gauge` - pool gauge address
  * `gauge_total_supply` - pool staked tokens (less/eq than/to pool total supply)
  * `gauge_alive` - indicates if the gauge is still active
- * `fee` - pool fees contract address
- * `bribe` - pool bribes contract address
+ * `fee` - pool gauge fees contract address
+ * `bribe` - pool gauge bribes contract address
  * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
  * `emissions_token` - pool emissions token address
  * `account_balance` - account Lp tokens balance
  * `account_earned` - account earned emissions for this pool
  * `account_staked` - account pool staked in gauge balance
+ * `pool_fee` - pool swap fee (percentage)
+ * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
+ * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
 
 ---
 
@@ -131,7 +134,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x925A0d9d2000c4919e7BF0a0d5F2995a2bfE8542`
+`VeSugar.vy` is deployed at `0x9591B50366d82291e4e2BF88ffE52C3B39c8999a`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
