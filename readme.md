@@ -185,3 +185,8 @@ brownie test --network=optimism-test
 
 Sugar is written in Vyper, and Optimistic Etherscan fails at times to
 generate the same bytecode (probably because of the hardcoded `evm_version`).
+
+## How to generate the constructor arguments for verification?
+
+Consider using the web tool at https://abi.hashex.org to build the arguments
+and provide the generated value as part of the Etherscan verification form.
