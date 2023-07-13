@@ -455,13 +455,16 @@ def _byData(_data: address[3], _account: address) -> Lp:
   pool_fees: address = pool.poolFees()
   token0: IERC20 = IERC20(pool.token0())
   token1: IERC20 = IERC20(pool.token1())
+  gauge_alive: bool = self.voter.isAlive(gauge.address)
 
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
     earned = gauge.earned(_account)
     gauge_total_supply = gauge.totalSupply()
-    emissions = gauge.rewardRate()
     emissions_token = gauge.rewardToken()
+
+  if gauge_alive:
+    emissions = gauge.rewardRate()
 
   if _data[0] != self.v1_factory:
     pool_fee = IPoolFactory(_data[0]).getFee(_data[1], is_stable)
@@ -483,7 +486,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
-    gauge_alive: self.voter.isAlive(gauge.address),
+    gauge_alive: gauge_alive,
 
     fee: self.voter.gaugeToFees(gauge.address),
     bribe: self.voter.gaugeToBribe(gauge.address),
