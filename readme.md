@@ -73,8 +73,6 @@ The available methods are:
    returns a paginated list of `Lp` structs.
  * `byIndex(_index: uint256, _account: address) -> Lp` - returns the
    `Lp` data for a specific index of a pool.
- * `byAddress(_address: address, _account: address) -> Lp` - returns the
-   `Lp` data for a specific pool address.
 
 ---
 
