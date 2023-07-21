@@ -148,6 +148,7 @@ The returned data/struct of type `VeNFT` values represent:
   * `votes` - veNFT list of pools with vote weights casted in the form of
     `LpVotes`
   * `token` - veNFT locked token address
+  * `permanent` - veNFT permanent lock enabled flag
 
 The pool votes struct values represent:
   * `lp` - the pool address
