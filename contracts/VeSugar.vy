@@ -25,6 +25,7 @@ struct VeNFT:
   voted_at: uint256
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
+  permanent: bool
 
 # Our contracts / Interfaces
 
@@ -47,7 +48,7 @@ interface IVotingEscrow:
   def decimals() -> uint8: view
   def ownerOf(_venft_id: uint256) -> address: view
   def balanceOfNFT(_venft_id: uint256) -> uint256: view
-  def locked(_venft_id: uint256) -> (uint128, uint256): view
+  def locked(_venft_id: uint256) -> (uint128, uint256, bool): view
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
 
@@ -141,7 +142,8 @@ def _byId(_id: uint256) -> VeNFT:
   votes: DynArray[LpVotes, MAX_PAIRS] = []
   amount: uint128 = 0
   expires_at: uint256 = 0
-  amount, expires_at = self.ve.locked(_id)
+  perma: bool = False
+  amount, expires_at, perma = self.ve.locked(_id)
   last_voted: uint256 = 0
 
   if self.ve.voted(_id):
@@ -182,4 +184,5 @@ def _byId(_id: uint256) -> VeNFT:
     voted_at: last_voted,
     votes: votes,
     token: self.token,
+    permanent: perma
   })
