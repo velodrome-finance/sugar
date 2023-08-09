@@ -6,11 +6,44 @@
 # @notice Makes it nicer to work with autocompounders.
 
 MAX_COMPOUNDERS: constant(uint256) = 50
+# Inherited from veSugar
+MAX_RESULTS: constant(uint256) = 1000
+MAX_PAIRS: constant(uint256) = 30
 
-struct AutoCompounder:
+struct LpVotes:
+  lp: address
+  weight: uint256
+
+struct VeNFT:
+  id: uint256
+  account: address
+  decimals: uint8
+  amount: uint128
+  voting_amount: uint256
+  rebase_amount: uint256
+  expires_at: uint256
+  voted_at: uint256
+  votes: DynArray[LpVotes, MAX_PAIRS]
+  token: address
+  permanent: bool
+
+struct Deposit:
+  deposited_nft: VeNFT
+  manager_id: uint256
+
+struct Relay:
   name: String[100]
-  tokenId: uint256
+  managed_nft: VeNFT
   address: address
+  inactive: bool
+
+interface IVeSugar:
+  def byId(_id: uint256) -> VeNFT: view
+  def byAccount(_account: address) -> DynArray[VeNFT, MAX_RESULTS]: view
+
+interface IVotingEscrow:
+  def idToManaged(_venft_id: uint256) -> uint256: view
+  def deactivated(_venft_id: uint256) -> bool: view
 
 interface IAutoCompounderFactory:
   def autoCompounders() -> DynArray[address, MAX_COMPOUNDERS]: view
@@ -21,31 +54,61 @@ interface IAutoCompounder:
 
 # Vars
 factory: public(IAutoCompounderFactory)
+ve_sugar: public(IVeSugar)
+ve: public(IVotingEscrow)
 
 @external
-def __init__(_factory: address):
+def __init__(_factory: address, _ve_sugar: address, _ve: address):
   """
   @dev Set up our external factory contract
   """
   self.factory = IAutoCompounderFactory(_factory)
+  self.ve_sugar = IVeSugar(_ve_sugar)
+  self.ve = IVotingEscrow(_ve)
 
 @external
 @view
-def all() -> DynArray[AutoCompounder, MAX_COMPOUNDERS]:
+def all() -> DynArray[Relay, MAX_COMPOUNDERS]:
   """
   @notice Returns all AutoCompounders
   @return Array of AutoCompounder structs
   """
-  compounders: DynArray[AutoCompounder, MAX_COMPOUNDERS] = empty(DynArray[AutoCompounder, MAX_COMPOUNDERS])
+  compounders: DynArray[Relay, MAX_COMPOUNDERS] = empty(DynArray[Relay, MAX_COMPOUNDERS])
   addresses: DynArray[address, MAX_COMPOUNDERS] = self.factory.autoCompounders()
   
   for index in range(0, len(addresses)):
     autocompounder: IAutoCompounder = IAutoCompounder(addresses[index])
+    managed_id: uint256 = autocompounder.tokenId()
+    managed_nft: VeNFT = self.ve_sugar.byId(managed_id)
+    inactive: bool = self.ve.deactivated(managed_id)
 
-    compounders.append(AutoCompounder({
+    compounders.append(Relay({
       name: autocompounder.name(),
-      tokenId: autocompounder.tokenId(),
-      address: addresses[index]
+      managed_nft: managed_nft,
+      address: addresses[index],
+      inactive: inactive
     }))
 
   return compounders
+
+@external
+@view
+def deposits(_account: address) -> DynArray[Deposit, MAX_RESULTS]:
+  """
+  @notice Returns all of an account's Relay Deposits
+  @param _account The account address
+  @return Array of Deposits
+  """
+  deposits: DynArray[Deposit, MAX_RESULTS] = empty(DynArray[Deposit, MAX_RESULTS])
+  nfts: DynArray[VeNFT, MAX_RESULTS] = self.ve_sugar.byAccount(_account)
+
+  for index in range(0, len(nfts)):
+    manager_id: uint256 = self.ve.idToManaged(nfts[index].id)
+
+    if manager_id != 0:
+      deposits.append(Deposit({
+        deposited_nft: nfts[index],
+        manager_id: manager_id
+      }))
+
+  return deposits
