@@ -32,10 +32,17 @@ struct Deposit:
   manager_id: uint256
 
 struct Relay:
-  name: String[100]
-  managed_nft: VeNFT
-  address: address
+  venft_id: uint256
+  decimals: uint8
+  amount: uint128
+  voting_amount: uint256
+  voted_at: uint256
+  votes: DynArray[LpVotes, MAX_PAIRS]
+  token: address
+  manager: address
+  compounder: address
   inactive: bool
+  name: String[100]
 
 interface IVeSugar:
   def byId(_id: uint256) -> VeNFT: view
@@ -68,7 +75,19 @@ def __init__(_factory: address, _ve_sugar: address, _ve: address):
 
 @external
 @view
-def all() -> DynArray[Relay, MAX_COMPOUNDERS]:
+def all(_account: address) -> (DynArray[Relay, MAX_COMPOUNDERS], DynArray[RelayVeNFT, MAX_RESULTS]):
+  """
+  @notice Returns all AutoCompounders and account's deposits
+  @return Array of Relay structs, Array of account's deposits
+  """
+  autocompounders: DynArray[Relay, MAX_COMPOUNDERS] = self._autocompounders()
+  deposits: DynArray[Deposit, MAX_RESULTS] = self._deposits()
+
+  return autocompounders, deposits
+
+@internal
+@view
+def _autocompounders() -> DynArray[Relay, MAX_COMPOUNDERS]:
   """
   @notice Returns all AutoCompounders
   @return Array of AutoCompounder structs
@@ -81,19 +100,27 @@ def all() -> DynArray[Relay, MAX_COMPOUNDERS]:
     managed_id: uint256 = autocompounder.tokenId()
     managed_nft: VeNFT = self.ve_sugar.byId(managed_id)
     inactive: bool = self.ve.deactivated(managed_id)
+    manager: address = self.ve.ownerOf(managed_id)
 
     compounders.append(Relay({
-      name: autocompounder.name(),
-      managed_nft: managed_nft,
-      address: addresses[index],
-      inactive: inactive
+      venft_id: managed_id,
+      decimals: managed_nft.decimals,
+      amount: managed_nft.amount,
+      voting_amount: managed_nft.voting_amount,
+      voted_at: managed_nft.voted_at,
+      votes: managed_nft.votes,
+      token: managed_nft.token,
+      manager: manager,
+      compounder: addresses[index],
+      inactive: inactive,
+      name: autocompounder.name()
     }))
 
   return compounders
 
-@external
+@internal
 @view
-def deposits(_account: address) -> DynArray[Deposit, MAX_RESULTS]:
+def _deposits(_account: address) -> DynArray[Deposit, MAX_RESULTS]:
   """
   @notice Returns all of an account's Relay Deposits
   @param _account The account address
