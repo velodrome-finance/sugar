@@ -43,6 +43,7 @@ struct Relay:
   compounder: address
   inactive: bool
   name: String[100]
+  account_venft_ids: DynArray[uint256, MAX_RESULTS]
 
 interface IVeSugar:
   def byId(_id: uint256) -> VeNFT: view
@@ -51,6 +52,13 @@ interface IVeSugar:
 interface IVotingEscrow:
   def idToManaged(_venft_id: uint256) -> uint256: view
   def deactivated(_venft_id: uint256) -> bool: view
+  def token() -> address: view
+  def decimals() -> uint8: view
+  def ownerOf(_venft_id: uint256) -> address: view
+  def balanceOfNFT(_venft_id: uint256) -> uint256: view
+  def locked(_venft_id: uint256) -> (uint128, uint256, bool): view
+  def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
+  def voted(_venft_id: uint256) -> bool: view
 
 interface IAutoCompounderFactory:
   def autoCompounders() -> DynArray[address, MAX_COMPOUNDERS]: view
@@ -87,13 +95,23 @@ def all(_account: address) -> (DynArray[Relay, MAX_COMPOUNDERS], DynArray[RelayV
 
 @internal
 @view
-def _autocompounders() -> DynArray[Relay, MAX_COMPOUNDERS]:
+def _autocompounders(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
   """
   @notice Returns all AutoCompounders
   @return Array of AutoCompounder structs
   """
   compounders: DynArray[Relay, MAX_COMPOUNDERS] = empty(DynArray[Relay, MAX_COMPOUNDERS])
   addresses: DynArray[address, MAX_COMPOUNDERS] = self.factory.autoCompounders()
+  account_venfts: DynArray[(uint256, uint256), MAX_RESULTS] = empty(DynArray[(uint256, uint256), MAX_RESULTS])
+
+  for venft_index in range(MAX_RESULTS):
+    account_venft_id: uint256 = self.ve.ownerToNFTokenIdList(_account, venft_index)
+
+    if account_venft_id == 0:
+      break
+    
+    account_venft_manager_id: uint256 = self.ve.idToManaged(account_venft_id)
+    account_venfts.append(account_venft_manager_id, account_venft_id)
   
   for index in range(0, len(addresses)):
     autocompounder: IAutoCompounder = IAutoCompounder(addresses[index])
@@ -101,6 +119,11 @@ def _autocompounders() -> DynArray[Relay, MAX_COMPOUNDERS]:
     managed_nft: VeNFT = self.ve_sugar.byId(managed_id)
     inactive: bool = self.ve.deactivated(managed_id)
     manager: address = self.ve.ownerOf(managed_id)
+    account_venft_ids: DynArray[uint256, MAX_RESULTS] = empty(DynArray[uint256, MAX_RESULTS])
+
+    for venft_index in range(0, len(account_venfts)):
+        if managed_id == account_venfts[venft_index][0]:
+            account_venft_ids.append(account_venfts[venft_index][1])
 
     compounders.append(Relay({
       venft_id: managed_id,
@@ -113,7 +136,8 @@ def _autocompounders() -> DynArray[Relay, MAX_COMPOUNDERS]:
       manager: manager,
       compounder: addresses[index],
       inactive: inactive,
-      name: autocompounder.name()
+      name: autocompounder.name(),
+      account_venft_ids: account_venft_ids
     }))
 
   return compounders
