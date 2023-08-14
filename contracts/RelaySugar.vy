@@ -6,7 +6,6 @@
 # @notice Makes it nicer to work with autocompounders.
 
 MAX_COMPOUNDERS: constant(uint256) = 50
-# Inherited from veSugar
 MAX_RESULTS: constant(uint256) = 1000
 MAX_PAIRS: constant(uint256) = 30
 
@@ -16,19 +15,12 @@ struct LpVotes:
 
 struct VeNFT:
   id: uint256
-  account: address
   decimals: uint8
   amount: uint128
   voting_amount: uint256
-  rebase_amount: uint256
-  expires_at: uint256
   voted_at: uint256
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
-  permanent: bool
-
-struct Deposit:
-  deposited_nft: VeNFT
   manager_id: uint256
 
 struct Relay:
@@ -45,9 +37,12 @@ struct Relay:
   name: String[100]
   account_venft_ids: DynArray[uint256, MAX_RESULTS]
 
-interface IVeSugar:
-  def byId(_id: uint256) -> VeNFT: view
-  def byAccount(_account: address) -> DynArray[VeNFT, MAX_RESULTS]: view
+interface IVoter:
+  def ve() -> address: view
+  def lastVoted(_venft_id: uint256) -> uint256: view
+  def poolVote(_venft_id: uint256, _index: uint256) -> address: view
+  def votes(_venft_id: uint256, _lp: address) -> uint256: view
+  def usedWeights(_venft_id: uint256) -> uint256: view
 
 interface IVotingEscrow:
   def idToManaged(_venft_id: uint256) -> uint256: view
@@ -69,27 +64,29 @@ interface IAutoCompounder:
 
 # Vars
 factory: public(IAutoCompounderFactory)
-ve_sugar: public(IVeSugar)
+voter: public(IVoter)
 ve: public(IVotingEscrow)
+token: public(address)
 
 @external
-def __init__(_factory: address, _ve_sugar: address, _ve: address):
+def __init__(_factory: address, _voter: address):
   """
   @dev Set up our external factory contract
   """
   self.factory = IAutoCompounderFactory(_factory)
-  self.ve_sugar = IVeSugar(_ve_sugar)
-  self.ve = IVotingEscrow(_ve)
+  self.voter = IVoter(_voter)
+  self.ve = IVotingEscrow(self.voter.ve())
+  self.token = self.ve.token()
 
 @external
 @view
-def all(_account: address) -> (DynArray[Relay, MAX_COMPOUNDERS], DynArray[RelayVeNFT, MAX_RESULTS]):
+def all(_account: address) -> (DynArray[Relay, MAX_COMPOUNDERS], DynArray[VeNFT, MAX_RESULTS]):
   """
   @notice Returns all AutoCompounders and account's deposits
   @return Array of Relay structs, Array of account's deposits
   """
   autocompounders: DynArray[Relay, MAX_COMPOUNDERS] = self._autocompounders()
-  deposits: DynArray[Deposit, MAX_RESULTS] = self._deposits()
+  deposits: DynArray[VeNFT, MAX_RESULTS] = self._deposits()
 
   return autocompounders, deposits
 
@@ -116,14 +113,14 @@ def _autocompounders(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
   for index in range(0, len(addresses)):
     autocompounder: IAutoCompounder = IAutoCompounder(addresses[index])
     managed_id: uint256 = autocompounder.tokenId()
-    managed_nft: VeNFT = self.ve_sugar.byId(managed_id)
+    managed_nft: VeNFT = self._byId(managed_id)
     inactive: bool = self.ve.deactivated(managed_id)
     manager: address = self.ve.ownerOf(managed_id)
     account_venft_ids: DynArray[uint256, MAX_RESULTS] = empty(DynArray[uint256, MAX_RESULTS])
 
     for venft_index in range(0, len(account_venfts)):
-        if managed_id == account_venfts[venft_index][0]:
-            account_venft_ids.append(account_venfts[venft_index][1])
+      if managed_id == account_venfts[venft_index][0]:
+        account_venft_ids.append(account_venfts[venft_index][1])
 
     compounders.append(Relay({
       venft_id: managed_id,
@@ -144,22 +141,77 @@ def _autocompounders(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
 
 @internal
 @view
-def _deposits(_account: address) -> DynArray[Deposit, MAX_RESULTS]:
+def _deposits(_account: address) -> DynArray[VeNFT, MAX_RESULTS]:
   """
-  @notice Returns all of an account's Relay Deposits
+  @notice Returns all of an account's Relay veNFT deposits
   @param _account The account address
-  @return Array of Deposits
+  @return Array of VeNFTs
   """
-  deposits: DynArray[Deposit, MAX_RESULTS] = empty(DynArray[Deposit, MAX_RESULTS])
-  nfts: DynArray[VeNFT, MAX_RESULTS] = self.ve_sugar.byAccount(_account)
+  deposits: DynArray[VeNFT, MAX_RESULTS] = empty(DynArray[VeNFT, MAX_RESULTS])
 
-  for index in range(0, len(nfts)):
-    manager_id: uint256 = self.ve.idToManaged(nfts[index].id)
+  if _account == empty(address):
+    return deposits
+
+  for index in range(MAX_RESULTS):
+    venft_id: uint256 = self.ve.ownerToNFTokenIdList(_account, index)
+
+    if venft_id == 0:
+      break
+
+    manager_id: uint256 = self.ve.idToManaged(venft_id)
 
     if manager_id != 0:
-      deposits.append(Deposit({
-        deposited_nft: nfts[index],
-        manager_id: manager_id
-      }))
+      deposits.append(self._byId(venft_id))
 
   return deposits
+
+@internal
+@view
+def _byId(_id: uint256) -> VeNFT:
+  """
+  @notice Returns veNFT data based on ID
+  @param _id The index/ID to lookup
+  @return VeNFT struct
+  """
+  votes: DynArray[LpVotes, MAX_PAIRS] = []
+  amount: uint128 = 0
+  amount = self.ve.locked(_id)[0]
+  last_voted: uint256 = 0
+  manager_id: uint256 = self.ve.idToManaged(_id)
+
+  if self.ve.voted(_id):
+    last_voted = self.voter.lastVoted(_id)
+
+  vote_weight: uint256 = self.voter.usedWeights(_id)
+  # Since we don't have a way to see how many pools the veNFT voted...
+  left_weight: uint256 = vote_weight
+
+  for index in range(MAX_PAIRS):
+    if left_weight == 0:
+      break
+
+    lp: address = self.voter.poolVote(_id, index)
+
+    if lp == empty(address):
+      break
+
+    weight: uint256 = self.voter.votes(_id, lp)
+
+    votes.append(LpVotes({
+      lp: lp,
+      weight: weight
+    }))
+
+    # Remove _counted_ weight to see if there are other pool votes left...
+    left_weight -= weight
+
+  return VeNFT({
+    id: _id,
+    decimals: self.ve.decimals(),
+    amount: amount,
+    voting_amount: self.ve.balanceOfNFT(_id),
+    voted_at: last_voted,
+    votes: votes,
+    token: self.token,
+    manager_id: manager_id
+  })
