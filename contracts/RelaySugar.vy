@@ -90,9 +90,9 @@ def _autocompounders(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
   addresses: DynArray[address, MAX_COMPOUNDERS] = self.factory.autoCompounders()
 
   for index in range(0, MAX_COMPOUNDERS):
-    if index == len(addresses) - 1:
+    if index == len(addresses):
       break
-      
+
     autocompounder: IAutoCompounder = IAutoCompounder(addresses[index])
     managed_id: uint256 = autocompounder.tokenId()
 
@@ -115,7 +115,7 @@ def _byId(_id: uint256, _account: address) -> Relay:
   autocompounder: IAutoCompounder = empty(IAutoCompounder)
 
   for index in range(0, MAX_COMPOUNDERS):
-    if index > len(autocompounders) - 1:
+    if index == len(autocompounders):
       break
 
     autocompounder = IAutoCompounder(autocompounders[index])
