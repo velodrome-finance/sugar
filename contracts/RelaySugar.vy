@@ -75,9 +75,7 @@ def all(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
   @notice Returns all Relays and account's deposits
   @return Array of Relay structs
   """
-  autocompounders: DynArray[Relay, MAX_COMPOUNDERS] = self._autocompounders(_account)
-
-  return autocompounders
+  return self._autocompounders(_account)
 
 @internal
 @view
@@ -93,40 +91,22 @@ def _autocompounders(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
     if index == len(addresses):
       break
 
-    autocompounder: IAutoCompounder = IAutoCompounder(addresses[index])
-    managed_id: uint256 = autocompounder.tokenId()
-
-    relay: Relay = self._byId(managed_id, _account)
+    relay: Relay = self._byAddress(addresses[index], _account)
     compounders.append(relay)
 
   return compounders
 
 @internal
 @view
-def _byId(_id: uint256, _account: address) -> Relay:
+def _byAddress(_compounder: address, _account: address) -> Relay:
   """
-  @notice Returns Relay data based on veNFT ID, with optional account arg
-  @param _id The index/ID to lookup
+  @notice Returns Relay data based on address, with optional account arg
+  @param _id The Relay address to lookup
   @return Relay struct
   """
-
-  autocompounders: DynArray[address, MAX_COMPOUNDERS] = self.factory.autoCompounders()
-  compounder: address = empty(address)
-  autocompounder: IAutoCompounder = empty(IAutoCompounder)
-
-  for index in range(0, MAX_COMPOUNDERS):
-    if index == len(autocompounders):
-      break
-
-    autocompounder = IAutoCompounder(autocompounders[index])
-    managed_id: uint256 = autocompounder.tokenId()
-
-    if managed_id == _id:
-      compounder = autocompounders[index]
-      break
-
-  if compounder == empty(address):
-    return empty(Relay)
+  
+  autocompounder: IAutoCompounder = IAutoCompounder(_compounder)
+  managed_id: uint256 = autocompounder.tokenId()
 
   account_venft_ids: DynArray[uint256, MAX_RESULTS] = empty(DynArray[uint256, MAX_RESULTS])
 
@@ -137,20 +117,19 @@ def _byId(_id: uint256, _account: address) -> Relay:
       break
     
     account_venft_manager_id: uint256 = self.ve.idToManaged(account_venft_id)
-    if account_venft_manager_id == _id:
+    if account_venft_manager_id == managed_id:
       account_venft_ids.append(account_venft_id)
 
   votes: DynArray[LpVotes, MAX_PAIRS] = []
-  amount: uint128 = 0
-  amount = self.ve.locked(_id)[0]
+  amount: uint128 = self.ve.locked(managed_id)[0]
   last_voted: uint256 = 0
-  manager: address = self.ve.ownerOf(_id)
-  inactive: bool = self.ve.deactivated(_id)
+  manager: address = self.ve.ownerOf(managed_id)
+  inactive: bool = self.ve.deactivated(managed_id)
 
-  if self.ve.voted(_id):
-    last_voted = self.voter.lastVoted(_id)
+  if self.ve.voted(managed_id):
+    last_voted = self.voter.lastVoted(managed_id)
 
-  vote_weight: uint256 = self.voter.usedWeights(_id)
+  vote_weight: uint256 = self.voter.usedWeights(managed_id)
   # Since we don't have a way to see how many pools the veNFT voted...
   left_weight: uint256 = vote_weight
 
@@ -158,12 +137,12 @@ def _byId(_id: uint256, _account: address) -> Relay:
     if left_weight == 0:
       break
 
-    lp: address = self.voter.poolVote(_id, index)
+    lp: address = self.voter.poolVote(managed_id, index)
 
     if lp == empty(address):
       break
 
-    weight: uint256 = self.voter.votes(_id, lp)
+    weight: uint256 = self.voter.votes(managed_id, lp)
 
     votes.append(LpVotes({
       lp: lp,
@@ -174,15 +153,15 @@ def _byId(_id: uint256, _account: address) -> Relay:
     left_weight -= weight
 
   return Relay({
-    venft_id: _id,
+    venft_id: managed_id,
     decimals: self.ve.decimals(),
     amount: amount,
-    voting_amount: self.ve.balanceOfNFT(_id),
+    voting_amount: self.ve.balanceOfNFT(managed_id),
     voted_at: last_voted,
     votes: votes,
     token: self.token,
     manager: manager,
-    compounder: compounder,
+    compounder: _compounder,
     inactive: inactive,
     name: autocompounder.name(),
     account_venft_ids: account_venft_ids
