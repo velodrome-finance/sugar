@@ -16,8 +16,6 @@ def main():
         LpSugar.deploy(
             os.getenv('VOTER_ADDRESS'),
             os.getenv('REGISTRY_ADDRESS'),
-            os.getenv('V1_VOTER_ADDRESS'),
-            os.getenv('CONVERTOR_ADDRESS'),
             {'from': account}
         )
 

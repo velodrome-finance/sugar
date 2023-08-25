@@ -1,6 +1,6 @@
-# Velodrome Sugar 🍭
+# Aerodrome Sugar 🍭
 
-Sugar comes with contracts to help working with Velodrome Finance data!
+Sugar comes with contracts to help working with Aerodrome Finance data!
 
 ## How come?!
 
@@ -169,12 +169,12 @@ The available methods are:
 
 To setup the environment, build the Docker image first:
 ```sh
-docker build ./ -t velodrome/sugar
+docker build ./ -t aerodrome/sugar
 ```
 
 Next start the container with existing environment variables:
 ```sh
-docker run --env-file=env.example --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
+docker run --env-file=env.example --rm -v $(pwd):/app -w /app -it aerodrome/sugar sh
 ```
 The environment has Brownie and Vyper already installed.
 

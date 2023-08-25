@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 # @version >=0.3.6 <0.4.0
 
-# @title Velodrome Finance veNFT Sugar v2
+# @title Aerodrome Finance veNFT Sugar v2
 # @author stas
 # @notice Makes it nicer to work with our vote-escrow NFTs.
 
