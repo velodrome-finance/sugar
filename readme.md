@@ -35,7 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pools Data
 
-`LpSugar.vy` is deployed at `0x7F45F1eA57E9231f846B2b4f5F8138F94295A726`
+`LpSugar.vy` is deployed at `0x2073D8035bB2b0F2e85aAF5a8732C6f397F9ff9b`
 
 It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
@@ -132,7 +132,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x0eCc2593E3a6A9be3628940Fa4D928CC257B588B`
+`VeSugar.vy` is deployed at `0x7390Ee1f0677c96D06e21C3f1CEb69443D589e03`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
