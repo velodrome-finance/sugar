@@ -3,11 +3,12 @@
 
 # @title Velodrome Finance Relay Sugar v2
 # @author stas, ZoomerAnon
-# @notice Makes it nicer to work with autocompounders.
+# @notice Makes it nicer to work with Relay.
 
-MAX_COMPOUNDERS: constant(uint256) = 50
+MAX_RELAYS: constant(uint256) = 50
 MAX_RESULTS: constant(uint256) = 1000
 MAX_PAIRS: constant(uint256) = 30
+WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct LpVotes:
   lp: address
@@ -21,8 +22,9 @@ struct Relay:
   voted_at: uint256
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
+  rewards_compounded: uint256
   manager: address
-  compounder: address
+  relay: address
   inactive: bool
   name: String[100]
   account_venft_ids: DynArray[uint256, MAX_RESULTS]
@@ -45,15 +47,18 @@ interface IVotingEscrow:
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
 
-interface IAutoCompounderFactory:
-  def autoCompounders() -> DynArray[address, MAX_COMPOUNDERS]: view
+interface IRelayFactory:
+  def relays() -> DynArray[address, MAX_RELAYS]: view
 
-interface IAutoCompounder:
+interface IRelay:
   def name() -> String[100]: view
   def tokenId() -> uint256: view
+  def token() -> address: view
+  # Latest epoch rewards
+  def amountTokenEarned(_epoch_ts: uint256) -> uint256: view
 
 # Vars
-factory: public(IAutoCompounderFactory)
+factory: public(IRelayFactory)
 voter: public(IVoter)
 ve: public(IVotingEscrow)
 token: public(address)
@@ -63,50 +68,50 @@ def __init__(_factory: address, _voter: address):
   """
   @dev Set up our external factory contract
   """
-  self.factory = IAutoCompounderFactory(_factory)
+  self.factory = IRelayFactory(_factory)
   self.voter = IVoter(_voter)
   self.ve = IVotingEscrow(self.voter.ve())
   self.token = self.ve.token()
 
 @external
 @view
-def all(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
+def all(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   """
   @notice Returns all Relays and account's deposits
   @return Array of Relay structs
   """
-  return self._autocompounders(_account)
+  return self._relays(_account)
 
 @internal
 @view
-def _autocompounders(_account: address) -> DynArray[Relay, MAX_COMPOUNDERS]:
+def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   """
   @notice Returns all Relays and account's deposits
   @return Array of Relay structs
   """
-  compounders: DynArray[Relay, MAX_COMPOUNDERS] = empty(DynArray[Relay, MAX_COMPOUNDERS])
-  addresses: DynArray[address, MAX_COMPOUNDERS] = self.factory.autoCompounders()
+  relays: DynArray[Relay, MAX_RELAYS] = empty(DynArray[Relay, MAX_RELAYS])
+  addresses: DynArray[address, MAX_RELAYS] = self.factory.relays()
 
-  for index in range(0, MAX_COMPOUNDERS):
+  for index in range(0, MAX_RELAYS):
     if index == len(addresses):
       break
 
     relay: Relay = self._byAddress(addresses[index], _account)
-    compounders.append(relay)
+    relays.append(relay)
 
-  return compounders
+  return relays
 
 @internal
 @view
-def _byAddress(_compounder: address, _account: address) -> Relay:
+def _byAddress(_relay: address, _account: address) -> Relay:
   """
   @notice Returns Relay data based on address, with optional account arg
   @param _id The Relay address to lookup
   @return Relay struct
   """
   
-  autocompounder: IAutoCompounder = IAutoCompounder(_compounder)
-  managed_id: uint256 = autocompounder.tokenId()
+  relay: IRelay = IRelay(_relay)
+  managed_id: uint256 = relay.tokenId()
 
   account_venft_ids: DynArray[uint256, MAX_RESULTS] = empty(DynArray[uint256, MAX_RESULTS])
 
@@ -125,6 +130,11 @@ def _byAddress(_compounder: address, _account: address) -> Relay:
   last_voted: uint256 = 0
   manager: address = self.ve.ownerOf(managed_id)
   inactive: bool = self.ve.deactivated(managed_id)
+
+  epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
+
+  # Rewards claimed this epoch
+  rewards_compounded: uint256 = relay.amountTokenEarned(epoch_start_ts)
 
   if self.ve.voted(managed_id):
     last_voted = self.voter.lastVoted(managed_id)
@@ -159,10 +169,11 @@ def _byAddress(_compounder: address, _account: address) -> Relay:
     voting_amount: self.ve.balanceOfNFT(managed_id),
     voted_at: last_voted,
     votes: votes,
-    token: self.token,
+    token: relay.token(),
+    rewards_compounded: rewards_compounded,
     manager: manager,
-    compounder: _compounder,
+    relay: _relay,
     inactive: inactive,
-    name: autocompounder.name(),
+    name: relay.name(),
     account_venft_ids: account_venft_ids
   })
