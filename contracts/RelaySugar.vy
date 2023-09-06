@@ -22,7 +22,7 @@ struct Relay:
   voted_at: uint256
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
-  rewards_compounded: uint256
+  compounded: uint256
   manager: address
   relay: address
   inactive: bool
@@ -170,7 +170,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     voted_at: last_voted,
     votes: votes,
     token: relay.token(),
-    rewards_compounded: rewards_compounded,
+    compounded: rewards_compounded,
     manager: manager,
     relay: _relay,
     inactive: inactive,
