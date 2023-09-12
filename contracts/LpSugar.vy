@@ -293,9 +293,11 @@ def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
 
 @external
 @view
-def forSwaps() -> DynArray[SwapLp, MAX_POOLS]:
+def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
   @notice Returns a compiled list of pools for swaps from all pool factories
+  @param _limit The max amount of tokens to return
+  @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
   factories_count: uint256 = self.registry.poolFactoriesLength()
@@ -317,8 +319,8 @@ def forSwaps() -> DynArray[SwapLp, MAX_POOLS]:
     else:
       pools_count = factory.allPoolsLength()
 
-    for pindex in range(0, MAX_POOLS):
-      if pindex >= pools_count:
+    for pindex in range(_offset, _offset + MAX_POOLS):
+      if len(pools) >= _limit or pindex >= pools_count:
         break
 
       pool_addr: address = empty(address)
@@ -330,10 +332,7 @@ def forSwaps() -> DynArray[SwapLp, MAX_POOLS]:
 
       pool: IPool = IPool(pool_addr)
 
-      reserve0: uint256 = pool.reserve0()
-      reserve1: uint256 = pool.reserve1()
-
-      if (reserve0 > 0 and reserve1 > 0) or pool_addr == self.convertor:
+      if pool.reserve0() > 0 or pool_addr == self.convertor:
         pools.append(SwapLp({
           lp: pool_addr,
           stable: pool.stable(),
