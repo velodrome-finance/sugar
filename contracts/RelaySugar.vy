@@ -47,28 +47,28 @@ interface IVotingEscrow:
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
 
-interface IRelayFactory:
-  def relays() -> DynArray[address, MAX_RELAYS]: view
+interface IRelayRegistry:
+  def getAll() -> DynArray[address, MAX_RELAYS]: view
 
 interface IRelay:
   def name() -> String[100]: view
-  def tokenId() -> uint256: view
+  def mTokenId() -> uint256: view
   def token() -> address: view
   # Latest epoch rewards
   def amountTokenEarned(_epoch_ts: uint256) -> uint256: view
 
 # Vars
-factory: public(IRelayFactory)
+registry: public(IRelayRegistry)
 voter: public(IVoter)
 ve: public(IVotingEscrow)
 token: public(address)
 
 @external
-def __init__(_factory: address, _voter: address):
+def __init__(_registry: address, _voter: address):
   """
-  @dev Set up our external factory contract
+  @dev Set up our external registry and voter contracts
   """
-  self.factory = IRelayFactory(_factory)
+  self.registry = IRelayRegistry(_registry)
   self.voter = IVoter(_voter)
   self.ve = IVotingEscrow(self.voter.ve())
   self.token = self.ve.token()
@@ -90,7 +90,7 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   @return Array of Relay structs
   """
   relays: DynArray[Relay, MAX_RELAYS] = empty(DynArray[Relay, MAX_RELAYS])
-  addresses: DynArray[address, MAX_RELAYS] = self.factory.relays()
+  addresses: DynArray[address, MAX_RELAYS] = self.registry.getAll()
 
   for index in range(0, MAX_RELAYS):
     if index == len(addresses):
@@ -106,12 +106,13 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
 def _byAddress(_relay: address, _account: address) -> Relay:
   """
   @notice Returns Relay data based on address, with optional account arg
-  @param _id The Relay address to lookup
+  @param _relay The Relay address to lookup
+  @param _account The account address to lookup deposits
   @return Relay struct
   """
   
   relay: IRelay = IRelay(_relay)
-  managed_id: uint256 = relay.tokenId()
+  managed_id: uint256 = relay.mTokenId()
 
   account_venft_ids: DynArray[uint256, MAX_RESULTS] = empty(DynArray[uint256, MAX_RESULTS])
 
