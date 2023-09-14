@@ -50,6 +50,9 @@ interface IVotingEscrow:
 interface IRelayRegistry:
   def getAll() -> DynArray[address, MAX_RELAYS]: view
 
+interface IRelayFactory:
+  def relays() -> DynArray[address, MAX_RELAYS]: view
+
 interface IRelay:
   def name() -> String[100]: view
   def mTokenId() -> uint256: view
@@ -90,14 +93,21 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   @return Array of Relay structs
   """
   relays: DynArray[Relay, MAX_RELAYS] = empty(DynArray[Relay, MAX_RELAYS])
-  addresses: DynArray[address, MAX_RELAYS] = self.registry.getAll()
+  factories: DynArray[address, MAX_RELAYS] = self.registry.getAll()
 
-  for index in range(0, MAX_RELAYS):
-    if index == len(addresses):
+  for factory_index in range(0, MAX_RELAYS):
+    if factory_index == len(factories):
       break
 
-    relay: Relay = self._byAddress(addresses[index], _account)
-    relays.append(relay)
+    relay_factory: IRelayFactory = IRelayFactory(factories[factory_index])
+    addresses: DynArray[address, MAX_RELAYS] = relay_factory.relays()
+
+    for index in range(0, MAX_RELAYS):
+      if index == len(addresses):
+        break
+
+      relay: Relay = self._byAddress(addresses[index], _account)
+      relays.append(relay)
 
   return relays
 
