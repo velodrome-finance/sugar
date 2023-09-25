@@ -295,7 +295,7 @@ def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
 @view
 def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
-  @notice Returns a compiled list of pools for swaps from all pool factories
+  @notice Returns a compiled list of pools for swaps from pool factories (sans v1)
   @param _limit The max amount of tokens to return
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
@@ -311,13 +311,12 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
     factory: IPoolFactory = IPoolFactory(factories[index])
 
-    pools_count: uint256 = 0
-    legacy: bool = factory.address == self.v1_factory
+    if factory.address == self.v1_factory:
+      continue
 
-    if legacy:
-      pools_count = factory.allPairsLength()
-    else:
-      pools_count = factory.allPoolsLength()
+    pools_count: uint256 = 0
+
+    pools_count = factory.allPoolsLength()
 
     for pindex in range(_offset, _offset + MAX_POOLS):
       if len(pools) >= _limit or pindex >= pools_count:
@@ -325,10 +324,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
       pool_addr: address = empty(address)
 
-      if legacy:
-        pool_addr = factory.allPairs(pindex)
-      else:
-        pool_addr = factory.allPools(pindex)
+      pool_addr = factory.allPools(pindex)
 
       pool: IPool = IPool(pool_addr)
 
