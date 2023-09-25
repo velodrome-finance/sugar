@@ -23,6 +23,7 @@ struct Relay:
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
   compounded: uint256
+  run_at: uint256
   manager: address
   relay: address
   inactive: bool
@@ -57,6 +58,7 @@ interface IRelay:
   def name() -> String[100]: view
   def mTokenId() -> uint256: view
   def token() -> address: view
+  def keeperLastRun() -> uint256: view
   # Latest epoch rewards
   def amountTokenEarned(_epoch_ts: uint256) -> uint256: view
 
@@ -182,6 +184,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     votes: votes,
     token: relay.token(),
     compounded: rewards_compounded,
+    run_at: relay.keeperLastRun(),
     manager: manager,
     relay: _relay,
     inactive: inactive,
