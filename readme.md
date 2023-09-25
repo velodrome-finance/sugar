@@ -165,6 +165,35 @@ The available methods are:
  * `byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
    NFT id.
 
+### Relay Data
+
+`RelaySugar.vy` is deployed at `0x7f609cf1a99318652859aED5B00C7F5F187E0077`
+
+It allows fetching Relay autocompounder/autoconverter data.
+The returned data/struct of type `Relay` values represent:
+
+  * `venft_id` - token ID of the Relay veNFT
+  * `decimals` - Relay veNFT token decimals
+  * `amount` - Relay veNFT locked amount
+  * `voting_amount` - Relay veNFT voting power
+  * `voted_at` - Relay veNFT last vote timestamp
+  * `votes` - Relay veNFT list of pools with vote weights casted in the form of
+    `LpVotes`
+  * `token` - token address the Relay is compounding into
+  * `compounded` - amount of tokens compounded into in the recent epoch
+  * `run_at` - timestamp of last compounding
+  * `manager` - Relay manager
+  * `relay` - Relay address
+  * `inactive` - Relay active/inactive status
+  * `name` - Relay name
+  * `account_venft_ids` - token IDs of the account's deposits into this Relay
+
+---
+
+The available methods are:
+
+ * `all(_account: address) -> Relay[]` - returns a list of all `Relay` structs.
+
 ## Development
 
 To setup the environment, build the Docker image first:
