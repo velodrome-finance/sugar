@@ -99,9 +99,6 @@ interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
   def getFee(_pool_addr: address, _stable: bool) -> uint256: view
-  # Backwards compatibility with V1
-  def allPairsLength() -> uint256: view
-  def allPairs(_index: uint256) -> address: view
 
 interface IPool:
   def token0() -> address: view
@@ -125,10 +122,6 @@ interface IVoter:
   def isWhitelistedToken(_token_addr: address) -> bool: view
   def v1Factory() -> address: view
 
-interface IGaugeV1:
-  def earned(_token:address, _account: address) -> uint256: view
-  def rewardRate(_token:address) -> uint256: view
-
 interface IGauge:
   def fees0() -> uint256: view
   def fees1() -> uint256: view
@@ -151,35 +144,25 @@ interface IReward:
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
-v1_voter: public(IVoter)
 v1_factory: public(address)
-v1_token: public(address)
 
 # Methods
 
 @external
-def __init__(
-    _voter: address,
-    _registry: address,
-    _v1_voter: address,
-    _convertor: address
-  ):
+def __init__(_voter: address, _registry: address, _convertor: address):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
-  self.v1_voter = IVoter(_v1_voter)
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
-
   self.v1_factory = self.voter.v1Factory()
-  self.v1_token = IPool(self.convertor).token0()
 
 @internal
 @view
-def _pools(with_convertor: bool) -> DynArray[address[3], MAX_POOLS]:
+def _pools() -> DynArray[address[3], MAX_POOLS]:
   """
-  @notice Returns a compiled list of pool and its factory and gauge (sans v1)
+  @notice Returns a compiled list of pool and its factory and gauge
   @return Array of three addresses (factory, pool, gauge)
   """
   factories_count: uint256 = self.registry.poolFactoriesLength()
@@ -205,7 +188,7 @@ def _pools(with_convertor: bool) -> DynArray[address[3], MAX_POOLS]:
 
       pool_addr: address = factory.allPools(pindex)
 
-      if with_convertor == False and pool_addr == self.convertor:
+      if pool_addr == self.convertor:
         continue
 
       gauge_addr: address = self.voter.gauges(pool_addr)
@@ -216,86 +199,9 @@ def _pools(with_convertor: bool) -> DynArray[address[3], MAX_POOLS]:
 
 @external
 @view
-def toMigrate(_account: address) -> DynArray[Lp, MAX_POOLS]:
-  """
-  @notice Returns a collection of pool data to be migrated (from v1)
-  @return `LP` structs
-  """
-  pools: DynArray[Lp, MAX_POOLS] = empty(DynArray[Lp, MAX_POOLS])
-
-  if _account ==  empty(address):
-    return pools
-
-  factory: IPoolFactory = IPoolFactory(self.v1_factory)
-  pools_count: uint256 = factory.allPairsLength()
-
-  for pindex in range(0, MAX_POOLS):
-    if pindex >= pools_count:
-      break
-
-    pool: IPool = IPool(factory.allPairs(pindex))
-    gauge: IGauge = IGauge(self.v1_voter.gauges(pool.address))
-
-    account_balance: uint256 = pool.balanceOf(_account)
-    account_staked: uint256 = 0
-    gauge_total_supply: uint256 = 0
-    earned: uint256 = 0
-    emissions: uint256 = 0
-
-    if gauge.address != empty(address):
-      account_staked = gauge.balanceOf(_account)
-
-    if account_balance == 0 and account_staked == 0:
-      continue
-
-    if account_staked > 0:
-      earned = IGaugeV1(gauge.address).earned(self.v1_token, _account)
-      gauge_total_supply = gauge.totalSupply()
-      emissions = IGaugeV1(gauge.address).rewardRate(self.v1_token)
-
-    pools.append(Lp({
-      lp: pool.address,
-      symbol: pool.symbol(),
-      decimals: pool.decimals(),
-      stable: pool.stable(),
-      total_supply: pool.totalSupply(),
-
-      token0: pool.token0(),
-      reserve0: pool.reserve0(),
-      claimable0: pool.claimable0(_account),
-
-      token1: pool.token1(),
-      reserve1: pool.reserve1(),
-      claimable1: pool.claimable1(_account),
-
-      gauge: gauge.address,
-      gauge_total_supply: gauge_total_supply,
-      # Save gas...
-      gauge_alive: False,
-
-      fee: empty(address),
-      bribe: empty(address),
-      factory: self.v1_factory,
-
-      emissions: emissions,
-      emissions_token: self.v1_token,
-
-      account_balance: pool.balanceOf(_account),
-      account_earned: earned,
-      account_staked: account_staked,
-
-      pool_fee: 0,
-      token0_fees: 0,
-      token1_fees: 0
-    }))
-
-  return pools
-
-@external
-@view
 def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
-  @notice Returns a compiled list of pools for swaps from all pool factories
+  @notice Returns a compiled list of pools for swaps from pool factories (sans v1)
   @param _limit The max amount of tokens to return
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
@@ -309,30 +215,22 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
     if index >= factories_count:
       break
 
+    if factories[index] == self.v1_factory:
+      continue
+
     factory: IPoolFactory = IPoolFactory(factories[index])
 
-    pools_count: uint256 = 0
-    legacy: bool = factory.address == self.v1_factory
-
-    if legacy:
-      pools_count = factory.allPairsLength()
-    else:
-      pools_count = factory.allPoolsLength()
+    pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(_offset, _offset + MAX_POOLS):
       if len(pools) >= _limit or pindex >= pools_count:
         break
 
-      pool_addr: address = empty(address)
-
-      if legacy:
-        pool_addr = factory.allPairs(pindex)
-      else:
-        pool_addr = factory.allPools(pindex)
+      pool_addr: address = factory.allPools(pindex)
 
       pool: IPool = IPool(pool_addr)
 
-      if pool.reserve0() > 0 or pool_addr == self.convertor:
+      if pool.reserve0() > 0:
         pools.append(SwapLp({
           lp: pool_addr,
           stable: pool.stable(),
@@ -354,7 +252,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(True)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
   seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
@@ -408,7 +306,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_POOLS] = empty(DynArray[Lp, MAX_POOLS])
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(False)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
 
   for index in range(_offset, _offset + MAX_POOLS):
@@ -428,7 +326,7 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   @param _account The account to check the staked and earned balances
   @return Lp struct
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(False)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
 
   return self._byData(pools[_index], _account)
 
@@ -450,7 +348,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
   emissions: uint256 = 0
   emissions_token: address = empty(address)
   is_stable: bool = pool.stable()
-  pool_fee: uint256 = 0
+  pool_fee: uint256 = IPoolFactory(_data[0]).getFee(_data[1], is_stable)
   pool_fees: address = pool.poolFees()
   token0: IERC20 = IERC20(pool.token0())
   token1: IERC20 = IERC20(pool.token1())
@@ -464,9 +362,6 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
   if gauge_alive:
     emissions = gauge.rewardRate()
-
-  if _data[0] != self.v1_factory:
-    pool_fee = IPoolFactory(_data[0]).getFee(_data[1], is_stable)
 
   return Lp({
     lp: _data[1],
@@ -513,7 +408,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(False)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
@@ -677,7 +572,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   @param _venft_id The veNFT ID to get rewards for
   @return Array for VeNFT Reward structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(False)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
