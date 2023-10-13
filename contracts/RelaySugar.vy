@@ -23,12 +23,17 @@ struct Relay:
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
   compounded: uint256
+  withdrawable: uint256
   run_at: uint256
   manager: address
   relay: address
   inactive: bool
   name: String[100]
   account_venft_ids: DynArray[uint256, MAX_RESULTS]
+
+
+interface IERC20:
+  def balanceOf(_account: address) -> uint256: view
 
 interface IVoter:
   def ve() -> address: view
@@ -61,6 +66,8 @@ interface IRelay:
   def keeperLastRun() -> uint256: view
   # Latest epoch rewards
   def amountTokenEarned(_epoch_ts: uint256) -> uint256: view
+  def DEFAULT_ADMIN_ROLE() -> bytes32: view
+  def getRoleMember(_role: bytes32, _index: uint256) -> address: view
 
 # Vars
 registry: public(IRelayRegistry)
@@ -141,8 +148,16 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   votes: DynArray[LpVotes, MAX_PAIRS] = []
   amount: uint128 = self.ve.locked(managed_id)[0]
   last_voted: uint256 = 0
-  manager: address = self.ve.ownerOf(managed_id)
+  withdrawable: uint256 = 0
   inactive: bool = self.ve.deactivated(managed_id)
+
+  admin_role: bytes32 = relay.DEFAULT_ADMIN_ROLE()
+  manager: address = relay.getRoleMember(admin_role, 0)
+
+  # If the Relay is an AutoConverter, fetch withdrawable amount
+  if self.token != relay.token():
+    token: IERC20 = IERC20(relay.token())
+    withdrawable = token.balanceOf(_relay)
 
   epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
 
@@ -184,6 +199,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     votes: votes,
     token: relay.token(),
     compounded: rewards_compounded,
+    withdrawable: withdrawable,
     run_at: relay.keeperLastRun(),
     manager: manager,
     relay: _relay,
