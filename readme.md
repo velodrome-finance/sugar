@@ -176,6 +176,7 @@ The returned data/struct of type `Relay` values represent:
   * `decimals` - Relay veNFT token decimals
   * `amount` - Relay veNFT locked amount
   * `voting_amount` - Relay veNFT voting power
+  * `used_voting_amount` - Relay veNFT voting power used for last vote
   * `voted_at` - Relay veNFT last vote timestamp
   * `votes` - Relay veNFT list of pools with vote weights casted in the form of
     `LpVotes`
