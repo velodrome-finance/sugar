@@ -20,6 +20,7 @@ struct VeNFT:
   decimals: uint8
   amount: uint128
   voting_amount: uint256
+  governance_amount: uint256
   rebase_amount: uint256
   expires_at: uint256
   voted_at: uint256
@@ -52,17 +53,22 @@ interface IVotingEscrow:
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
 
+interface IVetoGovernorVotes:
+  def clock() -> uint48: view
+  def getVotes(_venft_id: uint256, _timepoint: uint256) -> uint256: view
+
 # Vars
 
 voter: public(IVoter)
 token: public(address)
 ve: public(IVotingEscrow)
 dist: public(IRewardsDistributor)
+gov: public(IVetoGovernorVotes)
 
 # Methods
 
 @external
-def __init__(_voter: address, _rewards_distributor: address):
+def __init__(_voter: address, _rewards_distributor: address, _gov: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -70,6 +76,7 @@ def __init__(_voter: address, _rewards_distributor: address):
   self.ve = IVotingEscrow(self.voter.ve())
   self.token = self.ve.token()
   self.dist = IRewardsDistributor(_rewards_distributor)
+  self.gov = IVetoGovernorVotes(_gov)
 
 @external
 @view
@@ -146,6 +153,9 @@ def _byId(_id: uint256) -> VeNFT:
   amount, expires_at, perma = self.ve.locked(_id)
   last_voted: uint256 = 0
 
+  timepoint: uint256 = convert(self.gov.clock(), uint256)
+  governance_amount: uint256 = self.gov.getVotes(_id, timepoint)
+
   if self.ve.voted(_id):
     last_voted = self.voter.lastVoted(_id)
 
@@ -179,6 +189,7 @@ def _byId(_id: uint256) -> VeNFT:
 
     amount: amount,
     voting_amount: self.ve.balanceOfNFT(_id),
+    governance_amount: governance_amount,
     rebase_amount: self.dist.claimable(_id),
     expires_at: expires_at,
     voted_at: last_voted,

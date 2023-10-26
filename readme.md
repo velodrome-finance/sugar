@@ -142,6 +142,7 @@ The returned data/struct of type `VeNFT` values represent:
   * `decimals` - veNFT token decimals
   * `amount` - veNFT locked amount
   * `voting_amount` - veNFT voting power
+  * `governance_amount` - veNFT voting power in governance
   * `rebase_amount` - veNFT accrued reabses amount
   * `expires_at` - veNFT lock expiration timestamp
   * `voted_at` - veNFT last vote timestamp
