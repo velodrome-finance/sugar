@@ -167,7 +167,7 @@ The available methods are:
 
 ### Relay Data
 
-`RelaySugar.vy` is deployed at `0xeBf8F5818D429785A584693599b695AFc3BeE3c6`
+`RelaySugar.vy` is deployed at `0x6109C83CCcdA022B41Fa8eFADC37827e1a771c74`
 
 It allows fetching Relay autocompounder/autoconverter data.
 The returned data/struct of type `Relay` values represent:
