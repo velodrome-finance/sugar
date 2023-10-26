@@ -27,6 +27,13 @@ struct VeNFT:
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
   permanent: bool
+  delegate_id: uint256
+
+struct Checkpoint:
+  from_timestamp: uint256
+  owner: address
+  delegated_balance: uint256
+  delegatee: uint256
 
 # Our contracts / Interfaces
 
@@ -52,8 +59,10 @@ interface IVotingEscrow:
   def locked(_venft_id: uint256) -> (uint128, uint256, bool): view
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
+  def numCheckpoints(_venft_id: uint256) -> uint48: view
+  def checkpoints(_venft_id: uint256, _index: uint48) -> Checkpoint: view
 
-interface IVetoGovernorVotes:
+interface IGovernor:
   def clock() -> uint48: view
   def getVotes(_venft_id: uint256, _timepoint: uint256) -> uint256: view
 
@@ -63,7 +72,7 @@ voter: public(IVoter)
 token: public(address)
 ve: public(IVotingEscrow)
 dist: public(IRewardsDistributor)
-gov: public(IVetoGovernorVotes)
+gov: public(IGovernor)
 
 # Methods
 
@@ -76,7 +85,7 @@ def __init__(_voter: address, _rewards_distributor: address, _gov: address):
   self.ve = IVotingEscrow(self.voter.ve())
   self.token = self.ve.token()
   self.dist = IRewardsDistributor(_rewards_distributor)
-  self.gov = IVetoGovernorVotes(_gov)
+  self.gov = IGovernor(_gov)
 
 @external
 @view
@@ -154,7 +163,10 @@ def _byId(_id: uint256) -> VeNFT:
   last_voted: uint256 = 0
 
   timepoint: uint256 = convert(self.gov.clock(), uint256)
-  governance_amount: uint256 = self.gov.getVotes(_id, timepoint)
+  governance_amount: uint256 = self.gov.getVotes(_id, timepoint - 1)
+
+  checkpoint_length: uint48 = self.ve.numCheckpoints(_id)
+  delegate_id: uint256 = self.ve.checkpoints(_id, checkpoint_length - 1).delegatee
 
   if self.ve.voted(_id):
     last_voted = self.voter.lastVoted(_id)
@@ -195,5 +207,6 @@ def _byId(_id: uint256) -> VeNFT:
     voted_at: last_voted,
     votes: votes,
     token: self.token,
-    permanent: perma
+    permanent: perma,
+    delegate_id: delegate_id
   })
