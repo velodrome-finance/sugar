@@ -29,12 +29,6 @@ struct VeNFT:
   permanent: bool
   delegate_id: uint256
 
-struct Checkpoint:
-  from_timestamp: uint256
-  owner: address
-  delegated_balance: uint256
-  delegatee: uint256
-
 # Our contracts / Interfaces
 
 interface IVoter:
@@ -59,8 +53,7 @@ interface IVotingEscrow:
   def locked(_venft_id: uint256) -> (uint128, uint256, bool): view
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
-  def numCheckpoints(_venft_id: uint256) -> uint48: view
-  def checkpoints(_venft_id: uint256, _index: uint48) -> Checkpoint: view
+  def delegates(_venft_id: uint256) -> uint256: view
 
 interface IGovernor:
   def clock() -> uint48: view
@@ -165,8 +158,7 @@ def _byId(_id: uint256) -> VeNFT:
   timepoint: uint256 = convert(self.gov.clock(), uint256)
   governance_amount: uint256 = self.gov.getVotes(_id, timepoint - 1)
 
-  checkpoint_length: uint48 = self.ve.numCheckpoints(_id)
-  delegate_id: uint256 = self.ve.checkpoints(_id, checkpoint_length - 1).delegatee
+  delegate_id: uint256 = self.ve.delegates(_id)
 
   if self.ve.voted(_id):
     last_voted = self.voter.lastVoted(_id)
