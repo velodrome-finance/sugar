@@ -56,7 +56,6 @@ interface IVotingEscrow:
   def delegates(_venft_id: uint256) -> uint256: view
 
 interface IGovernor:
-  def clock() -> uint48: view
   def getVotes(_venft_id: uint256, _timepoint: uint256) -> uint256: view
 
 # Vars
@@ -155,8 +154,7 @@ def _byId(_id: uint256) -> VeNFT:
   amount, expires_at, perma = self.ve.locked(_id)
   last_voted: uint256 = 0
 
-  timepoint: uint256 = convert(self.gov.clock(), uint256)
-  governance_amount: uint256 = self.gov.getVotes(_id, timepoint - 1)
+  governance_amount: uint256 = self.gov.getVotes(_id, block.timestamp)
 
   delegate_id: uint256 = self.ve.delegates(_id)
 
