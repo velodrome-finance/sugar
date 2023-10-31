@@ -132,7 +132,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x0eCc2593E3a6A9be3628940Fa4D928CC257B588B`
+`VeSugar.vy` is deployed at `0x86651B1E97428689EAc93bDE47B294CfB887408c`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
@@ -142,6 +142,7 @@ The returned data/struct of type `VeNFT` values represent:
   * `decimals` - veNFT token decimals
   * `amount` - veNFT locked amount
   * `voting_amount` - veNFT voting power
+  * `governance_amount` - veNFT voting power in governance
   * `rebase_amount` - veNFT accrued reabses amount
   * `expires_at` - veNFT lock expiration timestamp
   * `voted_at` - veNFT last vote timestamp
@@ -149,6 +150,7 @@ The returned data/struct of type `VeNFT` values represent:
     `LpVotes`
   * `token` - veNFT locked token address
   * `permanent` - veNFT permanent lock enabled flag
+  * `delegate_id` - token ID of the veNFT being delegated to
 
 The pool votes struct values represent:
   * `lp` - the pool address
