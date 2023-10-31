@@ -169,7 +169,7 @@ The available methods are:
 
 ### Relay Data
 
-`RelaySugar.vy` is deployed at `0xeBf8F5818D429785A584693599b695AFc3BeE3c6`
+`RelaySugar.vy` is deployed at `0xeEc6dD356508d3f30503bd15317b6D7671410e8e`
 
 It allows fetching Relay autocompounder/autoconverter data.
 The returned data/struct of type `Relay` values represent:
@@ -178,6 +178,7 @@ The returned data/struct of type `Relay` values represent:
   * `decimals` - Relay veNFT token decimals
   * `amount` - Relay veNFT locked amount
   * `voting_amount` - Relay veNFT voting power
+  * `used_voting_amount` - Relay veNFT voting power used for last vote
   * `voted_at` - Relay veNFT last vote timestamp
   * `votes` - Relay veNFT list of pools with vote weights casted in the form of
     `LpVotes`
