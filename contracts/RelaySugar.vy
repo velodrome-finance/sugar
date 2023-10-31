@@ -19,6 +19,7 @@ struct Relay:
   decimals: uint8
   amount: uint128
   voting_amount: uint256
+  used_voting_amount: uint256
   voted_at: uint256
   votes: DynArray[LpVotes, MAX_PAIRS]
   token: address
@@ -195,6 +196,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     decimals: self.ve.decimals(),
     amount: amount,
     voting_amount: self.ve.balanceOfNFT(managed_id),
+    used_voting_amount: vote_weight,
     voted_at: last_voted,
     votes: votes,
     token: relay.token(),
