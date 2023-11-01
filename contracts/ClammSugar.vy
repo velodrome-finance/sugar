@@ -63,6 +63,7 @@ struct Lp:
   gauge_alive: bool
 
   fee: address
+  bribe: address
   factory: address
 
   emissions: uint256
@@ -276,6 +277,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
+    bribe: self.voter.gaugeToBribe(gauge.address),
     factory: _data[0],
 
     emissions: emissions,
