@@ -37,20 +37,22 @@ struct PositionData:
   unstaked_earned0: uint128
   unstaked_earned1: uint128
 
-struct UserPosition:
-  token_id: uint256
-  staked: bool
-  tick_lower: int24
-  tick_upper: int24
-  liquidity: uint128
-  unstaked_earned0: uint128
-  unstaked_earned1: uint128
-  emissions_earned: uint256
+struct Position:
+  id: uint256 # NFT ID on v3, 0 on v2
+  manager: address # NFT Position Manager on v3, router on v2
+  liquidity: uint256 # Liquidity value on v3, amt of LP tokens on v2
+  staked: uint256 # 0/1 for staked state on v3, amt of staked LP tokens on v2
+  unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
+  unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and v3
+  emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
+  tick_lower: int24 # Position lower tick on v3, 0 on v2
+  tick_upper: int24 # Position upper tick on v3, 0 on v2
 
 struct Lp:
   lp: address
   nft: address
-  tick: int24
+  type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
+  tick: int24 # current tick on v3, 0 on v2
   price: uint160
 
   token0: address
@@ -74,7 +76,7 @@ struct Lp:
   token0_fees: uint128
   token1_fees: uint128
 
-  positions: DynArray[UserPosition, MAX_POSITIONS]
+  positions: DynArray[Position, MAX_POSITIONS]
 
 # TODO: epoch data/voting rewards
 
@@ -230,7 +232,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
   # Do we want to normalize for token decimals here?
   price: uint160 = sqrt_price**2
 
-  positions: DynArray[UserPosition, MAX_POSITIONS] = empty(DynArray[UserPosition, MAX_POSITIONS])
+  positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
   
   for index in range(0, MAX_POSITIONS):
     position_id: uint256 = nft.tokenOfOwnerByIndex(_account, index)
@@ -248,15 +250,16 @@ def _byData(_data: address[3], _account: address) -> Lp:
       staked = gauge.stakedContains(_account, position_id)
 
     positions.append(
-      UserPosition({
-        token_id: position_id,
-        staked: staked,
+      Position({
+        id: position_id,
+        manager: pool.nft(),
+        liquidity: convert(position_data.liquidity, uint256),
+        staked: convert(staked, uint256),
+        unstaked_earned0: convert(position_data.unstaked_earned0, uint256),
+        unstaked_earned1: convert(position_data.unstaked_earned1, uint256),
+        emissions_earned: emissions_earned,
         tick_lower: position_data.tick_lower,
-        tick_upper: position_data.tick_upper,
-        liquidity: position_data.liquidity,
-        unstaked_earned0: position_data.unstaked_earned0,
-        unstaked_earned1: position_data.unstaked_earned1,
-        emissions_earned: emissions_earned
+        tick_upper: position_data.tick_upper
       })
     )
 
@@ -264,7 +267,8 @@ def _byData(_data: address[3], _account: address) -> Lp:
     lp: pool.address,
     nft: nft.address,
 
-    tick: pool.tickSpacing(),
+    type: pool.tickSpacing(),
+    tick: slot.tick,
     price: price,
 
     token0: token0.address,
