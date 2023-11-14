@@ -189,7 +189,7 @@ The returned data/struct of type `Relay` values represent:
   * `relay` - Relay address
   * `inactive` - Relay active/inactive status
   * `name` - Relay name
-  * `account_venft_ids` - token IDs of the account's deposits into this Relay
+  * `account_venfts` - List of veNFTs deposited into this Relay by the account in the form of `ManagedVenft`
 
 ---
 
