@@ -132,7 +132,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x7390Ee1f0677c96D06e21C3f1CEb69443D589e03`
+`VeSugar.vy` is deployed at `0x9fCd211cc23E24352C3A17d353C6b3ECbeb6fAc2`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
@@ -164,6 +164,36 @@ The available methods are:
    for a specific account.
  * `byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
    NFT id.
+
+### Relay Data
+
+`RelaySugar.vy` is deployed at `0x1443c0757f77c04bd514427d2bE356A5834E4167`
+
+It allows fetching Relay autocompounder/autoconverter data.
+The returned data/struct of type `Relay` values represent:
+
+  * `venft_id` - token ID of the Relay veNFT
+  * `decimals` - Relay veNFT token decimals
+  * `amount` - Relay veNFT locked amount
+  * `voting_amount` - Relay veNFT voting power
+  * `used_voting_amount` - Relay veNFT voting power used for last vote
+  * `voted_at` - Relay veNFT last vote timestamp
+  * `votes` - Relay veNFT list of pools with vote weights casted in the form of
+    `LpVotes`
+  * `token` - token address the Relay is compounding into
+  * `compounded` - amount of tokens compounded into in the recent epoch
+  * `run_at` - timestamp of last compounding
+  * `manager` - Relay manager
+  * `relay` - Relay address
+  * `inactive` - Relay active/inactive status
+  * `name` - Relay name
+  * `account_venfts` - List of veNFTs deposited into this Relay by the account in the form of `ManagedVenft`
+
+---
+
+The available methods are:
+
+ * `all(_account: address) -> Relay[]` - returns a list of all `Relay` structs.
 
 ## Development
 

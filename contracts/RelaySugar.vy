@@ -14,6 +14,11 @@ struct LpVotes:
   lp: address
   weight: uint256
 
+struct ManagedVenft:
+  id: uint256
+  amount: uint256
+  earned: uint256
+
 struct Relay:
   venft_id: uint256
   decimals: uint8
@@ -30,7 +35,7 @@ struct Relay:
   relay: address
   inactive: bool
   name: String[100]
-  account_venft_ids: DynArray[uint256, MAX_RESULTS]
+  account_venfts: DynArray[ManagedVenft, MAX_RESULTS]
 
 
 interface IERC20:
@@ -53,6 +58,11 @@ interface IVotingEscrow:
   def locked(_venft_id: uint256) -> (uint128, uint256, bool): view
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
+  def managedToLocked(_managed_venft_id: uint256) -> address: view
+  def weights(_venft_id: uint256, _managed_venft_id: uint256) -> uint256: view
+
+interface IReward:
+  def earned(_token: address, _venft_id: uint256) -> uint256: view
 
 interface IRelayRegistry:
   def getAll() -> DynArray[address, MAX_RELAYS]: view
@@ -134,7 +144,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   relay: IRelay = IRelay(_relay)
   managed_id: uint256 = relay.mTokenId()
 
-  account_venft_ids: DynArray[uint256, MAX_RESULTS] = empty(DynArray[uint256, MAX_RESULTS])
+  account_venfts: DynArray[ManagedVenft, MAX_RESULTS] = empty(DynArray[ManagedVenft, MAX_RESULTS])
 
   for venft_index in range(MAX_RESULTS):
     account_venft_id: uint256 = self.ve.ownerToNFTokenIdList(_account, venft_index)
@@ -144,7 +154,15 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     
     account_venft_manager_id: uint256 = self.ve.idToManaged(account_venft_id)
     if account_venft_manager_id == managed_id:
-      account_venft_ids.append(account_venft_id)
+      locked_reward: IReward = IReward(self.ve.managedToLocked(account_venft_manager_id))
+      venft_weight: uint256 = self.ve.weights(account_venft_id, account_venft_manager_id)
+      earned: uint256 = locked_reward.earned(self.token, account_venft_id)
+
+      account_venfts.append(ManagedVenft({
+        id: account_venft_id,
+        amount: venft_weight,
+        earned: earned
+      }))
 
   votes: DynArray[LpVotes, MAX_PAIRS] = []
   amount: uint128 = self.ve.locked(managed_id)[0]
@@ -207,5 +225,5 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     relay: _relay,
     inactive: inactive,
     name: relay.name(),
-    account_venft_ids: account_venft_ids
+    account_venfts: account_venfts
   })
