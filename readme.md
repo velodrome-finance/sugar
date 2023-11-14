@@ -169,7 +169,7 @@ The available methods are:
 
 ### Relay Data
 
-`RelaySugar.vy` is deployed at `0xeEc6dD356508d3f30503bd15317b6D7671410e8e`
+`RelaySugar.vy` is deployed at `0xd4A12f507dfcfeE01E54736A7E0676B136f69667`
 
 It allows fetching Relay autocompounder/autoconverter data.
 The returned data/struct of type `Relay` values represent:
@@ -189,7 +189,12 @@ The returned data/struct of type `Relay` values represent:
   * `relay` - Relay address
   * `inactive` - Relay active/inactive status
   * `name` - Relay name
-  * `account_venft_ids` - token IDs of the account's deposits into this Relay
+  * `account_venfts` - List of veNFTs deposited into this Relay by the account in the form of `ManagedVenft`
+
+The managed veNFT deposit struct values represent:
+  * `id` - the token ID of the veNFT
+  * `amount` - the weight of the veNFT
+  * `earned` - earned emissions of the veNFT
 
 ---
 
