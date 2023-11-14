@@ -189,6 +189,11 @@ The returned data/struct of type `Relay` values represent:
   * `name` - Relay name
   * `account_venfts` - List of veNFTs deposited into this Relay by the account in the form of `ManagedVenft`
 
+The managed veNFT deposit struct values represent:
+  * `id` - the token ID of the veNFT
+  * `amount` - the weight of the veNFT
+  * `earned` - earned emissions of the veNFT
+
 ---
 
 The available methods are:
