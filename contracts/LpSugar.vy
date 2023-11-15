@@ -27,6 +27,7 @@ struct SwapLp:
   token0: address
   token1: address
   factory: address
+  pool_fee: uint256
 
 struct Lp:
   lp: address
@@ -233,14 +234,16 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       pool_addr: address = factory.allPools(pindex)
 
       pool: IPool = IPool(pool_addr)
+      is_stable: bool = pool.stable()
 
       if pool.reserve0() > 0:
         pools.append(SwapLp({
           lp: pool_addr,
-          stable: pool.stable(),
+          stable: is_stable,
           token0: pool.token0(),
           token1: pool.token1(),
-          factory: factory.address
+          factory: factory.address,
+          pool_fee: factory.getFee(pool_addr, is_stable)
         }))
 
   return pools
