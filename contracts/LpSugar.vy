@@ -107,6 +107,10 @@ interface IPool:
   def reserve1() -> uint256: view
   def claimable0(_account: address) -> uint256: view
   def claimable1(_account: address) -> uint256: view
+  def supplyIndex0(_account: address) -> uint256: view
+  def supplyIndex1(_account: address) -> uint256: view
+  def index0() -> uint256: view
+  def index1() -> uint256: view
   def totalSupply() -> uint256: view
   def symbol() -> String[100]: view
   def decimals() -> uint8: view
@@ -353,6 +357,17 @@ def _byData(_data: address[3], _account: address) -> Lp:
   token0: IERC20 = IERC20(pool.token0())
   token1: IERC20 = IERC20(pool.token1())
   gauge_alive: bool = self.voter.isAlive(gauge.address)
+  acc_balance: uint256 = pool.balanceOf(_account)
+
+  claimable0: uint256 = pool.claimable0(_account)
+  claimable1: uint256 = pool.claimable1(_account)
+  claimable_delta0: uint256 = pool.index0() - pool.supplyIndex0(_account)
+  claimable_delta1: uint256 = pool.index1() - pool.supplyIndex1(_account)
+
+  if claimable_delta0 > 0:
+    claimable0 += (acc_balance * claimable_delta0) / 10**18
+  if claimable_delta1 > 0:
+    claimable1 += (acc_balance * claimable_delta1) / 10**18
 
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
@@ -372,11 +387,11 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
     token0: token0.address,
     reserve0: pool.reserve0(),
-    claimable0: pool.claimable0(_account),
+    claimable0: claimable0,
 
     token1: token1.address,
     reserve1: pool.reserve1(),
-    claimable1: pool.claimable1(_account),
+    claimable1: claimable1,
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
@@ -389,7 +404,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions: emissions,
     emissions_token: emissions_token,
 
-    account_balance: pool.balanceOf(_account),
+    account_balance: acc_balance,
     account_earned: earned,
     account_staked: acc_staked,
 
