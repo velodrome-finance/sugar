@@ -357,17 +357,22 @@ def _byData(_data: address[3], _account: address) -> Lp:
   token0: IERC20 = IERC20(pool.token0())
   token1: IERC20 = IERC20(pool.token1())
   gauge_alive: bool = self.voter.isAlive(gauge.address)
-  acc_balance: uint256 = pool.balanceOf(_account)
+  decimals: uint256 = pool.decimals()
+  claimable0: uint256 = 0
+  claimable1: uint256 = 0
+  acc_balance: uint256 = 0
 
-  claimable0: uint256 = pool.claimable0(_account)
-  claimable1: uint256 = pool.claimable1(_account)
-  claimable_delta0: uint256 = pool.index0() - pool.supplyIndex0(_account)
-  claimable_delta1: uint256 = pool.index1() - pool.supplyIndex1(_account)
+  if account != empty(address):
+    acc_balance = pool.balanceOf(_account)
+    claimable0 = pool.claimable0(_account)
+    claimable1 = pool.claimable1(_account)
+    claimable_delta0: uint256 = pool.index0() - pool.supplyIndex0(_account)
+    claimable_delta1: uint256 = pool.index1() - pool.supplyIndex1(_account)
 
-  if claimable_delta0 > 0:
-    claimable0 += (acc_balance * claimable_delta0) / 10**18
-  if claimable_delta1 > 0:
-    claimable1 += (acc_balance * claimable_delta1) / 10**18
+    if claimable_delta0 > 0:
+      claimable0 += (acc_balance * claimable_delta0) / 10**decimals
+    if claimable_delta1 > 0:
+      claimable1 += (acc_balance * claimable_delta1) / 10**decimals
 
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
@@ -381,7 +386,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
-    decimals: pool.decimals(),
+    decimals: decimals,
     stable: is_stable,
     total_supply: pool.totalSupply(),
 
