@@ -158,13 +158,10 @@ def _byId(_id: uint256) -> VeNFT:
   governance_amount: uint256 = self.gov.getVotes(_id, block.timestamp)
 
   delegate_id: uint256 = self.ve.delegates(_id)
+  managed_id: uint256 = self.ve.idToManaged(_id)
 
-  if self.ve.voted(_id):
+  if managed_id != 0 or self.ve.voted(_id):
     last_voted = self.voter.lastVoted(_id)
-  else:
-    managed_id: uint256 = self.ve.idToManaged(_id)
-    if managed_id != 0:
-      last_voted = self.voter.lastVoted(managed_id)
 
   vote_weight: uint256 = self.voter.usedWeights(_id)
   # Since we don't have a way to see how many pools we voted...
