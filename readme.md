@@ -132,7 +132,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x9fCd211cc23E24352C3A17d353C6b3ECbeb6fAc2`
+`VeSugar.vy` is deployed at `0x9A53b9f397645891453e70675fF49D91951fbe96`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:

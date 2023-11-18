@@ -54,6 +54,7 @@ interface IVotingEscrow:
   def ownerToNFTokenIdList(_account: address, _index: uint256) -> uint256: view
   def voted(_venft_id: uint256) -> bool: view
   def delegates(_venft_id: uint256) -> uint256: view
+  def idToManaged(_venft_id: uint256) -> uint256: view
 
 interface IGovernor:
   def getVotes(_venft_id: uint256, _timepoint: uint256) -> uint256: view
@@ -156,8 +157,9 @@ def _byId(_id: uint256) -> VeNFT:
   governance_amount: uint256 = self.gov.getVotes(_id, block.timestamp)
 
   delegate_id: uint256 = self.ve.delegates(_id)
+  managed_id: uint256 = self.ve.idToManaged(_id)
 
-  if self.ve.voted(_id):
+  if managed_id != 0 or self.ve.voted(_id):
     last_voted = self.voter.lastVoted(_id)
 
   vote_weight: uint256 = self.voter.usedWeights(_id)
