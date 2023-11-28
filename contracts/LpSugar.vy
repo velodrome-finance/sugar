@@ -12,7 +12,46 @@ MAX_POOLS: constant(uint256) = 1000
 MAX_TOKENS: constant(uint256) = 2000
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
+MAX_POSITIONS: constant(uint256) = 100
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
+
+# Slot0 from V3Pool.sol
+struct Slot:
+  sqrt_price: uint160
+  tick: int24
+  observation_index: uint16
+  cardinality: uint16
+  cardinality_next: uint16
+  unlocked: bool
+
+# GaugeFees from V3Pool.sol
+struct GaugeFees:
+  token0: uint128
+  token1: uint128
+
+# Position from NonfungiblePositionManager.sol (NFT)
+struct PositionData:
+  nonce: uint96
+  operator: address
+  pool_id: uint80
+  tick_lower: int24
+  tick_upper: int24
+  liquidity: uint128
+  fee_growth0: uint256
+  fee_growth1: uint256
+  unstaked_earned0: uint128
+  unstaked_earned1: uint128
+
+struct Position:
+  id: uint256 # NFT ID on v3, 0 on v2
+  manager: address # NFT Position Manager on v3, router on v2
+  liquidity: uint256 # Liquidity value on v3, amt of LP tokens on v2
+  staked: uint256 # 0/1 for staked state on v3, amt of staked LP tokens on v2
+  unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
+  unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and v3
+  emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
+  tick_lower: int24 # Position lower tick on v3, 0 on v2
+  tick_upper: int24 # Position upper tick on v3, 0 on v2
 
 struct Token:
   token_address: address
@@ -23,7 +62,7 @@ struct Token:
 
 struct SwapLp:
   lp: address
-  stable: bool
+  type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
   token0: address
   token1: address
   factory: address
@@ -32,16 +71,18 @@ struct Lp:
   lp: address
   symbol: String[100]
   decimals: uint8
-  stable: bool
   total_supply: uint256
+
+  nft: address 
+  type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
+  tick: int24 # current tick on v3, 0 on v2
+  price: uint160 # current price on v3, 0 on v2
 
   token0: address
   reserve0: uint256
-  claimable0: uint256
 
   token1: address
   reserve1: uint256
-  claimable1: uint256
 
   gauge: address
   gauge_total_supply: uint256
@@ -54,13 +95,12 @@ struct Lp:
   emissions: uint256
   emissions_token: address
 
-  account_balance: uint256
-  account_earned: uint256
-  account_staked: uint256
-
-  pool_fee: uint256
+  staked_fee: uint256 # staked fee % on v3, fee % on v2
+  unstaked_fee: uint256 # unstaked fee % on v3, fee % on v2
   token0_fees: uint256
   token1_fees: uint256
+
+  positions: DynArray[Position, MAX_POSITIONS]
 
 struct LpEpochReward:
   token: address
@@ -114,6 +154,17 @@ interface IPool:
   def balanceOf(_account: address) -> uint256: view
   def poolFees() -> address: view
 
+interface IV3Pool:
+  def token0() -> address: view
+  def token1() -> address: view
+  def gauge() -> address: view
+  def nft() -> address: view
+  def tickSpacing() -> int24: view
+  def slot0() -> Slot: view
+  def gaugeFees() -> GaugeFees: view
+  def fee() -> uint24: view
+  def unstakedFee() -> uint24: view
+
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
   def gaugeToBribe(_gauge_addr: address) -> address: view
@@ -132,6 +183,23 @@ interface IGauge:
   def rewardRateByEpoch(_ts: uint256) -> uint256: view
   def rewardToken() -> address: view
 
+interface ICLGauge:
+  def earned(_account: address, _position_id: uint256) -> uint256: view
+  def rewardRate() -> uint256: view
+  def rewardRateByEpoch(_ts: uint256) -> uint256: view
+  def rewardToken() -> address: view
+  def feesVotingReward() -> address: view
+  def stakedContains(_account: address, _position_id: uint256) -> bool: view
+
+interface IUniversalGauge: # fetches rewards data from both v2 and v3 gauges
+  def rewardRate() -> uint256: view
+  def rewardRateByEpoch(_ts: uint256) -> uint256: view
+  def rewardToken() -> address: view
+
+interface INFTPositionManager:
+  def positions(_position_id: uint256) -> PositionData: view
+  def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
+
 interface IReward:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
   def supplyCheckpoints(_index: uint256) -> uint256[2]: view
@@ -144,18 +212,20 @@ interface IReward:
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
+router: public(address)
 v1_factory: public(address)
 
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _convertor: address):
+def __init__(_voter: address, _registry: address, _convertor: address, _router: address):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
+  self.router = _router
   self.v1_factory = self.voter.v1Factory()
 
 @internal
@@ -227,15 +297,35 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         break
 
       pool_addr: address = factory.allPools(pindex)
+      type: int24 = -1
+      token0: address = empty(address)
+      token1: address = empty(address)
+      reserve0: uint256 = 0
 
-      pool: IPool = IPool(pool_addr)
+      # to-do: create preferred way of differentiating between v2 and v3 pools
+      is_cl_pool: bool = False
 
-      if pool.reserve0() > 0:
+      if is_cl_pool:
+        pool: IV3Pool = IV3Pool(pool_addr)
+        type = pool.tickSpacing()
+        token0 = pool.token0()
+        token1 = pool.token1()
+        token0_contract: IERC20 = IERC20(token0)
+        reserve0 = token0_contract.balanceOf(pool_addr)
+      else:
+        pool: IPool = IPool(pool_addr)
+        if pool.stable():
+          type = 0
+        token0 = pool.token0()
+        token1 = pool.token1()
+        reserve0 = pool.reserve0()
+
+      if reserve0 > 0:
         pools.append(SwapLp({
           lp: pool_addr,
-          stable: pool.stable(),
-          token0: pool.token0(),
-          token1: pool.token1(),
+          type: type,
+          token0: token0,
+          token1: token1,
           factory: factory.address
         }))
 
@@ -313,7 +403,13 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     if len(col) == _limit or index >= pools_count:
       break
 
-    col.append(self._byData(pools[index], _account))
+    # to-do: create preferred way of differentiating between v2 and v3 pools
+    is_cl_pool: bool = False
+
+    if is_cl_pool:
+      col.append(self._byDataCL(pools[index], _account))
+    else:
+      col.append(self._byData(pools[index], _account))
 
   return col
 
@@ -328,6 +424,11 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   """
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
 
+  # to-do: create preferred way of differentiating between v2 and v3 pools
+  is_cl_pool: bool = False
+
+  if is_cl_pool:
+    return self._byDataCL(pools[_index], _account)
   return self._byData(pools[_index], _account)
 
 @internal
@@ -354,6 +455,10 @@ def _byData(_data: address[3], _account: address) -> Lp:
   token1: IERC20 = IERC20(pool.token1())
   gauge_alive: bool = self.voter.isAlive(gauge.address)
 
+  type: int24 = -1
+  if is_stable:
+    type = 0
+
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
     earned = gauge.earned(_account)
@@ -363,20 +468,38 @@ def _byData(_data: address[3], _account: address) -> Lp:
   if gauge_alive:
     emissions = gauge.rewardRate()
 
+  positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
+
+  positions.append(
+    Position({
+      id: 0,
+      manager: self.router,
+      liquidity: pool.balanceOf(_account),
+      staked: acc_staked,
+      unstaked_earned0: pool.claimable0(_account),
+      unstaked_earned1: pool.claimable1(_account),
+      emissions_earned: earned,
+      tick_lower: 0,
+      tick_upper: 0
+    })
+  )
+
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
     decimals: pool.decimals(),
-    stable: is_stable,
     total_supply: pool.totalSupply(),
+
+    nft: empty(address),
+    type: type,
+    tick: 0,
+    price: 0,
 
     token0: token0.address,
     reserve0: pool.reserve0(),
-    claimable0: pool.claimable0(_account),
 
     token1: token1.address,
     reserve1: pool.reserve1(),
-    claimable1: pool.claimable1(_account),
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
@@ -389,13 +512,113 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions: emissions,
     emissions_token: emissions_token,
 
-    account_balance: pool.balanceOf(_account),
-    account_earned: earned,
-    account_staked: acc_staked,
-
-    pool_fee: pool_fee,
+    staked_fee: pool_fee,
+    unstaked_fee: pool_fee,
     token0_fees: token0.balanceOf(pool_fees),
-    token1_fees: token1.balanceOf(pool_fees)
+    token1_fees: token1.balanceOf(pool_fees),
+
+    positions: positions
+  })
+
+@internal
+@view
+def _byDataCL(_data: address[3], _account: address) -> Lp:
+  """
+  @notice Returns CL pool data based on the factory, pool and gauge addresses
+  @param _data The addresses to lookup
+  @param _account The user account
+  @return Lp struct
+  """
+  pool: IV3Pool = IV3Pool(_data[1])
+  gauge: ICLGauge = ICLGauge(_data[2])
+  nft: INFTPositionManager = INFTPositionManager(pool.nft())
+
+  gauge_fees: GaugeFees = pool.gaugeFees()
+  gauge_alive: bool = self.voter.isAlive(gauge.address)
+  fee_voting_reward: address = empty(address)
+  emissions: uint256 = 0
+  emissions_token: address = empty(address)
+  token0: IERC20 = IERC20(pool.token0())
+  token1: IERC20 = IERC20(pool.token1())
+
+  if gauge.address != empty(address):
+    fee_voting_reward = gauge.feesVotingReward()
+    emissions_token = gauge.rewardToken()
+
+  if gauge_alive:
+    emissions = gauge.rewardRate()
+
+  slot: Slot = pool.slot0()
+  # https://blog.uniswap.org/uniswap-v3-math-primer
+  sqrt_price: uint160 = slot.sqrt_price / (2**96)
+  # Do we want to normalize for token decimals here?
+  price: uint160 = sqrt_price**2
+
+  positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
+  
+  for index in range(0, MAX_POSITIONS):
+    position_id: uint256 = nft.tokenOfOwnerByIndex(_account, index)
+
+    if position_id == 0:
+      break
+
+    position_data: PositionData = nft.positions(position_id)
+
+    emissions_earned: uint256 = 0
+    staked: bool = False
+
+    if gauge.address != empty(address):
+      emissions_earned = gauge.earned(_account, position_id)
+      staked = gauge.stakedContains(_account, position_id)
+
+    positions.append(
+      Position({
+        id: position_id,
+        manager: pool.nft(),
+        liquidity: convert(position_data.liquidity, uint256),
+        staked: convert(staked, uint256),
+        unstaked_earned0: convert(position_data.unstaked_earned0, uint256),
+        unstaked_earned1: convert(position_data.unstaked_earned1, uint256),
+        emissions_earned: emissions_earned,
+        tick_lower: position_data.tick_lower,
+        tick_upper: position_data.tick_upper
+      })
+    )
+
+  return Lp({
+    lp: pool.address,
+    symbol: "",
+    decimals: 0,
+    total_supply: 0,
+
+    nft: nft.address,
+    type: pool.tickSpacing(),
+    tick: slot.tick,
+    price: price,
+
+    token0: token0.address,
+    reserve0: token0.balanceOf(pool.address),
+
+    token1: token1.address,
+    reserve1: token1.balanceOf(pool.address),
+
+    gauge: gauge.address,
+    gauge_total_supply: 0,
+    gauge_alive: gauge_alive,
+
+    fee: fee_voting_reward,
+    bribe: self.voter.gaugeToBribe(gauge.address),
+    factory: _data[0],
+
+    emissions: emissions,
+    emissions_token: emissions_token,
+
+    staked_fee: convert(pool.fee(), uint256),
+    unstaked_fee: convert(pool.unstakedFee(), uint256),
+    token0_fees: convert(gauge_fees.token0, uint256),
+    token1_fees: convert(gauge_fees.token1, uint256),
+
+    positions: positions
   })
 
 @external
@@ -451,7 +674,7 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   @param _gauge The pool gauge
   @return A LpEpoch struct
   """
-  gauge: IGauge = IGauge(_gauge)
+  gauge: IUniversalGauge = IUniversalGauge(_gauge)
   bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
 
   epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
@@ -488,7 +711,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
     empty(DynArray[LpEpoch, MAX_EPOCHS])
 
-  gauge: IGauge = IGauge(self.voter.gauges(_address))
+  gauge: IUniversalGauge = IUniversalGauge(self.voter.gauges(_address))
 
   if self.voter.isAlive(gauge.address) == False:
     return epochs
