@@ -139,6 +139,7 @@ interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
   def getFee(_pool_addr: address, _stable: bool) -> uint256: view
+  def getPool(_token0: address, _token1: address, _fee: uint24) -> address: view
 
 interface IPool:
   def token0() -> address: view
@@ -153,17 +154,13 @@ interface IPool:
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
   def poolFees() -> address: view
-
-interface IV3Pool:
-  def token0() -> address: view
-  def token1() -> address: view
-  def gauge() -> address: view
-  def nft() -> address: view
-  def tickSpacing() -> int24: view
-  def slot0() -> Slot: view
-  def gaugeFees() -> GaugeFees: view
-  def fee() -> uint24: view
-  def unstakedFee() -> uint24: view
+  def gauge() -> address: view # fetches gauge from v3 pool
+  def nft() -> address: view # fetches nft address from v3 pool
+  def tickSpacing() -> int24: view # v3 tick spacing
+  def slot0() -> Slot: view # v3 slot data
+  def gaugeFees() -> GaugeFees: view # v3 gauge fees amounts
+  def fee() -> uint24: view # v3 fee level
+  def unstakedFee() -> uint24: view # v3 unstaked fee level
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -297,27 +294,25 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         break
 
       pool_addr: address = factory.allPools(pindex)
+      pool: IPool = IPool(pool_addr)
       type: int24 = -1
-      token0: address = empty(address)
-      token1: address = empty(address)
+      token0: address = pool.token0()
+      token1: address = pool.token1()
       reserve0: uint256 = 0
 
-      # to-do: create preferred way of differentiating between v2 and v3 pools
       is_cl_pool: bool = False
+      is_stable: bool = factory.getPool(token0, token1, 0) == pool_addr
+
+      if not is_stable and factory.getPool(token0, token1, 1) != pool_addr:
+        is_cl_pool = True
 
       if is_cl_pool:
-        pool: IV3Pool = IV3Pool(pool_addr)
         type = pool.tickSpacing()
-        token0 = pool.token0()
-        token1 = pool.token1()
         reserve0 = IERC20(token0).balanceOf(pool_addr)
 
       else:
-        pool: IPool = IPool(pool_addr)
-        if pool.stable():
+        if is_stable:
           type = 0
-        token0 = pool.token0()
-        token1 = pool.token1()
         reserve0 = pool.reserve0()
 
       if reserve0 > 0:
@@ -403,8 +398,16 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     if len(col) == _limit or index >= pools_count:
       break
 
-    # to-do: create preferred way of differentiating between v2 and v3 pools
+    pool: IPool = IPool(pools[index][1])
+    factory: IPoolFactory = IPoolFactory(pools[index][0])
+    token0: address = pool.token0()
+    token1: address = pool.token1()
+
     is_cl_pool: bool = False
+    is_stable: bool = factory.getPool(token0, token1, 0) == pools[index][1]
+
+    if not is_stable and factory.getPool(token0, token1, 1) != pools[index][1]:
+      is_cl_pool = True
 
     if is_cl_pool:
       col.append(self._byDataCL(pools[index], _account))
@@ -424,8 +427,16 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   """
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
 
-  # to-do: create preferred way of differentiating between v2 and v3 pools
+  pool: IPool = IPool(pools[_index][1])
+  factory: IPoolFactory = IPoolFactory(pools[_index][0])
+  token0: address = pool.token0()
+  token1: address = pool.token1()
+
   is_cl_pool: bool = False
+  is_stable: bool = factory.getPool(token0, token1, 0) == pools[_index][1]
+
+  if not is_stable and factory.getPool(token0, token1, 1) != pools[_index][1]:
+    is_cl_pool = True
 
   if is_cl_pool:
     return self._byDataCL(pools[_index], _account)
@@ -529,7 +540,7 @@ def _byDataCL(_data: address[3], _account: address) -> Lp:
   @param _account The user account
   @return Lp struct
   """
-  pool: IV3Pool = IV3Pool(_data[1])
+  pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
   nft: INFTPositionManager = INFTPositionManager(pool.nft())
 
