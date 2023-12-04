@@ -95,7 +95,7 @@ struct Lp:
   emissions: uint256
   emissions_token: address
 
-  staked_fee: uint256 # staked fee % on v3, fee % on v2
+  pool_fee: uint256 # staked fee % on v3, fee % on v2
   unstaked_fee: uint256 # unstaked fee % on v3, fee % on v2
   token0_fees: uint256
   token1_fees: uint256
@@ -310,8 +310,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         type = pool.tickSpacing()
         token0 = pool.token0()
         token1 = pool.token1()
-        token0_contract: IERC20 = IERC20(token0)
-        reserve0 = token0_contract.balanceOf(pool_addr)
+        reserve0 = IERC20(token0).balanceOf(pool_addr)
+
       else:
         pool: IPool = IPool(pool_addr)
         if pool.stable():
@@ -512,7 +512,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions: emissions,
     emissions_token: emissions_token,
 
-    staked_fee: pool_fee,
+    pool_fee: pool_fee,
     unstaked_fee: pool_fee,
     token0_fees: token0.balanceOf(pool_fees),
     token1_fees: token1.balanceOf(pool_fees),
@@ -549,10 +549,7 @@ def _byDataCL(_data: address[3], _account: address) -> Lp:
     emissions = gauge.rewardRate()
 
   slot: Slot = pool.slot0()
-  # https://blog.uniswap.org/uniswap-v3-math-primer
-  sqrt_price: uint160 = slot.sqrt_price / (2**96)
-  # Do we want to normalize for token decimals here?
-  price: uint160 = sqrt_price**2
+  price: uint160 = slot.sqrt_price
 
   positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
   
@@ -613,7 +610,7 @@ def _byDataCL(_data: address[3], _account: address) -> Lp:
     emissions: emissions,
     emissions_token: emissions_token,
 
-    staked_fee: convert(pool.fee(), uint256),
+    pool_fee: convert(pool.fee(), uint256),
     unstaked_fee: convert(pool.unstakedFee(), uint256),
     token0_fees: convert(gauge_fees.token0, uint256),
     token1_fees: convert(gauge_fees.token1, uint256),
