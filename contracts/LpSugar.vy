@@ -188,11 +188,6 @@ interface ICLGauge:
   def feesVotingReward() -> address: view
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
 
-interface IUniversalGauge: # fetches rewards data from both v2 and v3 gauges
-  def rewardRate() -> uint256: view
-  def rewardRateByEpoch(_ts: uint256) -> uint256: view
-  def rewardToken() -> address: view
-
 interface INFTPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
@@ -682,7 +677,7 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   @param _gauge The pool gauge
   @return A LpEpoch struct
   """
-  gauge: IUniversalGauge = IUniversalGauge(_gauge)
+  gauge: IGauge = IGauge(_gauge)
   bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
 
   epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
@@ -719,7 +714,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
     empty(DynArray[LpEpoch, MAX_EPOCHS])
 
-  gauge: IUniversalGauge = IUniversalGauge(self.voter.gauges(_address))
+  gauge: IGauge = IGauge(self.voter.gauges(_address))
 
   if self.voter.isAlive(gauge.address) == False:
     return epochs
