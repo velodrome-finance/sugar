@@ -43,14 +43,15 @@ The returned data/struct of type `Lp` values represent:
  * `lp` - pool contract address
  * `symbol` - pool symbol
  * `decimals` - pool decimals
- * `stable` - pool type (`stable = false`, means it's a variable type of pool)
  * `total_supply` - pool tokens supply
+ * `nft` - NFT position manager on v3 pools, empty address on v2 pools
+ * `type` - tick spacing on v3 pools, 0/-1 for stable/volatile on v2 pools
+ * `tick` - current tick on v3 pools, 0 on v2 pools
+ * `price` - pool price on v3 pools, 0 on v2 pools
  * `token0` - pool 1st token address
  * `reserve0` - pool 1st token reserves (nr. of tokens in the contract)
- * `claimable0` - claimable 1st token from fees (for unstaked positions)
  * `token1` - pool 2nd token address
  * `reserve1` - pool 2nd token reserves (nr. of tokens in the contract)
- * `claimable1` - claimable 2nd token from fees (for unstaked positions)
  * `gauge` - pool gauge address
  * `gauge_total_supply` - pool staked tokens (less/eq than/to pool total supply)
  * `gauge_alive` - indicates if the gauge is still active
@@ -59,12 +60,11 @@ The returned data/struct of type `Lp` values represent:
  * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
  * `emissions_token` - pool emissions token address
- * `account_balance` - account Lp tokens balance
- * `account_earned` - account earned emissions for this pool
- * `account_staked` - account pool staked in gauge balance
  * `pool_fee` - pool swap fee (percentage)
+ * `unstaked_fee` - unstaked fee percentage on v3 pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
+ * `positions` - a list of account pool position data, it is a struct of type `Position`
 
 ---
 
