@@ -96,7 +96,7 @@ struct Lp:
   emissions_token: address
 
   pool_fee: uint256 # staked fee % on v3, fee % on v2
-  unstaked_fee: uint256 # unstaked fee % on v3, fee % on v2
+  unstaked_fee: uint256 # unstaked fee % on v3, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
 
@@ -399,15 +399,15 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     token1: address = pool.token1()
 
     is_cl_pool: bool = False
-    is_stable: bool = factory.getPool(token0, token1, 0) == pools[index][1]
+    is_stable: bool = factory.getPool(token0, token1, 0) == pool.address
 
-    if not is_stable and factory.getPool(token0, token1, 1) != pools[index][1]:
+    if not is_stable and factory.getPool(token0, token1, 1) != pool.address:
       is_cl_pool = True
 
     if is_cl_pool:
-      col.append(self._byDataCL(pools[index], _account))
+      col.append(self._byDataCL(pools[index], token0, token1, _account))
     else:
-      col.append(self._byData(pools[index], _account))
+      col.append(self._byData(pools[index], token0, token1, _account))
 
   return col
 
@@ -428,18 +428,18 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   token1: address = pool.token1()
 
   is_cl_pool: bool = False
-  is_stable: bool = factory.getPool(token0, token1, 0) == pools[_index][1]
+  is_stable: bool = factory.getPool(token0, token1, 0) == pool.address
 
-  if not is_stable and factory.getPool(token0, token1, 1) != pools[_index][1]:
+  if not is_stable and factory.getPool(token0, token1, 1) != pool.address:
     is_cl_pool = True
 
   if is_cl_pool:
-    return self._byDataCL(pools[_index], _account)
-  return self._byData(pools[_index], _account)
+    return self._byDataCL(pools[_index], token0, token1, _account)
+  return self._byData(pools[_index], token0, token1, _account)
 
 @internal
 @view
-def _byData(_data: address[3], _account: address) -> Lp:
+def _byData(_data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
   """
   @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
@@ -457,8 +457,8 @@ def _byData(_data: address[3], _account: address) -> Lp:
   is_stable: bool = pool.stable()
   pool_fee: uint256 = IPoolFactory(_data[0]).getFee(_data[1], is_stable)
   pool_fees: address = pool.poolFees()
-  token0: IERC20 = IERC20(pool.token0())
-  token1: IERC20 = IERC20(pool.token1())
+  token0: IERC20 = IERC20(_token0)
+  token1: IERC20 = IERC20(_token1)
   gauge_alive: bool = self.voter.isAlive(gauge.address)
 
   type: int24 = -1
@@ -519,7 +519,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
     emissions_token: emissions_token,
 
     pool_fee: pool_fee,
-    unstaked_fee: pool_fee,
+    unstaked_fee: 0,
     token0_fees: token0.balanceOf(pool_fees),
     token1_fees: token1.balanceOf(pool_fees),
 
@@ -528,7 +528,7 @@ def _byData(_data: address[3], _account: address) -> Lp:
 
 @internal
 @view
-def _byDataCL(_data: address[3], _account: address) -> Lp:
+def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
   """
   @notice Returns CL pool data based on the factory, pool and gauge addresses
   @param _data The addresses to lookup
@@ -544,12 +544,11 @@ def _byDataCL(_data: address[3], _account: address) -> Lp:
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
-  token0: IERC20 = IERC20(pool.token0())
-  token1: IERC20 = IERC20(pool.token1())
+  token0: IERC20 = IERC20(_token0)
+  token1: IERC20 = IERC20(_token1)
 
-  if gauge.address != empty(address):
-    fee_voting_reward = gauge.feesVotingReward()
-    emissions_token = gauge.rewardToken()
+  fee_voting_reward = gauge.feesVotingReward()
+  emissions_token = gauge.rewardToken()
 
   if gauge_alive:
     emissions = gauge.rewardRate()
