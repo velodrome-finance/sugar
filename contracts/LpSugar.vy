@@ -52,6 +52,7 @@ struct Position:
   emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
   tick_lower: int24 # Position lower tick on v3, 0 on v2
   tick_upper: int24 # Position upper tick on v3, 0 on v2
+  alm: bool # True if Position is deposited into ALM on v3, False on v2
 
 struct Token:
   token_address: address
@@ -99,6 +100,10 @@ struct Lp:
   unstaked_fee: uint256 # unstaked fee % on v3, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
+
+  alm_vault: address # ALM vault address on v3, empty address on v2
+  alm_reserve0: uint256 # ALM token0 reserves on v3, 0 on v2
+  alm_reserve1: uint256 # ALM token1 reserves on v3, 0 on v2
 
   positions: DynArray[Position, MAX_POSITIONS]
 
@@ -206,11 +211,12 @@ voter: public(IVoter)
 convertor: public(address)
 router: public(address)
 v1_factory: public(address)
+alm_registry: public(address) # todo: add ALM interface when ALM contracts are ready
 
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _convertor: address, _router: address):
+def __init__(_voter: address, _registry: address, _convertor: address, _router: address, _alm_registry: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -219,6 +225,7 @@ def __init__(_voter: address, _registry: address, _convertor: address, _router: 
   self.convertor = _convertor
   self.router = _router
   self.v1_factory = self.voter.v1Factory()
+  self.alm_registry = _alm_registry
 
 @internal
 @view
@@ -486,7 +493,8 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
       unstaked_earned1: pool.claimable1(_account),
       emissions_earned: earned,
       tick_lower: 0,
-      tick_upper: 0
+      tick_upper: 0,
+      alm: False
     })
   )
 
@@ -522,6 +530,10 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
     unstaked_fee: 0,
     token0_fees: token0.balanceOf(pool_fees),
     token1_fees: token1.balanceOf(pool_fees),
+
+    alm_vault: empty(address),
+    alm_reserve0: 0,
+    alm_reserve1: 0,
 
     positions: positions
   })
@@ -583,7 +595,8 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
         unstaked_earned1: convert(position_data.unstaked_earned1, uint256),
         emissions_earned: emissions_earned,
         tick_lower: position_data.tick_lower,
-        tick_upper: position_data.tick_upper
+        tick_upper: position_data.tick_upper,
+        alm: False # todo: populate real ALM data when ALM contracts are ready
       })
     )
 
@@ -619,6 +632,11 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
     unstaked_fee: convert(pool.unstakedFee(), uint256),
     token0_fees: convert(gauge_fees.token0, uint256),
     token1_fees: convert(gauge_fees.token1, uint256),
+
+    # todo: populate real ALM data when ALM contracts are ready
+    alm_vault: empty(address),
+    alm_reserve0: 0,
+    alm_reserve1: 0,
 
     positions: positions
   })

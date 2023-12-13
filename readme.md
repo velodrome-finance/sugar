@@ -64,6 +64,9 @@ The returned data/struct of type `Lp` values represent:
  * `unstaked_fee` - unstaked fee percentage on v3 pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
+ * `alm_vault` - ALM vault address on v3 if it exists, empty address on v2
+ * `alm_reserve0` - ALM vault token0 reserves on v3, 0 on v2
+ * `alm_reserve1` - ALM vault token1 reserves on v3, 0 on v2
  * `positions` - a list of account pool position data, it is a struct of type `Position`
 
 ---
