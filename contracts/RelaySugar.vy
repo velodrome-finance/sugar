@@ -8,6 +8,7 @@
 MAX_RELAYS: constant(uint256) = 50
 MAX_RESULTS: constant(uint256) = 1000
 MAX_PAIRS: constant(uint256) = 30
+MAX_REGISTRIES: constant(uint256) = 20
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct LpVotes:
@@ -81,17 +82,17 @@ interface IRelay:
   def getRoleMember(_role: bytes32, _index: uint256) -> address: view
 
 # Vars
-registry: public(IRelayRegistry)
+registries: public(DynArray[address, MAX_REGISTRIES])
 voter: public(IVoter)
 ve: public(IVotingEscrow)
 token: public(address)
 
 @external
-def __init__(_registry: address, _voter: address):
+def __init__(_registries: DynArray[address, MAX_REGISTRIES], _voter: address):
   """
   @dev Set up our external registry and voter contracts
   """
-  self.registry = IRelayRegistry(_registry)
+  self.registries = _registries
   self.voter = IVoter(_voter)
   self.ve = IVotingEscrow(self.voter.ve())
   self.token = self.ve.token()
@@ -113,21 +114,26 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   @return Array of Relay structs
   """
   relays: DynArray[Relay, MAX_RELAYS] = empty(DynArray[Relay, MAX_RELAYS])
-  factories: DynArray[address, MAX_RELAYS] = self.registry.getAll()
-
-  for factory_index in range(0, MAX_RELAYS):
-    if factory_index == len(factories):
+  for registry_index in range(0, MAX_REGISTRIES):
+    if registry_index == len(self.registries):
       break
+      
+    relay_registry: IRelayRegistry = IRelayRegistry(self.registries[registry_index])
+    factories: DynArray[address, MAX_RELAYS] = relay_registry.getAll()
 
-    relay_factory: IRelayFactory = IRelayFactory(factories[factory_index])
-    addresses: DynArray[address, MAX_RELAYS] = relay_factory.relays()
-
-    for index in range(0, MAX_RELAYS):
-      if index == len(addresses):
+    for factory_index in range(0, MAX_RELAYS):
+      if factory_index == len(factories):
         break
 
-      relay: Relay = self._byAddress(addresses[index], _account)
-      relays.append(relay)
+      relay_factory: IRelayFactory = IRelayFactory(factories[factory_index])
+      addresses: DynArray[address, MAX_RELAYS] = relay_factory.relays()
+
+      for index in range(0, MAX_RELAYS):
+        if index == len(addresses):
+          break
+
+        relay: Relay = self._byAddress(addresses[index], _account)
+        relays.append(relay)
 
   return relays
 
