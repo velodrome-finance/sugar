@@ -5,10 +5,10 @@
 # @author stas, ZoomerAnon
 # @notice Makes it nicer to work with Relay.
 
-MAX_RELAYS: constant(uint256) = 50
-MAX_RESULTS: constant(uint256) = 1000
+MAX_RELAYS: constant(uint256) = 25
+MAX_RESULTS: constant(uint256) = 100
 MAX_PAIRS: constant(uint256) = 30
-MAX_REGISTRIES: constant(uint256) = 20
+MAX_REGISTRIES: constant(uint256) = 10
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct LpVotes:
