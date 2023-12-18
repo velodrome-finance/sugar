@@ -1,18 +1,18 @@
 # SPDX-License-Identifier: BUSL-1.1
 # @version >=0.3.6 <0.4.0
 
-# @title Velodrome Finance LP Sugar v2
-# @author stas
+# @title Velodrome Finance LP Sugar v3
+# @author stas, ethzoomer
 # @notice Makes it nicer to work with the liquidity pools.
 
 # Structs
 
 MAX_FACTORIES: constant(uint256) = 10
-MAX_POOLS: constant(uint256) = 1000
+MAX_POOLS: constant(uint256) = 500
 MAX_TOKENS: constant(uint256) = 2000
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
-MAX_POSITIONS: constant(uint256) = 100
+MAX_POSITIONS: constant(uint256) = 10
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 # Slot0 from V3Pool.sol
