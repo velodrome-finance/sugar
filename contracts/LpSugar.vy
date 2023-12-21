@@ -8,8 +8,9 @@
 # Structs
 
 MAX_FACTORIES: constant(uint256) = 10
-MAX_POOLS: constant(uint256) = 500
+MAX_POOLS: constant(uint256) = 2000
 MAX_TOKENS: constant(uint256) = 2000
+MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
 MAX_POSITIONS: constant(uint256) = 10
@@ -384,7 +385,7 @@ def _token(_address: address, _account: address) -> Token:
 @external
 @view
 def all(_limit: uint256, _offset: uint256, _account: address) \
-    -> DynArray[Lp, MAX_POOLS]:
+    -> DynArray[Lp, MAX_LPS]:
   """
   @notice Returns a collection of pool data
   @param _limit The max amount of pools to return
@@ -392,7 +393,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @param _account The account to check the staked and earned balances
   @return Array for Lp structs
   """
-  col: DynArray[Lp, MAX_POOLS] = empty(DynArray[Lp, MAX_POOLS])
+  col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
 
