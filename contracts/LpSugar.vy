@@ -191,9 +191,11 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
 
 @external
 @view
-def forSwaps() -> DynArray[SwapLp, MAX_POOLS]:
+def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
   @notice Returns a compiled list of pools for swaps from all pool factories
+  @param _limit The max amount of tokens to return
+  @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
   factories_count: uint256 = self.registry.poolFactoriesLength()
@@ -208,8 +210,8 @@ def forSwaps() -> DynArray[SwapLp, MAX_POOLS]:
     factory: IPoolFactory = IPoolFactory(factories[index])
     pools_count: uint256 = factory.allPoolsLength()
 
-    for pindex in range(0, MAX_POOLS):
-      if pindex >= pools_count:
+    for pindex in range(_offset, _offset + MAX_POOLS):
+      if len(pools) >= _limit or pindex >= pools_count:
         break
 
       pool_addr: address = factory.allPools(pindex)
