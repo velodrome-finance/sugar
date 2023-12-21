@@ -365,6 +365,27 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
 
   return col
 
+@external
+@view
+def tokensByAddress(_addresses: DynArray[address, MAX_TOKENS], _account: address)\
+  -> DynArray[Token, MAX_TOKENS]:
+  """
+  @notice Returns a collection of tokens data based on given addresses
+  @param _addresses The tokens to return data of
+  @param _account The account to check the balances
+  @return Array for Token structs
+  """
+  tokens_count: uint256 = len(_addresses)
+  col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
+
+  for index in range(0, MAX_TOKENS):
+    if index == MAX_TOKENS or index >= tokens_count:
+      break
+
+    col.append(self._token(_addresses[index], _account))
+
+  return col
+
 @internal
 @view
 def _token(_address: address, _account: address) -> Token:
