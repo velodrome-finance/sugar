@@ -68,6 +68,7 @@ struct SwapLp:
   token0: address
   token1: address
   factory: address
+  pool_fee: uint256
 
 struct Lp:
   lp: address
@@ -154,6 +155,10 @@ interface IPool:
   def reserve1() -> uint256: view
   def claimable0(_account: address) -> uint256: view
   def claimable1(_account: address) -> uint256: view
+  def supplyIndex0(_account: address) -> uint256: view
+  def supplyIndex1(_account: address) -> uint256: view
+  def index0() -> uint256: view
+  def index1() -> uint256: view
   def totalSupply() -> uint256: view
   def symbol() -> String[100]: view
   def decimals() -> uint8: view
@@ -302,6 +307,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       token0: address = pool.token0()
       token1: address = pool.token1()
       reserve0: uint256 = 0
+      pool_fee: uint256 = 0
 
       is_cl_pool: bool = False
       is_stable: bool = factory.getPool(token0, token1, 0) == pool_addr
@@ -312,11 +318,13 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       if is_cl_pool:
         type = pool.tickSpacing()
         reserve0 = IERC20(token0).balanceOf(pool_addr)
+        pool_fee = convert(pool.fee(), uint256)
 
       else:
         if is_stable:
           type = 0
         reserve0 = pool.reserve0()
+        pool_fee = factory.getFee(pool_addr, is_stable)
 
       if reserve0 > 0:
         pools.append(SwapLp({
@@ -324,7 +332,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
           type: type,
           token0: token0,
           token1: token1,
-          factory: factory.address
+          factory: factory.address,
+          pool_fee: pool_fee
         }))
 
   return pools
@@ -489,6 +498,10 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
   gauge_alive: bool = self.voter.isAlive(gauge.address)
+  decimals: uint8 = pool.decimals()
+  claimable0: uint256 = 0
+  claimable1: uint256 = 0
+  acc_balance: uint256 = 0
 
   type: int24 = -1
   if is_stable:
@@ -503,16 +516,28 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
   if gauge_alive:
     emissions = gauge.rewardRate()
 
+  if _account != empty(address):
+    acc_balance = pool.balanceOf(_account)
+    claimable0 = pool.claimable0(_account)
+    claimable1 = pool.claimable1(_account)
+    claimable_delta0: uint256 = pool.index0() - pool.supplyIndex0(_account)
+    claimable_delta1: uint256 = pool.index1() - pool.supplyIndex1(_account)
+
+    if claimable_delta0 > 0:
+      claimable0 += (acc_balance * claimable_delta0) / 10**convert(decimals, uint256)
+    if claimable_delta1 > 0:
+      claimable1 += (acc_balance * claimable_delta1) / 10**convert(decimals, uint256)
+
   positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
 
   positions.append(
     Position({
       id: 0,
       manager: self.router,
-      liquidity: pool.balanceOf(_account),
+      liquidity: acc_balance,
       staked: acc_staked,
-      unstaked_earned0: pool.claimable0(_account),
-      unstaked_earned1: pool.claimable1(_account),
+      unstaked_earned0: claimable0,
+      unstaked_earned1: claimable1,
       emissions_earned: earned,
       tick_lower: 0,
       tick_upper: 0,
@@ -523,7 +548,7 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
-    decimals: pool.decimals(),
+    decimals: decimals,
     total_supply: pool.totalSupply(),
 
     nft: empty(address),
