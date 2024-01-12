@@ -530,20 +530,21 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
 
   positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
 
-  positions.append(
-    Position({
-      id: 0,
-      manager: self.router,
-      liquidity: acc_balance,
-      staked: acc_staked,
-      unstaked_earned0: claimable0,
-      unstaked_earned1: claimable1,
-      emissions_earned: earned,
-      tick_lower: 0,
-      tick_upper: 0,
-      alm: False
-    })
-  )
+  if acc_balance > 0 or acc_staked > 0 or earned > 0 or claimable0 > 0:
+    positions.append(
+      Position({
+        id: 0,
+        manager: self.router,
+        liquidity: acc_balance,
+        staked: acc_staked,
+        unstaked_earned0: claimable0,
+        unstaked_earned1: claimable1,
+        emissions_earned: earned,
+        tick_lower: 0,
+        tick_upper: 0,
+        alm: False
+      })
+    )
 
   return Lp({
     lp: _data[1],
