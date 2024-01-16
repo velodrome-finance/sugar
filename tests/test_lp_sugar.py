@@ -28,6 +28,7 @@ def LpStruct(sugar_contract):
 
     yield namedtuple('LpStruct', members)
 
+
 @pytest.fixture
 def SwapLpStruct(sugar_contract):
     method_output = sugar_contract.forSwaps.abi['outputs'][0]
