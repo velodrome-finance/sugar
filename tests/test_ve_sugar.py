@@ -13,14 +13,6 @@ def sugar_contract(VeSugar, accounts):
 
 
 @pytest.fixture
-def RewardStruct(sugar_contract):
-    method_output = sugar_contract.rewards.abi['outputs'][0]
-    members = list(map(lambda _e: _e['name'], method_output['components']))
-
-    yield namedtuple('RewardStruct', members)
-
-
-@pytest.fixture
 def VeNFTStruct(sugar_contract):
     method_output = sugar_contract.byId.abi['outputs'][0]
     members = list(map(lambda _e: _e['name'], method_output['components']))
@@ -30,8 +22,8 @@ def VeNFTStruct(sugar_contract):
 
 def test_initial_state(sugar_contract):
     assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
-    assert sugar_contract.rewards_distributor() == \
-        os.getenv('REWARDS_DIST_ADDRESS')
+    assert sugar_contract.dist() == \
+        os.getenv('DIST_ADDRESS')
     assert sugar_contract.ve() is not None
 
 
@@ -39,11 +31,10 @@ def test_byId(sugar_contract, VeNFTStruct):
     venft = VeNFTStruct(*sugar_contract.byId(1))
 
     assert venft is not None
-    assert len(venft) == 11
+    assert len(venft) == 13
     assert venft.id is not None
     assert len(venft.votes) > 0
     assert venft.voted_at > 0
-    assert venft.attachments > 0
 
 
 def test_byAccount(sugar_contract, VeNFTStruct):
@@ -54,7 +45,7 @@ def test_byAccount(sugar_contract, VeNFTStruct):
     ))
 
     assert venft is not None
-    assert len(venft) == 11
+    assert len(venft) == 13
     assert venft.account == acc_venft[0].account
 
 
@@ -92,12 +83,3 @@ def test_all_limit_offset(sugar_contract, VeNFTStruct):
 
     assert venft1.id == second_venft.id
     assert venft1.account == second_venft.account
-
-
-def test_rewards(sugar_contract, RewardStruct):
-    rewards = list(map(
-        lambda _r: RewardStruct(*_r),
-        sugar_contract.rewards(100, 0, 1)
-    ))
-
-    assert len(rewards) > 0
