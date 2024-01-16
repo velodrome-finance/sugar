@@ -145,7 +145,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-`VeSugar.vy` is deployed at `0x0eCc2593E3a6A9be3628940Fa4D928CC257B588B`
+`VeSugar.vy` is deployed at `0x37403dBd6f1b583ea244F7956fF9e37EF45c63eB`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
@@ -155,6 +155,7 @@ The returned data/struct of type `VeNFT` values represent:
   * `decimals` - veNFT token decimals
   * `amount` - veNFT locked amount
   * `voting_amount` - veNFT voting power
+  * `governance_amount` - veNFT voting power in governance
   * `rebase_amount` - veNFT accrued reabses amount
   * `expires_at` - veNFT lock expiration timestamp
   * `voted_at` - veNFT last vote timestamp
@@ -162,6 +163,7 @@ The returned data/struct of type `VeNFT` values represent:
     `LpVotes`
   * `token` - veNFT locked token address
   * `permanent` - veNFT permanent lock enabled flag
+  * `delegate_id` - token ID of the veNFT being delegated to
 
 The pool votes struct values represent:
   * `lp` - the pool address
@@ -180,7 +182,7 @@ The available methods are:
 
 ### Relay Data
 
-`RelaySugar.vy` is deployed at `0xeBf8F5818D429785A584693599b695AFc3BeE3c6`
+`RelaySugar.vy` is deployed at `0x062185EEF2726EFc11880856CD356FA2Ac2B38Ff`
 
 It allows fetching Relay autocompounder/autoconverter data.
 The returned data/struct of type `Relay` values represent:
@@ -189,6 +191,7 @@ The returned data/struct of type `Relay` values represent:
   * `decimals` - Relay veNFT token decimals
   * `amount` - Relay veNFT locked amount
   * `voting_amount` - Relay veNFT voting power
+  * `used_voting_amount` - Relay veNFT voting power used for last vote
   * `voted_at` - Relay veNFT last vote timestamp
   * `votes` - Relay veNFT list of pools with vote weights casted in the form of
     `LpVotes`
@@ -199,7 +202,12 @@ The returned data/struct of type `Relay` values represent:
   * `relay` - Relay address
   * `inactive` - Relay active/inactive status
   * `name` - Relay name
-  * `account_venft_ids` - token IDs of the account's deposits into this Relay
+  * `account_venfts` - List of veNFTs deposited into this Relay by the account in the form of `ManagedVenft`
+
+The managed veNFT deposit struct values represent:
+  * `id` - the token ID of the veNFT
+  * `amount` - the weight of the veNFT
+  * `earned` - earned emissions of the veNFT
 
 ---
 

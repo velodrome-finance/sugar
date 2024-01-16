@@ -23,8 +23,9 @@ def RelayStruct(sugar_contract):
 
 def test_initial_state(sugar_contract):
     assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
-    assert sugar_contract.registry() == \
-        os.getenv('RELAY_REGISTRY_ADDRESS')
+    assert sugar_contract.registries(0) == os.getenv('RELAY_REGISTRY_ADDRESS')
+    assert sugar_contract.ve() is not None
+    assert sugar_contract.token() is not None
 
 
 def test_all(sugar_contract, RelayStruct):
@@ -33,4 +34,4 @@ def test_all(sugar_contract, RelayStruct):
         sugar_contract.all(ADDRESS_ZERO)
     ))
 
-    assert relays is not None
+    assert len(relays) > 5
