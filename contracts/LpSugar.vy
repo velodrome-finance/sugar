@@ -340,7 +340,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
 @external
 @view
-def tokens(_limit: uint256, _offset: uint256, _account: address)\
+def tokens(_limit: uint256, _offset: uint256, _account: address, _addresses: DynArray[address, MAX_TOKENS]) \
   -> DynArray[Token, MAX_TOKENS]:
   """
   @notice Returns a collection of tokens data based on available pools
@@ -351,9 +351,17 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
   """
   pools: DynArray[address[3], MAX_POOLS] = self._pools()
   pools_count: uint256 = len(pools)
+  addresses_count: uint256 = len(_addresses)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
   seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
 
+  for index in range(0, MAX_TOKENS):
+    if len(col) >= _limit or index >= addresses_count:
+      break
+
+    col.append(self._token(_addresses[index], _account))
+    seen.append(_addresses[index])
+  
   for index in range(_offset, _offset + MAX_TOKENS):
     if len(col) >= _limit or index >= pools_count:
       break
@@ -371,27 +379,6 @@ def tokens(_limit: uint256, _offset: uint256, _account: address)\
     if token1 not in seen:
       col.append(self._token(token1, _account))
       seen.append(token1)
-
-  return col
-
-@external
-@view
-def tokensByAddress(_addresses: DynArray[address, MAX_TOKENS], _account: address)\
-  -> DynArray[Token, MAX_TOKENS]:
-  """
-  @notice Returns a collection of tokens data based on given addresses
-  @param _addresses The tokens to return data of
-  @param _account The account to check the balances
-  @return Array for Token structs
-  """
-  tokens_count: uint256 = len(_addresses)
-  col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
-
-  for index in range(0, MAX_TOKENS):
-    if index == MAX_TOKENS or index >= tokens_count:
-      break
-
-    col.append(self._token(_addresses[index], _account))
 
   return col
 
