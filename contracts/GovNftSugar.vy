@@ -27,10 +27,10 @@ struct Lock:
 
 struct GovNft:
   id: uint256
-  total_locked: uint256
-  initial_deposit: uint256
+  total_locked: uint256 # total locked amount
+  amount: uint256 # current locked amount
   total_claimed: uint256
-  unclaimed_before_split: uint256
+  claimable: uint256
   split_count: uint256
   cliff_length: uint256
   start: uint256
@@ -38,9 +38,9 @@ struct GovNft:
   token: address
   vault: address
   minter: address
-  recipient: address
-  nft: address
-  delegate: address
+  owner: address
+  address: address # address of GovNFT
+  delegated: address # address of delegate
 
 # Contracts / Interfaces
 
@@ -50,6 +50,8 @@ interface IGovNFT:
   def totalSupply() -> uint256: view
   def ownerOf(_govnft_id: uint256) -> address: view
   def locks(_govnft_id: uint256) -> Lock: view
+  def unclaimed(_govnft_id: uint256) -> uint256: view
+  def locked(_govnft_id: uint256) -> uint256: view
 
 interface IToken:
   def delegates(_account: address) -> address: view
@@ -90,10 +92,10 @@ def _owned(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
   govnfts: DynArray[GovNft, MAX_RESULTS] = empty(DynArray[GovNft, MAX_RESULTS])
   
-  balance: uint256 = self.nft.balanceOf(_account)
+  govnft_balance: uint256 = self.nft.balanceOf(_account)
 
   for govnft_index in range(0, MAX_NFTS):
-    if govnft_index == balance:
+    if govnft_index == govnft_balance:
       break
     govnft_id: uint256 = self.nft.tokenOfOwnerByIndex(_account, govnft_index)
 
@@ -141,9 +143,9 @@ def _byId(_govnft_id: uint256) -> GovNft:
   return GovNft({
     id: _govnft_id,
     total_locked: lock.total_locked,
-    initial_deposit: lock.initial_deposit,
+    amount: self.nft.locked(_govnft_id),
     total_claimed: lock.total_claimed,
-    unclaimed_before_split: lock.unclaimed_before_split,
+    claimable: self.nft.unclaimed(_govnft_id),
     split_count: lock.split_count,
     cliff_length: lock.cliff_length,
     start: lock.start,
@@ -151,7 +153,7 @@ def _byId(_govnft_id: uint256) -> GovNft:
     token: token_addr,
     vault: lock.vault,
     minter: lock.minter,
-    recipient: self.nft.ownerOf(_govnft_id),
-    nft: self.nft.address,
-    delegate: token.delegates(lock.vault)
+    owner: self.nft.ownerOf(_govnft_id),
+    address: self.nft.address,
+    delegated: token.delegates(lock.vault)
   })
