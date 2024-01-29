@@ -215,6 +215,35 @@ The available methods are:
 
  * `all(_account: address) -> Relay[]` - returns a list of all `Relay` structs.
 
+### GovNFT Data
+
+`GovNFTSugar.vy` is deployed at ``
+
+It allows fetching GovNFT data.
+The returned data/struct of type `GovNft` values represent:
+
+  * `id` - token ID of the GovNFT
+  * `total_locked` - total locked amount of the GovNFT at creation
+  * `amount` - current locked amount of the GovNFT
+  * `total_claimed` - amount of total tokens claimed by the owner
+  * `claimable` - current amount of tokens that are vested and claimable
+  * `split_count` - number of times the GovNFT has been split
+  * `cliff_length` - the length of the vesting cliff, in seconds
+  * `start` - timestamp of when vesting begins
+  * `end` - timestamp of when vesting ends
+  * `token` - the underlying vesting ERC20 token of the GovNFT
+  * `vault` - the vault address of the GovNFT
+  * `minter` - the address of the creator of the GovNFT
+  * `owner` - the owner of the GovNFT
+  * `address` - the address of the GovNFT contract
+  * `delegated` - the address that the underlying ERC20 token of the GovNFT is being delegated to
+
+---
+
+The available methods are:
+
+ * `all(_account: address) -> GovNft[]` - returns a list of all `GovNft` structs owned or minted by the given account.
+
 ## Development
 
 To setup the environment, build the Docker image first:
