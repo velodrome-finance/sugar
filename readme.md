@@ -70,7 +70,7 @@ The returned data/struct of type `Lp` values represent:
  * `positions` - a list of account pool position data, it is a struct of type `Position` with the following values:
     * `id` - NFT ID on v3 pools, 0 on v2 pools
     * `manager` - NFT position manager on v3 pools, router on v2 pools
-    * `liquidity` - liquidity value on v3, total supply of LP tokens on v2
+    * `liquidity` - liquidity value on v3, deposited LP tokens on v2
     * `staked` - 0/1 for staked/unstaked state on v3, amount of staked tokens on v2
     * `unstaked_earned0` - unstaked token0 fees earned
     * `unstaked_earned1` - unstaked token1 fees earned
