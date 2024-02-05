@@ -426,9 +426,10 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     token1: address = pool.token1()
 
     is_cl_pool: bool = False
-    is_stable: bool = factory.getPool(token0, token1, 0) == pool.address
+    # uses getPool function with fee param that supports both v2 and v3 pools
+    is_stable: bool = factory.getPool(token0, token1, 1) == pool.address
 
-    if not is_stable and factory.getPool(token0, token1, 1) != pool.address:
+    if not is_stable and factory.getPool(token0, token1, 0) != pool.address:
       is_cl_pool = True
 
     if is_cl_pool:
@@ -455,9 +456,10 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   token1: address = pool.token1()
 
   is_cl_pool: bool = False
-  is_stable: bool = factory.getPool(token0, token1, 0) == pool.address
+  # uses getPool function with fee param that supports both v2 and v3 pools
+  is_stable: bool = factory.getPool(token0, token1, 1) == pool.address
 
-  if not is_stable and factory.getPool(token0, token1, 1) != pool.address:
+  if not is_stable and factory.getPool(token0, token1, 0) != pool.address:
     is_cl_pool = True
 
   if is_cl_pool:
