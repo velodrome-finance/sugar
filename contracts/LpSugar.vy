@@ -310,6 +310,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       pool_fee: uint256 = 0
 
       is_cl_pool: bool = False
+
+      # uses getPool function with fee param that supports both v2 and v3 pools
       is_stable: bool = factory.getPool(token0, token1, 1) == pool_addr
 
       if not is_stable and factory.getPool(token0, token1, 0) != pool_addr:

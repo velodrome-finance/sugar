@@ -1,4 +1,4 @@
-eth-brownie
+eth-brownie==1.19.3
 vyper
 flake8
 titanoboa
