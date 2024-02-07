@@ -962,11 +962,9 @@ def _is_cl_factory(_factory: address) -> (bool):
   @notice Returns true if address is a CL factory
   @param _factory The factory address
   """
-  function_signature: bytes4 = method_id("nft()", output_type=bytes4)
-
   response: Bytes[32] = raw_call(
       _factory,
-      function_signature,
+      method_id("nft()"),
       max_outsize=32,
       is_delegate_call=False,
       is_static_call=True,
