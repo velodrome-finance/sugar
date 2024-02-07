@@ -297,6 +297,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
     pools_count: uint256 = factory.allPoolsLength()
 
+    is_cl_factory: bool = self._is_cl_factory(factories[index])
+
     for pindex in range(_offset, _offset + MAX_POOLS):
       if len(pools) >= _limit or pindex >= pools_count:
         break
@@ -309,24 +311,16 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       reserve0: uint256 = 0
       pool_fee: uint256 = 0
 
-      is_cl_pool: bool = False
-
-      # uses getPool function with fee param that supports both v2 and v3 pools
-      is_stable: bool = factory.getPool(token0, token1, 1) == pool_addr
-
-      if not is_stable and factory.getPool(token0, token1, 0) != pool_addr:
-        is_cl_pool = True
-
-      if is_cl_pool:
+      if is_cl_factory:
         type = pool.tickSpacing()
         reserve0 = IERC20(token0).balanceOf(pool_addr)
         pool_fee = convert(pool.fee(), uint256)
 
       else:
-        if is_stable:
+        if factory.getPool(token0, token1, 1) == pool_addr:
           type = 0
         reserve0 = pool.reserve0()
-        pool_fee = factory.getFee(pool_addr, is_stable)
+        pool_fee = factory.getFee(pool_addr, (type == 0))
 
       if reserve0 > 0:
         pools.append(SwapLp({
@@ -424,15 +418,9 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     factory: IPoolFactory = IPoolFactory(pools[index][0])
     token0: address = pool.token0()
     token1: address = pool.token1()
+    is_cl_factory: bool = self._is_cl_factory(pools[index][0])
 
-    is_cl_pool: bool = False
-    # uses getPool function with fee param that supports both v2 and v3 pools
-    is_stable: bool = factory.getPool(token0, token1, 1) == pool.address
-
-    if not is_stable and factory.getPool(token0, token1, 0) != pool.address:
-      is_cl_pool = True
-
-    if is_cl_pool:
+    if is_cl_factory:
       col.append(self._byDataCL(pools[index], token0, token1, _account))
     else:
       col.append(self._byData(pools[index], token0, token1, _account))
@@ -454,15 +442,9 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   factory: IPoolFactory = IPoolFactory(pools[_index][0])
   token0: address = pool.token0()
   token1: address = pool.token1()
+  is_cl_factory: bool = self._is_cl_factory(pools[_index][0])
 
-  is_cl_pool: bool = False
-  # uses getPool function with fee param that supports both v2 and v3 pools
-  is_stable: bool = factory.getPool(token0, token1, 1) == pool.address
-
-  if not is_stable and factory.getPool(token0, token1, 0) != pool.address:
-    is_cl_pool = True
-
-  if is_cl_pool:
+  if is_cl_factory:
     return self._byDataCL(pools[_index], token0, token1, _account)
   return self._byData(pools[_index], token0, token1, _account)
 
@@ -972,3 +954,23 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
     )
 
   return col
+
+@internal
+@view
+def _is_cl_factory(_factory: address) -> (bool):
+  """
+  @notice Returns true if address is a CL factory
+  @param _factory The factory address
+  """
+  function_signature: bytes4 = method_id("nft()", output_type=bytes4)
+
+  response: Bytes[32] = raw_call(
+      _factory,
+      function_signature,
+      max_outsize=32,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  return len(response) > 0
