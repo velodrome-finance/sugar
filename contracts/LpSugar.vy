@@ -14,9 +14,10 @@ MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
 MAX_POSITIONS: constant(uint256) = 10
+MAX_TICKS: constant(uint256) = 20
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
-# Slot0 from V3Pool.sol
+# Slot0 from CLPool.sol
 struct Slot:
   sqrt_price: uint160
   tick: int24
@@ -25,7 +26,7 @@ struct Slot:
   cardinality_next: uint16
   unlocked: bool
 
-# GaugeFees from V3Pool.sol
+# GaugeFees from CLPool.sol
 struct GaugeFees:
   token0: uint128
   token1: uint128
@@ -43,6 +44,19 @@ struct PositionData:
   unstaked_earned0: uint128
   unstaked_earned1: uint128
 
+# Tick.Info from CLPool.sol
+struct TickInfo:
+  liquidity_gross: uint128
+  liquidity_net: int128
+  staked_liquidity_net: int128
+  fee_growth_outside0: uint256
+  fee_growth_outside1: uint256
+  reward_growth_outside: uint256
+  tick_cumulative_outside: int56
+  seconds_per_liquidity_outside: uint160
+  seconds_outside: uint32
+  initialized: bool
+
 struct Position:
   id: uint256 # NFT ID on v3, 0 on v2
   manager: address # NFT Position Manager on v3, router on v2
@@ -54,6 +68,10 @@ struct Position:
   tick_lower: int24 # Position lower tick on v3, 0 on v2
   tick_upper: int24 # Position upper tick on v3, 0 on v2
   alm: bool # True if Position is deposited into ALM on v3, False on v2
+
+struct Tick:
+  tick: int24
+  liquidity_gross: uint128
 
 struct Token:
   token_address: address
@@ -108,6 +126,7 @@ struct Lp:
   alm_reserve1: uint256 # ALM token1 reserves on v3, 0 on v2
 
   positions: DynArray[Position, MAX_POSITIONS]
+  ticks: DynArray[Tick, MAX_TICKS]
 
 struct LpEpochReward:
   token: address
@@ -172,6 +191,7 @@ interface IPool:
   def gaugeFees() -> GaugeFees: view # v3 gauge fees amounts
   def fee() -> uint24: view # v3 fee level
   def unstakedFee() -> uint24: view # v3 unstaked fee level
+  def ticks(_tick: int24) -> TickInfo: view # v3 tick data
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -519,6 +539,8 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
       })
     )
 
+  ticks: DynArray[Tick, MAX_TICKS] = empty(DynArray[Tick, MAX_TICKS])
+
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
@@ -556,7 +578,8 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
     alm_reserve0: 0,
     alm_reserve1: 0,
 
-    positions: positions
+    positions: positions,
+    ticks: ticks
   })
 
 @internal
@@ -579,6 +602,7 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
   emissions_token: address = empty(address)
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
+  tick_spacing: int24 = pool.tickSpacing()
 
   fee_voting_reward = gauge.feesVotingReward()
   emissions_token = gauge.rewardToken()
@@ -621,6 +645,18 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
       })
     )
 
+  ticks: DynArray[Tick, MAX_TICKS] = empty(DynArray[Tick, MAX_TICKS])
+
+  # fetch liquidity from the ticks surrounding the current tick
+  for index in range((-1 * MAX_TICKS / 2), (MAX_TICKS / 2)):
+    tick: int24 = slot.tick + (index * tick_spacing)
+    tick_info: TickInfo = pool.ticks(tick)
+
+    ticks.append(Tick({
+      tick: tick,
+      liquidity_gross: tick_info.liquidity_gross
+    }))
+
   return Lp({
     lp: pool.address,
     symbol: "",
@@ -628,7 +664,7 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
     total_supply: 0,
 
     nft: nft.address,
-    type: pool.tickSpacing(),
+    type: tick_spacing,
     tick: slot.tick,
     price: price,
 
@@ -659,7 +695,8 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
     alm_reserve0: 0,
     alm_reserve1: 0,
 
-    positions: positions
+    positions: positions,
+    ticks: ticks
   })
 
 @external
