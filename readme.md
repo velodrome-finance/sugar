@@ -243,6 +243,9 @@ The returned data/struct of type `GovNft` values represent:
 The available methods are:
 
  * `all(_account: address) -> GovNft[]` - returns a list of all `GovNft` structs owned or minted by the given account.
+ * `owned(_account: address) -> GovNft[]` - returns a list of all `GovNft` structs owned by the given account.
+ * `minted(_account: address) -> GovNft[]` - returns a list of all `GovNft` structs minted by the given account.
+ * `byId(_govnft_id: uint256) -> GovNft` - returns the `GovNft` based on the given ID.
 
 ## Development
 
