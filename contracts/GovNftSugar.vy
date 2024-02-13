@@ -70,18 +70,12 @@ def __init__(_nft: address):
 
 @external
 @view
-def all(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
+def owned(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
-  @notice Returns all owned and minted GovNFTs for the given account
+  @notice Returns all owned GovNFTs for the given account
   @return Array of GovNft structs
   """
-  govnfts: DynArray[GovNft, MAX_RESULTS] = self._owned(_account)
-  minted: DynArray[GovNft, MAX_RESULTS] = self._minted(_account)
-
-  for govnft in minted:
-    govnfts.append(govnft)
-
-  return govnfts
+  return self._owned(_account)
 
 @internal
 @view
@@ -104,6 +98,15 @@ def _owned(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
 
   return govnfts
 
+@external
+@view
+def minted(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
+  """
+  @notice Returns all minted GovNFTs for the given account
+  @return Array of GovNft structs
+  """
+  return self._minted(_account)
+
 @internal
 @view
 def _minted(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
@@ -125,6 +128,16 @@ def _minted(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
       govnfts.append(govnft)
 
   return govnfts
+
+@external
+@view
+def byId(_govnft_id: uint256) -> GovNft:
+  """
+  @notice Returns GovNFT data based on ID
+  @param _govnft_id The GovNFT ID to look up
+  @return GovNft struct
+  """
+  return self._byId(_govnft_id)
 
 @internal
 @view
