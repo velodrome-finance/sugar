@@ -70,21 +70,6 @@ def __init__(_nft: address):
 
 @external
 @view
-def all(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
-  """
-  @notice Returns all owned and minted GovNFTs for the given account
-  @return Array of GovNft structs
-  """
-  govnfts: DynArray[GovNft, MAX_RESULTS] = self._owned(_account)
-  minted: DynArray[GovNft, MAX_RESULTS] = self._minted(_account)
-
-  for govnft in minted:
-    govnfts.append(govnft)
-
-  return govnfts
-
-@external
-@view
 def owned(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
   @notice Returns all owned GovNFTs for the given account
