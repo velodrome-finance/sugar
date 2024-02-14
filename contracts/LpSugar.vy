@@ -73,10 +73,6 @@ struct Price:
   tick_price: int24
   liquidity_gross: uint128
 
-struct LpPrice:
-  lp: address
-  prices: DynArray[Price, MAX_PRICES]
-
 struct Token:
   token_address: address
   symbol: String[100]
@@ -999,37 +995,20 @@ def _is_cl_factory(_factory: address) -> (bool):
 
 @external
 @view
-def prices(_limit: uint256, _offset: uint256) -> DynArray[LpPrice, MAX_POOLS]:
+def price(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
   """
-  @notice Returns a collection of tick price data for pools
-  @param _limit The max amount of pools to return
-  @param _offset The amount of pools to skip
-  @return Array of LpPrice structs
+  @notice Returns price data at surrounding ticks for a pool
+  @param _pool The pool to check price data of
+  @param _factory The factory of the pool
+  @return Array of Price structs
   """
-  col: DynArray[LpPrice, MAX_POOLS] = empty(DynArray[LpPrice, MAX_POOLS])
-  pools: DynArray[address[3], MAX_POOLS] = self._pools()
-  pools_count: uint256 = len(pools)
+  is_cl_factory: bool = self._is_cl_factory(_factory)
 
-  for index in range(_offset, _offset + MAX_POOLS):
-    if len(col) == _limit or index >= pools_count:
-      break
-
-    factory: IPoolFactory = IPoolFactory(pools[index][0])
-    is_cl_factory: bool = self._is_cl_factory(pools[index][0])
-
-    if is_cl_factory:
-      col.append(LpPrice({
-        lp: pools[index][1],
-        prices: self._price(pools[index][1])
-      }))
-    else:
-      empty_prices: DynArray[Price, MAX_PRICES] = empty(DynArray[Price, MAX_PRICES])
-      col.append(LpPrice({
-        lp: pools[index][1],
-        prices: empty_prices
-      }))
-
-  return col
+  if is_cl_factory:
+    return self._price(_pool)
+  else:
+    empty_prices: DynArray[Price, MAX_PRICES] = empty(DynArray[Price, MAX_PRICES])
+    return empty_prices
 
 @internal
 @view
