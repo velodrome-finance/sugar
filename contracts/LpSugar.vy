@@ -14,7 +14,7 @@ MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
 MAX_POSITIONS: constant(uint256) = 10
-MAX_TICKS: constant(uint256) = 20
+MAX_PRICES: constant(uint256) = 20
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 # Slot0 from CLPool.sol
@@ -69,9 +69,13 @@ struct Position:
   tick_upper: int24 # Position upper tick on v3, 0 on v2
   alm: bool # True if Position is deposited into ALM on v3, False on v2
 
-struct Tick:
-  tick: int24
+struct Price:
+  tick_price: int24
   liquidity_gross: uint128
+
+struct LpPrice:
+  lp: address
+  prices: DynArray[Price, MAX_PRICES]
 
 struct Token:
   token_address: address
@@ -126,7 +130,6 @@ struct Lp:
   alm_reserve1: uint256 # ALM token1 reserves on v3, 0 on v2
 
   positions: DynArray[Position, MAX_POSITIONS]
-  ticks: DynArray[Tick, MAX_TICKS]
 
 struct LpEpochReward:
   token: address
@@ -539,8 +542,6 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
       })
     )
 
-  ticks: DynArray[Tick, MAX_TICKS] = empty(DynArray[Tick, MAX_TICKS])
-
   return Lp({
     lp: _data[1],
     symbol: pool.symbol(),
@@ -578,8 +579,7 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
     alm_reserve0: 0,
     alm_reserve1: 0,
 
-    positions: positions,
-    ticks: ticks
+    positions: positions
   })
 
 @internal
@@ -645,18 +645,6 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
       })
     )
 
-  ticks: DynArray[Tick, MAX_TICKS] = empty(DynArray[Tick, MAX_TICKS])
-
-  # fetch liquidity from the ticks surrounding the current tick
-  for index in range((-1 * MAX_TICKS / 2), (MAX_TICKS / 2)):
-    tick: int24 = slot.tick + (index * tick_spacing)
-    tick_info: TickInfo = pool.ticks(tick)
-
-    ticks.append(Tick({
-      tick: tick,
-      liquidity_gross: tick_info.liquidity_gross
-    }))
-
   return Lp({
     lp: pool.address,
     symbol: "",
@@ -695,8 +683,7 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
     alm_reserve0: 0,
     alm_reserve1: 0,
 
-    positions: positions,
-    ticks: ticks
+    positions: positions
   })
 
 @external
@@ -1009,3 +996,62 @@ def _is_cl_factory(_factory: address) -> (bool):
   )[1]
 
   return len(response) > 0
+
+@external
+@view
+def prices(_limit: uint256, _offset: uint256) -> DynArray[LpPrice, MAX_POOLS]:
+  """
+  @notice Returns a collection of tick price data for pools
+  @param _limit The max amount of pools to return
+  @param _offset The amount of pools to skip
+  @return Array of LpPrice structs
+  """
+  col: DynArray[LpPrice, MAX_POOLS] = empty(DynArray[LpPrice, MAX_POOLS])
+  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools_count: uint256 = len(pools)
+
+  for index in range(_offset, _offset + MAX_POOLS):
+    if len(col) == _limit or index >= pools_count:
+      break
+
+    factory: IPoolFactory = IPoolFactory(pools[index][0])
+    is_cl_factory: bool = self._is_cl_factory(pools[index][0])
+
+    if is_cl_factory:
+      col.append(LpPrice({
+        lp: pools[index][1],
+        prices: self._price(pools[index][1])
+      }))
+    else:
+      empty_prices: DynArray[Price, MAX_PRICES] = empty(DynArray[Price, MAX_PRICES])
+      col.append(LpPrice({
+        lp: pools[index][1],
+        prices: empty_prices
+      }))
+
+  return col
+
+@internal
+@view
+def _price(_pool: address) -> DynArray[Price, MAX_PRICES]:
+  """
+  @notice Returns price data at surrounding ticks for a v3 pool
+  @param _pool The pool to check price data of
+  @return Array of Price structs
+  """
+  prices: DynArray[Price, MAX_PRICES] = empty(DynArray[Price, MAX_PRICES])
+  pool: IPool = IPool(_pool)
+  tick_spacing: int24 = pool.tickSpacing()
+  slot: Slot = pool.slot0()
+
+  # fetch liquidity from the ticks surrounding the current tick
+  for index in range((-1 * MAX_PRICES / 2), (MAX_PRICES / 2)):
+    tick: int24 = slot.tick + (index * tick_spacing)
+    tick_info: TickInfo = pool.ticks(tick)
+
+    prices.append(Price({
+      tick_price: tick,
+      liquidity_gross: tick_info.liquidity_gross
+    }))
+
+  return prices
