@@ -995,7 +995,7 @@ def _is_cl_factory(_factory: address) -> (bool):
 
 @external
 @view
-def price(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
+def prices(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
   """
   @notice Returns price data at surrounding ticks for a pool
   @param _pool The pool to check price data of
@@ -1007,8 +1007,7 @@ def price(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
   if is_cl_factory:
     return self._price(_pool)
   else:
-    empty_prices: DynArray[Price, MAX_PRICES] = empty(DynArray[Price, MAX_PRICES])
-    return empty_prices
+    return empty(DynArray[Price, MAX_PRICES])
 
 @internal
 @view
