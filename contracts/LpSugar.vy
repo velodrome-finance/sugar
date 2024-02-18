@@ -481,6 +481,7 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
+  pool_total_supply: uint256 = pool.totalSupply()
   gauge_total_supply: uint256 = 0
   emissions: uint256 = 0
   emissions_token: address = empty(address)
@@ -489,6 +490,8 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
   pool_fees: address = pool.poolFees()
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
+  token0_fees: uint256 = token0.balanceOf(pool_fees)
+  token1_fees: uint256 = token1.balanceOf(pool_fees)
   gauge_alive: bool = self.voter.isAlive(gauge.address)
   decimals: uint8 = pool.decimals()
   claimable0: uint256 = 0
@@ -507,6 +510,9 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
 
   if gauge_alive:
     emissions = gauge.rewardRate()
+    if pool_total_supply > 0 and gauge_total_supply > 0:
+      token0_fees = (pool.claimable0(_data[2]) * pool_total_supply) / gauge_total_supply
+      token1_fees = (pool.claimable1(_data[2]) * pool_total_supply) / gauge_total_supply
 
   if _account != empty(address):
     acc_balance = pool.balanceOf(_account)
@@ -542,7 +548,7 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
     lp: _data[1],
     symbol: pool.symbol(),
     decimals: decimals,
-    total_supply: pool.totalSupply(),
+    total_supply: pool_total_supply,
 
     nft: empty(address),
     type: type,
@@ -568,8 +574,8 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
 
     pool_fee: pool_fee,
     unstaked_fee: 0,
-    token0_fees: token0.balanceOf(pool_fees),
-    token1_fees: token1.balanceOf(pool_fees),
+    token0_fees: token0_fees,
+    token1_fees: token1_fees,
 
     alm_vault: empty(address),
     alm_reserve0: 0,
