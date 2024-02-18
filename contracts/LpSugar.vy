@@ -510,7 +510,7 @@ def _byData(_data: address[3], _token0: address, _token1: address, _account: add
 
   if gauge_alive:
     emissions = gauge.rewardRate()
-    if pool_total_supply > 0 and gauge_total_supply > 0:
+    if gauge_total_supply > 0:
       token0_fees = (pool.claimable0(_data[2]) * pool_total_supply) / gauge_total_supply
       token1_fees = (pool.claimable1(_data[2]) * pool_total_supply) / gauge_total_supply
 
