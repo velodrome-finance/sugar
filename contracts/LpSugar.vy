@@ -254,13 +254,15 @@ def __init__(_voter: address, _registry: address, _convertor: address, _router: 
 
 @internal
 @view
-def _pools() -> DynArray[address[3], MAX_POOLS]:
+def _pools(_offset: uint256) -> DynArray[address[3], MAX_POOLS]:
   """
+  @param _offset The amount of pools to skip (for optimization)
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of three addresses (factory, pool, gauge)
   """
   factories_count: uint256 = self.registry.poolFactoriesLength()
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  placeholder: address[3] = empty(address[3])
 
   pools: DynArray[address[3], MAX_POOLS] = \
     empty(DynArray[address[3], MAX_POOLS])
@@ -279,6 +281,11 @@ def _pools() -> DynArray[address[3], MAX_POOLS]:
     for pindex in range(0, MAX_POOLS):
       if pindex >= pools_count:
         break
+
+      # Basically skip calls for offset records...
+      if _offset > pindex:
+        pools.append(placeholder)
+        continue
 
       pool_addr: address = factory.allPools(pindex)
 
@@ -355,8 +362,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
 @external
 @view
-def tokens(_limit: uint256, _offset: uint256, _account: address, _addresses: DynArray[address, MAX_TOKENS]) \
-  -> DynArray[Token, MAX_TOKENS]:
+def tokens(_limit: uint256, _offset: uint256, _account: address, \
+    _addresses: DynArray[address, MAX_TOKENS]) -> DynArray[Token, MAX_TOKENS]:
   """
   @notice Returns a collection of tokens data based on available pools
   @param _limit The max amount of tokens to return
@@ -364,7 +371,8 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, _addresses: Dyn
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  # Offset divided by 2 since there are 2 tokens per pool...
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset / 2)
   pools_count: uint256 = len(pools)
   addresses_count: uint256 = len(_addresses)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
@@ -376,7 +384,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, _addresses: Dyn
 
     col.append(self._token(_addresses[index], _account))
     seen.append(_addresses[index])
-  
+
   for index in range(_offset, _offset + MAX_TOKENS):
     if len(col) >= _limit or index >= pools_count:
       break
@@ -426,7 +434,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
-  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset)
   pools_count: uint256 = len(pools)
 
   for index in range(_offset, _offset + MAX_POOLS):
@@ -455,7 +463,12 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   @param _account The account to check the staked and earned balances
   @return Lp struct
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  offset: uint256 = 0
+
+  if (_index > 0):
+    offset = _index - 1
+
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(offset)
 
   pool: IPool = IPool(pools[_index][1])
   factory: IPoolFactory = IPoolFactory(pools[_index][0])
@@ -469,7 +482,8 @@ def byIndex(_index: uint256, _account: address) -> Lp:
 
 @internal
 @view
-def _byData(_data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
+def _byData(
+_data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
   """
   @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
@@ -615,8 +629,9 @@ def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: a
   slot: Slot = pool.slot0()
   price: uint160 = slot.sqrt_price
 
-  positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
-  
+  positions: DynArray[Position, MAX_POSITIONS] = \
+    empty(DynArray[Position, MAX_POSITIONS])
+
   for index in range(0, MAX_POSITIONS):
     position_id: uint256 = nft.tokenOfOwnerByIndex(_account, index)
 
@@ -698,7 +713,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset)
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
@@ -862,7 +877,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   @param _venft_id The veNFT ID to get rewards for
   @return Array for VeNFT Reward structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools()
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset)
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
