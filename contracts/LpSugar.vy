@@ -60,8 +60,8 @@ struct TickInfo:
 struct Position:
   id: uint256 # NFT ID on v3, 0 on v2
   manager: address # NFT Position Manager on v3, router on v2
-  liquidity: uint256 # Liquidity value on v3, amt of LP tokens on v2
-  staked: uint256 # 0/1 for staked state on v3, amt of staked LP tokens on v2
+  liquidity: uint256 # Liquidity amount on v3, amount of LP tokens on v2
+  staked: uint256 # liq amount staked on v3, amount of staked LP tokens on v2
   unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
   unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and v3
   emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
