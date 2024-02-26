@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 import os
 
-from brownie import accounts, VeSugar, LpSugar
+from brownie import accounts, VeSugar, LpSugar, RelaySugar
 
 
 def main():
@@ -17,6 +17,8 @@ def main():
             os.getenv('VOTER_ADDRESS'),
             os.getenv('REGISTRY_ADDRESS'),
             os.getenv('CONVERTOR_ADDRESS'),
+            os.getenv('ROUTER_ADDRESS'),
+            os.getenv('ALM_REGISTRY_ADDRESS'),
             {'from': account}
         )
 
@@ -24,6 +26,14 @@ def main():
         VeSugar.deploy(
             os.getenv('VOTER_ADDRESS'),
             os.getenv('DIST_ADDRESS'),
+            os.getenv('GOVERNOR_ADDRESS'),
+            {'from': account}
+        )
+
+    if 'relay' in contract_name:
+        RelaySugar.deploy(
+            str(os.getenv('RELAY_REGISTRY_ADDRESSES')).split(','),
+            os.getenv('VOTER_ADDRESS'),
             {'from': account}
         )
 
