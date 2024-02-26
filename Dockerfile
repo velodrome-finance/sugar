@@ -11,5 +11,5 @@ WORKDIR /app
 RUN pip install "cython<3.0.0" && pip install --no-build-isolation pyyaml==5.4.1
 RUN pip install -r requirements.txt
 
-RUN brownie networks modify optimism-test host=https://goerli.optimism.io
+RUN brownie networks modify optimism-test host=https://sepolia.optimism.io
 RUN brownie networks modify optimism-main host=https://optimism-mainnet.wallet.coinbase.com
