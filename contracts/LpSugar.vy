@@ -241,7 +241,8 @@ alm_registry: public(address) # todo: add ALM interface when ALM contracts are r
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _convertor: address, _router: address, _alm_registry: address):
+def __init__(_voter: address, _registry: address, _convertor: address, \
+    _router: address, _alm_registry: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -254,15 +255,19 @@ def __init__(_voter: address, _registry: address, _convertor: address, _router: 
 
 @internal
 @view
-def _pools(_offset: uint256) -> DynArray[address[3], MAX_POOLS]:
+def _pools(_limit: uint256, _offset: uint256)\
+    -> DynArray[address[3], MAX_POOLS]:
   """
+  @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip (for optimization)
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of three addresses (factory, pool, gauge)
   """
-  factories_count: uint256 = self.registry.poolFactoriesLength()
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories_count: uint256 = len(factories)
+
   placeholder: address[3] = empty(address[3])
+  to_skip: uint256 = _offset
 
   pools: DynArray[address[3], MAX_POOLS] = \
     empty(DynArray[address[3], MAX_POOLS])
@@ -283,7 +288,8 @@ def _pools(_offset: uint256) -> DynArray[address[3], MAX_POOLS]:
         break
 
       # Basically skip calls for offset records...
-      if _offset > pindex:
+      if to_skip > 0:
+        to_skip -= 1
         pools.append(placeholder)
         continue
 
@@ -307,8 +313,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
-  factories_count: uint256 = self.registry.poolFactoriesLength()
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
 
@@ -371,8 +377,8 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  # Offset divided by 2 since there are 2 tokens per pool...
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset / 2)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
+
   pools_count: uint256 = len(pools)
   addresses_count: uint256 = len(_addresses)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
@@ -434,7 +440,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
 
   for index in range(_offset, _offset + MAX_POOLS):
@@ -468,7 +474,7 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   if (_index > 0):
     offset = _index - 1
 
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(offset)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(1, offset)
 
   pool: IPool = IPool(pools[_index][1])
   factory: IPoolFactory = IPoolFactory(pools[_index][0])
@@ -713,7 +719,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
@@ -877,7 +883,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   @param _venft_id The veNFT ID to get rewards for
   @return Array for VeNFT Reward structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_offset)
+  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
