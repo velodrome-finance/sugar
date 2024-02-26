@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BUSL-1.1
-# @version >=0.3.6 <0.4.0
+# @version ^0.3.6
 
 # @title Velodrome Finance Relay Sugar v2
 # @author stas, ZoomerAnon
@@ -117,7 +117,7 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   for registry_index in range(0, MAX_REGISTRIES):
     if registry_index == len(self.registries):
       break
-      
+
     relay_registry: IRelayRegistry = IRelayRegistry(self.registries[registry_index])
     factories: DynArray[address, MAX_RELAYS] = relay_registry.getAll()
 
@@ -146,7 +146,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   @param _account The account address to lookup deposits
   @return Relay struct
   """
-  
+
   relay: IRelay = IRelay(_relay)
   managed_id: uint256 = relay.mTokenId()
 
@@ -157,7 +157,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
 
     if account_venft_id == 0:
       break
-    
+
     account_venft_manager_id: uint256 = self.ve.idToManaged(account_venft_id)
     if account_venft_manager_id == managed_id:
       locked_reward: IReward = IReward(self.ve.managedToLocked(account_venft_manager_id))
