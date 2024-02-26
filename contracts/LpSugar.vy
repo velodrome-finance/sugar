@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BUSL-1.1
-# @version >=0.3.6 <0.4.0
+# @version ^0.3.6
 
 # @title Velodrome Finance LP Sugar v3
 # @author stas, ethzoomer
@@ -94,7 +94,7 @@ struct Lp:
   decimals: uint8
   total_supply: uint256
 
-  nft: address 
+  nft: address
   type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
   tick: int24 # current tick on v3, 0 on v2
   price: uint160 # current price on v3, 0 on v2
