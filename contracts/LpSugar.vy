@@ -333,7 +333,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
     pools_count: uint256 = factory.allPoolsLength()
 
-    is_cl_factory: bool = self._is_cl_factory(factories[index])
+    is_cl_factory: bool = self._is_cl_factory(factory.address)
 
     for pindex in range(_offset, _offset + MAX_POOLS):
       if len(pools) >= _limit or pindex >= pools_count:
@@ -1010,14 +1010,14 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
 
 @internal
 @view
-def _is_cl_factory(_factory: address) -> (bool):
+def _is_cl_factory(_factory: address) -> bool:
   """
   @notice Returns true if address is a CL factory
   @param _factory The factory address
   """
   response: Bytes[32] = raw_call(
       _factory,
-      method_id("nft()"),
+      method_id("unstakedFeeModule()"),
       max_outsize=32,
       is_delegate_call=False,
       is_static_call=True,
