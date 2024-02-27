@@ -31,6 +31,11 @@ struct GaugeFees:
   token0: uint128
   token1: uint128
 
+# Position Principal from Slipstream SugarHelper
+struct PositionPrincipal:
+  amount0: uint256
+  amount1: uint256
+
 # Position from NonfungiblePositionManager.sol (NFT)
 struct PositionData:
   nonce: uint96
@@ -61,11 +66,15 @@ struct Position:
   id: uint256 # NFT ID on v3, 0 on v2
   liquidity: uint256 # Liquidity amount on v3, amount of LP tokens on v2
   staked: uint256 # liq amount staked on v3, amount of staked LP tokens on v2
+  amount0: uint256 # amount of token0 on both v2 and v3
+  amount1: uint256 # amount of token1 on both v2 and v3
   unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
   unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and v3
   emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
   tick_lower: int24 # Position lower tick on v3, 0 on v2
   tick_upper: int24 # Position upper tick on v3, 0 on v2
+  price_lower: uint160 # Price at lower tick on v3, 0 on v2
+  price_upper: uint160 # Price at upper tick on v3, 0 on v2
   alm: bool # True if Position is deposited into ALM on v3, False on v2
 
 struct Price:
@@ -99,9 +108,11 @@ struct Lp:
 
   token0: address
   reserve0: uint256
+  staked0: uint256
 
   token1: address
   reserve1: uint256
+  staked1: uint256
 
   gauge: address
   gauge_total_supply: uint256
@@ -227,18 +238,24 @@ interface IReward:
   def rewards(_index: uint256) -> address: view
   def earned(_token: address, _venft_id: uint256) -> uint256: view
 
+interface ISlipstreamHelper:
+  def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> PositionPrincipal: view
+  def getSqrtRatioAtTick(_tick: int24) -> uint160: view
+  def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> PositionPrincipal: view
+
 # Vars
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
 nfpm: public(INFPositionManager)
 alm_registry: public(address) # todo: add ALM interface when ALM contracts are ready
+slipstream_helper: public(ISlipstreamHelper)
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address, _convertor: address, \
-    _nfpm: address, _alm_registry: address):
+    _nfpm: address, _alm_registry: address, _slipstream_helper: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -247,6 +264,7 @@ def __init__(_voter: address, _registry: address, _convertor: address, \
   self.nfpm = INFPositionManager(_nfpm)
   self.convertor = _convertor
   self.alm_registry = _alm_registry
+  self.slipstream_helper = ISlipstreamHelper(_slipstream_helper)
 
 @internal
 @view
@@ -522,6 +540,10 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
   claimable0: uint256 = 0
   claimable1: uint256 = 0
   acc_balance: uint256 = 0
+  reserve0: uint256 = pool.reserve0()
+  reserve1: uint256 = pool.reserve1()
+  staked0: uint256 = 0
+  staked1: uint256 = 0
 
   type: int24 = -1
   if is_stable:
@@ -538,6 +560,8 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     if gauge_total_supply > 0:
       token0_fees = (pool.claimable0(_data[2]) * pool_total_supply) / gauge_total_supply
       token1_fees = (pool.claimable1(_data[2]) * pool_total_supply) / gauge_total_supply
+      staked0 = (reserve0 * gauge_total_supply) / pool_total_supply
+      staked1 = (reserve1 * gauge_total_supply) / pool_total_supply
 
   if _account != empty(address):
     acc_balance = pool.balanceOf(_account)
@@ -559,11 +583,15 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
         id: 0,
         liquidity: acc_balance,
         staked: acc_staked,
+        amount0: ((acc_balance + acc_staked) * reserve0) / pool_total_supply,
+        amount1: ((acc_balance + acc_staked) * reserve1) / pool_total_supply,
         unstaked_earned0: claimable0,
         unstaked_earned1: claimable1,
         emissions_earned: earned,
         tick_lower: 0,
         tick_upper: 0,
+        price_lower: 0,
+        price_upper: 0,
         alm: False
       })
     )
@@ -579,10 +607,12 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     price: 0,
 
     token0: token0.address,
-    reserve0: pool.reserve0(),
+    reserve0: reserve0,
+    staked0: staked0,
 
     token1: token1.address,
-    reserve1: pool.reserve1(),
+    reserve1: reserve1,
+    staked1: staked1,
 
     gauge: gauge.address,
     gauge_total_supply: gauge_total_supply,
@@ -628,6 +658,9 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
   positions_count: uint256 = 0
+  staked0: uint256 = 0
+  staked1: uint256 = 0
+  tick_spacing: int24 = pool.tickSpacing()
 
   slot: Slot = pool.slot0()
   positions: DynArray[Position, MAX_POSITIONS] = \
@@ -640,8 +673,20 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     fee_voting_reward = gauge.feesVotingReward()
     emissions_token = gauge.rewardToken()
 
-  if gauge_alive:
-    emissions = gauge.rewardRate()
+    # fetch total staked liquidity from the ticks surrounding current tick
+    for index in range((-1 * MAX_PRICES / 2), (MAX_PRICES / 2)):
+      tick_a: int24 = slot.tick + (index * tick_spacing)
+      tick_b: int24 = tick_a + tick_spacing
+      tick_info: TickInfo = pool.ticks(tick_a)
+      ratio_a: uint160 = self.slipstream_helper.getSqrtRatioAtTick(tick_a)
+      ratio_b: uint160 = self.slipstream_helper.getSqrtRatioAtTick(tick_b)
+      liquidity: uint128 = convert(abs(convert(tick_info.stakedLiquidityNet, int256)), uint128)
+      tick_staked: PositionPrincipal = self.slipstream_helper.getAmountsForLiquidity(slot.sqrtPriceX96, ratio_a, ratio_b, liquidity)
+      staked0 += tick_staked.amount0
+      staked1 += tick_staked.amount1
+
+    if gauge_alive:
+      emissions = gauge.rewardRate()
 
   for index in range(0, MAX_POSITIONS):
     if index >= positions_count:
@@ -649,6 +694,7 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
 
     position_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, index)
     position_data: PositionData = self.nfpm.positions(position_id)
+    position_principal: PositionPrincipal = self.slipstream_helper.principal(self.nfpm.address, position_id, slot.sqrtPriceX96)
 
     emissions_earned: uint256 = 0
     staked: bool = False
@@ -662,11 +708,15 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
         id: position_id,
         liquidity: convert(position_data.liquidity, uint256),
         staked: convert(staked, uint256),
+        amount0: position_principal.amount0,
+        amount1: position_principal.amount1,
         unstaked_earned0: convert(position_data.tokensOwed0, uint256),
         unstaked_earned1: convert(position_data.tokensOwed1, uint256),
         emissions_earned: emissions_earned,
         tick_lower: position_data.tickLower,
         tick_upper: position_data.tickUpper,
+        price_lower: self.slipstream_helper.getSqrtRatioAtTick(position_data.tickLower),
+        price_upper: self.slipstream_helper.getSqrtRatioAtTick(position_data.tickUpper),
         alm: False # todo: populate real ALM data when ALM contracts are ready
       })
     )
@@ -677,15 +727,17 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     decimals: 0,
     total_supply: 0,
 
-    type: pool.tickSpacing(),
+    type: tick_spacing,
     tick: slot.tick,
     price: slot.sqrtPriceX96,
 
     token0: token0.address,
     reserve0: token0.balanceOf(pool.address),
+    staked0: staked0,
 
     token1: token1.address,
     reserve1: token1.balanceOf(pool.address),
+    staked1: staked1,
 
     gauge: gauge.address,
     gauge_total_supply: 0,
