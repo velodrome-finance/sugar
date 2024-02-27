@@ -278,12 +278,17 @@ def _pools(_limit: uint256, _offset: uint256)\
     if index >= factories_count:
       break
 
+    factory_type: address = empty(address)
     factory: IPoolFactory = IPoolFactory(factories[index])
 
-    if factory.address == self.v1_factory:
+    if self._is_v2_factory(factory.address):
+      factory_type = convert(2, address)
+    if self._is_cl_factory(factory.address):
+      factory_type = convert(3, address)
+
+    if factory_type == empty(address):
       continue
 
-    is_cl_factory: bool = self._is_cl_factory(factory.address)
     pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(0, MAX_POOLS):
@@ -303,10 +308,7 @@ def _pools(_limit: uint256, _offset: uint256)\
 
       gauge_addr: address = self.voter.gauges(pool_addr)
 
-      if is_cl_factory:
-        pools.append([factory.address, pool_addr, gauge_addr, factory.address])
-      else:
-        pools.append([factory.address, pool_addr, gauge_addr, empty(address)])
+      pools.append([factory.address, pool_addr, gauge_addr, factory_type])
 
   return pools
 
@@ -331,11 +333,12 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
+    is_cl_factory: bool = self._is_cl_factory(factory.address)
+    is_v2_factory: bool = self._is_v2_factory(factory.address)
 
-    if factory.address == self.v1_factory:
+    if is_v2_factory == False and is_cl_factory == False:
       continue
 
-    is_cl_factory: bool = self._is_cl_factory(factory.address)
     pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(_offset, _offset + MAX_POOLS):
@@ -459,7 +462,7 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
     token1: address = pool.token1()
 
     # If this is a CL factory...
-    if pool_data[0] == pool_data[3]:
+    if convert(3, address) == pool_data[3]:
       col.append(self._byDataCL(pool_data, token0, token1, _account))
     else:
       col.append(self._byData(pool_data, token0, token1, _account))
@@ -488,7 +491,7 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   token1: address = pool.token1()
 
   # If this is a CL factory...
-  if pool_data[0] == pool_data[3]:
+  if convert(3, address) == pool_data[3]:
     return self._byDataCL(pool_data, token0, token1, _account)
 
   return self._byData(pool_data, token0, token1, _account)
@@ -1010,6 +1013,24 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
     )
 
   return col
+
+@internal
+@view
+def _is_v2_factory(_factory: address) -> bool:
+  """
+  @notice Returns true if address is a v2 factory
+  @param _factory The factory address
+  """
+  response: Bytes[32] = raw_call(
+      _factory,
+      method_id("ZERO_FEE_INDICATOR()"),
+      max_outsize=32,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  return len(response) > 0
 
 @internal
 @view
