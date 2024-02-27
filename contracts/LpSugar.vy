@@ -273,6 +273,8 @@ def _pools(_limit: uint256, _offset: uint256)\
   @return Array of four addresses (factory, pool, gauge, type value: 0/2/3)
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  # TODO: Remove
+  factories.append(0x77C839b1381C1792A1D5D5ed06F506B2Ff0f4B51)
   factories_count: uint256 = len(factories)
 
   placeholder: address[4] = empty(address[4])
@@ -329,6 +331,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @return `SwapLp` structs
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  # TODO: Remove
+  factories.append(0x77C839b1381C1792A1D5D5ed06F506B2Ff0f4B51)
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
