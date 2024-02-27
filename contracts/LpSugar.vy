@@ -59,7 +59,6 @@ struct TickInfo:
 
 struct Position:
   id: uint256 # NFT ID on v3, 0 on v2
-  manager: address # NFT Position Manager on v3, router on v2
   liquidity: uint256 # Liquidity amount on v3, amount of LP tokens on v2
   staked: uint256 # liq amount staked on v3, amount of staked LP tokens on v2
   unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
@@ -94,7 +93,6 @@ struct Lp:
   decimals: uint8
   total_supply: uint256
 
-  nft: address
   type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
   tick: int24 # current tick on v3, 0 on v2
   price: uint160 # current price on v3, 0 on v2
@@ -184,7 +182,6 @@ interface IPool:
   def balanceOf(_account: address) -> uint256: view
   def poolFees() -> address: view
   def gauge() -> address: view # fetches gauge from v3 pool
-  def nft() -> address: view # fetches nft address from v3 pool
   def tickSpacing() -> int24: view # v3 tick spacing
   def slot0() -> Slot: view # v3 slot data
   def gaugeFees() -> GaugeFees: view # v3 gauge fees amounts
@@ -198,7 +195,6 @@ interface IVoter:
   def gaugeToFees(_gauge_addr: address) -> address: view
   def isAlive(_gauge_addr: address) -> bool: view
   def isWhitelistedToken(_token_addr: address) -> bool: view
-  def v1Factory() -> address: view
 
 interface IGauge:
   def fees0() -> uint256: view
@@ -218,7 +214,7 @@ interface ICLGauge:
   def feesVotingReward() -> address: view
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
 
-interface INFTPositionManager:
+interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
 
@@ -234,23 +230,21 @@ interface IReward:
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
-router: public(address)
-v1_factory: public(address)
+nfpm: public(INFPositionManager)
 alm_registry: public(address) # todo: add ALM interface when ALM contracts are ready
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address, _convertor: address, \
-    _router: address, _alm_registry: address):
+    _nfpm: address, _alm_registry: address):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
+  self.nfpm = INFPositionManager(_nfpm)
   self.convertor = _convertor
-  self.router = _router
-  self.v1_factory = self.voter.v1Factory()
   self.alm_registry = _alm_registry
 
 @internal
@@ -261,7 +255,7 @@ def _pools(_limit: uint256, _offset: uint256)\
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip (for optimization)
   @notice Returns a compiled list of pool and its factory and gauge
-  @return Array of four addresses (factory, pool, gauge, cl_factory)
+  @return Array of four addresses (factory, pool, gauge, type value: 0/2/3)
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   # TODO: Remove
@@ -562,7 +556,6 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     positions.append(
       Position({
         id: 0,
-        manager: self.router,
         liquidity: acc_balance,
         staked: acc_staked,
         unstaked_earned0: claimable0,
@@ -580,7 +573,6 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     decimals: decimals,
     total_supply: pool_total_supply,
 
-    nft: empty(address),
     type: type,
     tick: 0,
     price: 0,
@@ -626,7 +618,6 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   """
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
-  nft: INFTPositionManager = INFTPositionManager(pool.nft())
 
   gauge_fees: GaugeFees = pool.gaugeFees()
   gauge_alive: bool = self.voter.isAlive(gauge.address)
@@ -651,12 +642,12 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     empty(DynArray[Position, MAX_POSITIONS])
 
   for index in range(0, MAX_POSITIONS):
-    position_id: uint256 = nft.tokenOfOwnerByIndex(_account, index)
+    position_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, index)
 
     if position_id == 0:
       break
 
-    position_data: PositionData = nft.positions(position_id)
+    position_data: PositionData = self.nfpm.positions(position_id)
 
     emissions_earned: uint256 = 0
     staked: bool = False
@@ -668,7 +659,6 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     positions.append(
       Position({
         id: position_id,
-        manager: pool.nft(),
         liquidity: convert(position_data.liquidity, uint256),
         staked: convert(staked, uint256),
         unstaked_earned0: convert(position_data.tokensOwed0, uint256),
@@ -686,7 +676,6 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     decimals: 0,
     total_supply: 0,
 
-    nft: nft.address,
     type: tick_spacing,
     tick: slot.tick,
     price: price,
