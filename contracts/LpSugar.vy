@@ -326,14 +326,13 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
     if index >= factories_count:
       break
 
-    if factories[index] == self.v1_factory:
-      continue
-
     factory: IPoolFactory = IPoolFactory(factories[index])
 
-    pools_count: uint256 = factory.allPoolsLength()
+    if factory.address == self.v1_factory:
+      continue
 
     is_cl_factory: bool = self._is_cl_factory(factory.address)
+    pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(_offset, _offset + MAX_POOLS):
       if len(pools) >= _limit or pindex >= pools_count:
@@ -351,9 +350,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         type = pool.tickSpacing()
         reserve0 = IERC20(token0).balanceOf(pool_addr)
         pool_fee = convert(pool.fee(), uint256)
-
       else:
-        if factory.getPool(token0, token1, 1) == pool_addr:
+        if pool.stable():
           type = 0
         reserve0 = pool.reserve0()
         pool_fee = factory.getFee(pool_addr, (type == 0))
