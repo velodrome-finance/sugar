@@ -630,8 +630,9 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   token1: IERC20 = IERC20(_token1)
   tick_spacing: int24 = pool.tickSpacing()
 
-  fee_voting_reward = gauge.feesVotingReward()
-  emissions_token = gauge.rewardToken()
+  if gauge.address != empty(address):
+    fee_voting_reward = gauge.feesVotingReward()
+    emissions_token = gauge.rewardToken()
 
   if gauge_alive:
     emissions = gauge.rewardRate()
