@@ -19,11 +19,11 @@ WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 # Slot0 from CLPool.sol
 struct Slot:
-  sqrt_price: uint160
+  sqrtPriceX96: uint160
   tick: int24
-  observation_index: uint16
+  observationIndex: uint16
   cardinality: uint16
-  cardinality_next: uint16
+  cardinalityNext: uint16
   unlocked: bool
 
 # GaugeFees from CLPool.sol
@@ -35,26 +35,26 @@ struct GaugeFees:
 struct PositionData:
   nonce: uint96
   operator: address
-  pool_id: uint80
-  tick_lower: int24
-  tick_upper: int24
+  poolId: uint80
+  tickLower: int24
+  tickUpper: int24
   liquidity: uint128
-  fee_growth0: uint256
-  fee_growth1: uint256
-  unstaked_earned0: uint128
-  unstaked_earned1: uint128
+  feeGrowthInside0LastX128: uint256
+  feeGrowthInside1LastX128: uint256
+  tokensOwed0: uint128
+  tokensOwed1: uint128
 
 # Tick.Info from CLPool.sol
 struct TickInfo:
-  liquidity_gross: uint128
-  liquidity_net: int128
-  staked_liquidity_net: int128
-  fee_growth_outside0: uint256
-  fee_growth_outside1: uint256
-  reward_growth_outside: uint256
-  tick_cumulative_outside: int56
-  seconds_per_liquidity_outside: uint160
-  seconds_outside: uint32
+  liquidityGross: uint128
+  liquidityNet: int128
+  stakedLiquidityNet: int128
+  feeGrowthOutside0: uint256
+  feeGrowthOutside1: uint256
+  rewardGrowthOutside: uint256
+  tickCumulativeOutside: int56
+  secondsPerLiquidityOutside: uint160
+  secondsOutside: uint32
   initialized: bool
 
 struct Position:
@@ -637,7 +637,7 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     emissions = gauge.rewardRate()
 
   slot: Slot = pool.slot0()
-  price: uint160 = slot.sqrt_price
+  price: uint160 = slot.sqrtPriceX96
 
   positions: DynArray[Position, MAX_POSITIONS] = \
     empty(DynArray[Position, MAX_POSITIONS])
@@ -663,11 +663,11 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
         manager: pool.nft(),
         liquidity: convert(position_data.liquidity, uint256),
         staked: convert(staked, uint256),
-        unstaked_earned0: convert(position_data.unstaked_earned0, uint256),
-        unstaked_earned1: convert(position_data.unstaked_earned1, uint256),
+        unstaked_earned0: convert(position_data.tokensOwed0, uint256),
+        unstaked_earned1: convert(position_data.tokensOwed1, uint256),
         emissions_earned: emissions_earned,
-        tick_lower: position_data.tick_lower,
-        tick_upper: position_data.tick_upper,
+        tick_lower: position_data.tickLower,
+        tick_upper: position_data.tickUpper,
         alm: False # todo: populate real ALM data when ALM contracts are ready
       })
     )
@@ -1058,7 +1058,7 @@ def _price(_pool: address) -> DynArray[Price, MAX_PRICES]:
 
     prices.append(Price({
       tick_price: tick,
-      liquidity_gross: tick_info.liquidity_gross
+      liquidity_gross: tick_info.liquidityGross
     }))
 
   return prices
