@@ -17,7 +17,7 @@ def main():
             os.getenv('VOTER_ADDRESS'),
             os.getenv('REGISTRY_ADDRESS'),
             os.getenv('CONVERTOR_ADDRESS'),
-            os.getenv('ROUTER_ADDRESS'),
+            os.getenv('NFPM_ADDRESS'),
             os.getenv('ALM_REGISTRY_ADDRESS'),
             {'from': account}
         )
