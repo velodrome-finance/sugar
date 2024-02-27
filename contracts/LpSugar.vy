@@ -217,6 +217,7 @@ interface ICLGauge:
 interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
+  def balanceOf(_account: address) -> uint256: view
 
 interface IReward:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
@@ -622,7 +623,14 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   emissions_token: address = empty(address)
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
-  tick_spacing: int24 = pool.tickSpacing()
+  positions_count: uint256 = 0
+
+  slot: Slot = pool.slot0()
+  positions: DynArray[Position, MAX_POSITIONS] = \
+    empty(DynArray[Position, MAX_POSITIONS])
+
+  if _account != empty(address):
+    positions_count = self.nfpm.balanceOf(_account)
 
   if gauge.address != empty(address):
     fee_voting_reward = gauge.feesVotingReward()
@@ -631,18 +639,11 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   if gauge_alive:
     emissions = gauge.rewardRate()
 
-  slot: Slot = pool.slot0()
-  price: uint160 = slot.sqrtPriceX96
-
-  positions: DynArray[Position, MAX_POSITIONS] = \
-    empty(DynArray[Position, MAX_POSITIONS])
-
   for index in range(0, MAX_POSITIONS):
-    position_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, index)
-
-    if position_id == 0:
+    if index >= positions_count:
       break
 
+    position_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, index)
     position_data: PositionData = self.nfpm.positions(position_id)
 
     emissions_earned: uint256 = 0
@@ -672,9 +673,9 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     decimals: 0,
     total_supply: 0,
 
-    type: tick_spacing,
+    type: pool.tickSpacing(),
     tick: slot.tick,
-    price: price,
+    price: slot.sqrtPriceX96,
 
     token0: token0.address,
     reserve0: token0.balanceOf(pool.address),
