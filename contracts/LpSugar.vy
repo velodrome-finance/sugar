@@ -256,21 +256,21 @@ def __init__(_voter: address, _registry: address, _convertor: address, \
 @internal
 @view
 def _pools(_limit: uint256, _offset: uint256)\
-    -> DynArray[address[3], MAX_POOLS]:
+    -> DynArray[address[4], MAX_POOLS]:
   """
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip (for optimization)
   @notice Returns a compiled list of pool and its factory and gauge
-  @return Array of three addresses (factory, pool, gauge)
+  @return Array of four addresses (factory, pool, gauge, cl_factory)
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
 
-  placeholder: address[3] = empty(address[3])
+  placeholder: address[4] = empty(address[4])
   to_skip: uint256 = _offset
 
-  pools: DynArray[address[3], MAX_POOLS] = \
-    empty(DynArray[address[3], MAX_POOLS])
+  pools: DynArray[address[4], MAX_POOLS] = \
+    empty(DynArray[address[4], MAX_POOLS])
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -281,10 +281,11 @@ def _pools(_limit: uint256, _offset: uint256)\
     if factory.address == self.v1_factory:
       continue
 
+    is_cl_factory: bool = self._is_cl_factory(factory.address)
     pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(0, MAX_POOLS):
-      if pindex >= pools_count:
+      if pindex >= pools_count or len(pools) >= _limit + _offset:
         break
 
       # Basically skip calls for offset records...
@@ -300,7 +301,10 @@ def _pools(_limit: uint256, _offset: uint256)\
 
       gauge_addr: address = self.voter.gauges(pool_addr)
 
-      pools.append([factory.address, pool_addr, gauge_addr])
+      if is_cl_factory:
+        pools.append([factory.address, pool_addr, gauge_addr, factory.address])
+      else:
+        pools.append([factory.address, pool_addr, gauge_addr, empty(address)])
 
   return pools
 
@@ -377,7 +381,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
+  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
 
   pools_count: uint256 = len(pools)
   addresses_count: uint256 = len(_addresses)
@@ -395,7 +399,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     if len(col) >= _limit or index >= pools_count:
       break
 
-    pool_data: address[3] = pools[index]
+    pool_data: address[4] = pools[index]
 
     pool: IPool = IPool(pool_data[1])
     token0: address = pool.token0()
@@ -440,23 +444,23 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
+  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
 
   for index in range(_offset, _offset + MAX_POOLS):
     if len(col) == _limit or index >= pools_count:
       break
 
-    pool: IPool = IPool(pools[index][1])
-    factory: IPoolFactory = IPoolFactory(pools[index][0])
+    pool_data: address[4] = pools[index]
+    pool: IPool = IPool(pool_data[1])
     token0: address = pool.token0()
     token1: address = pool.token1()
-    is_cl_factory: bool = self._is_cl_factory(pools[index][0])
 
-    if is_cl_factory:
-      col.append(self._byDataCL(pools[index], token0, token1, _account))
+    # If this is a CL factory...
+    if pool_data[0] == pool_data[3]:
+      col.append(self._byDataCL(pool_data, token0, token1, _account))
     else:
-      col.append(self._byData(pools[index], token0, token1, _account))
+      col.append(self._byData(pool_data, token0, token1, _account))
 
   return col
 
@@ -474,22 +478,23 @@ def byIndex(_index: uint256, _account: address) -> Lp:
   if (_index > 0):
     offset = _index - 1
 
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(1, offset)
+  pools: DynArray[address[4], MAX_POOLS] = self._pools(1, offset)
 
-  pool: IPool = IPool(pools[_index][1])
-  factory: IPoolFactory = IPoolFactory(pools[_index][0])
+  pool_data: address[4] = pools[_index]
+  pool: IPool = IPool(pool_data[1])
   token0: address = pool.token0()
   token1: address = pool.token1()
-  is_cl_factory: bool = self._is_cl_factory(pools[_index][0])
 
-  if is_cl_factory:
-    return self._byDataCL(pools[_index], token0, token1, _account)
-  return self._byData(pools[_index], token0, token1, _account)
+  # If this is a CL factory...
+  if pool_data[0] == pool_data[3]:
+    return self._byDataCL(pool_data, token0, token1, _account)
+
+  return self._byData(pool_data, token0, token1, _account)
 
 @internal
 @view
-def _byData(
-_data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
+def _byData(_data: address[4], _token0: address, _token1: address, \
+    _account: address) -> Lp:
   """
   @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
@@ -606,7 +611,8 @@ _data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
 
 @internal
 @view
-def _byDataCL(_data: address[3], _token0: address, _token1: address, _account: address) -> Lp:
+def _byDataCL(_data: address[4], _token0: address, _token1: address, \
+    _account: address) -> Lp:
   """
   @notice Returns CL pool data based on the factory, pool and gauge addresses
   @param _data The addresses to lookup
@@ -719,7 +725,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
+  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
@@ -729,7 +735,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
     if counted == _limit or index >= pools_count:
       break
 
-    pool_data: address[3] = pools[index]
+    pool_data: address[4] = pools[index]
 
     if self.voter.isAlive(pool_data[2]) == False:
       continue
@@ -883,7 +889,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   @param _venft_id The veNFT ID to get rewards for
   @return Array for VeNFT Reward structs
   """
-  pools: DynArray[address[3], MAX_POOLS] = self._pools(_limit, _offset)
+  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
@@ -893,7 +899,7 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
     if counted == _limit or pindex >= pools_count:
       break
 
-    pool_data: address[3] = pools[pindex]
+    pool_data: address[4] = pools[pindex]
     pcol: DynArray[Reward, MAX_POOLS] = \
       self._poolRewards(_venft_id, pool_data[1], pool_data[2])
 
@@ -1029,12 +1035,10 @@ def prices(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
   @param _factory The factory of the pool
   @return Array of Price structs
   """
-  is_cl_factory: bool = self._is_cl_factory(_factory)
-
-  if is_cl_factory:
+  if self._is_cl_factory(_factory):
     return self._price(_pool)
-  else:
-    return empty(DynArray[Price, MAX_PRICES])
+
+  return empty(DynArray[Price, MAX_PRICES])
 
 @internal
 @view
