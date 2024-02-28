@@ -201,6 +201,7 @@ interface IPool:
   def fee() -> uint24: view # v3 fee level
   def unstakedFee() -> uint24: view # v3 unstaked fee level
   def ticks(_tick: int24) -> TickInfo: view # v3 tick data
+  def stakedLiquidity() -> uint128: view # v3 active staked liquidity
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -677,17 +678,11 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     fee_voting_reward = gauge.feesVotingReward()
     emissions_token = gauge.rewardToken()
 
-    # fetch total staked liquidity from the ticks surrounding current tick
-    for index in range((-1 * MAX_PRICES / 2), (MAX_PRICES / 2)):
-      tick_a: int24 = slot.tick + (index * tick_spacing)
-      tick_b: int24 = tick_a + tick_spacing
-      tick_info: TickInfo = pool.ticks(tick_a)
-      ratio_a: uint160 = self.slipstream_helper.getSqrtRatioAtTick(tick_a)
-      ratio_b: uint160 = self.slipstream_helper.getSqrtRatioAtTick(tick_b)
-      liquidity: uint128 = convert(abs(convert(tick_info.stakedLiquidityNet, int256)), uint128)
-      tick_staked: PositionPrincipal = self.slipstream_helper.getAmountsForLiquidity(slot.sqrtPriceX96, ratio_a, ratio_b, liquidity)
-      staked0 += tick_staked.amount0
-      staked1 += tick_staked.amount1
+    ratio_a: uint160 = self.slipstream_helper.getSqrtRatioAtTick(slot.tick)
+    ratio_b: uint160 = self.slipstream_helper.getSqrtRatioAtTick(slot.tick + tick_spacing)
+    tick_staked: PositionPrincipal = self.slipstream_helper.getAmountsForLiquidity(slot.sqrtPriceX96, ratio_a, ratio_b, pool.stakedLiquidity())
+    staked0 += tick_staked.amount0
+    staked1 += tick_staked.amount1
 
     if gauge_alive:
       emissions = gauge.rewardRate()
