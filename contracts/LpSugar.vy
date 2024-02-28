@@ -66,8 +66,10 @@ struct Position:
   id: uint256 # NFT ID on v3, 0 on v2
   liquidity: uint256 # Liquidity amount on v3, amount of LP tokens on v2
   staked: uint256 # liq amount staked on v3, amount of staked LP tokens on v2
-  amount0: uint256 # amount of token0 on both v2 and v3
-  amount1: uint256 # amount of token1 on both v2 and v3
+  amount0: uint256 # amount of unstaked token0 on both v2 and v3
+  amount1: uint256 # amount of unstaked token1 on both v2 and v3
+  staked0: uint256 # amount of staked token0 on both v2 and v3
+  staked1: uint256 # amount of staked token1 on both v2 and v3
   unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
   unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and v3
   emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
@@ -583,8 +585,10 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
         id: 0,
         liquidity: acc_balance,
         staked: acc_staked,
-        amount0: ((acc_balance + acc_staked) * reserve0) / pool_total_supply,
-        amount1: ((acc_balance + acc_staked) * reserve1) / pool_total_supply,
+        amount0: (acc_balance * reserve0) / pool_total_supply,
+        amount1: (acc_balance * reserve1) / pool_total_supply,
+        staked0: (acc_staked * reserve0) / pool_total_supply,
+        staked1: (acc_staked * reserve1) / pool_total_supply,
         unstaked_earned0: claimable0,
         unstaked_earned1: claimable1,
         emissions_earned: earned,
@@ -695,6 +699,10 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     position_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, index)
     position_data: PositionData = self.nfpm.positions(position_id)
     position_principal: PositionPrincipal = self.slipstream_helper.principal(self.nfpm.address, position_id, slot.sqrtPriceX96)
+    position_amount0: uint256 = 0
+    position_amount1: uint256 = 0
+    position_staked0: uint256 = 0
+    position_staked1: uint256 = 0
 
     emissions_earned: uint256 = 0
     staked: bool = False
@@ -703,13 +711,22 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
       emissions_earned = gauge.earned(_account, position_id)
       staked = gauge.stakedContains(_account, position_id)
 
+    if staked:
+      position_staked0 = position_principal.amount0
+      position_staked1 = position_principal.amount1
+    else:
+      position_amount0 = position_principal.amount0
+      position_amount1 = position_principal.amount1
+
     positions.append(
       Position({
         id: position_id,
         liquidity: convert(position_data.liquidity, uint256),
         staked: convert(staked, uint256),
-        amount0: position_principal.amount0,
-        amount1: position_principal.amount1,
+        amount0: position_amount0,
+        amount1: position_amount1,
+        staked0: position_staked0,
+        staked1: position_staked1,
         unstaked_earned0: convert(position_data.tokensOwed0, uint256),
         unstaked_earned1: convert(position_data.tokensOwed1, uint256),
         emissions_earned: emissions_earned,
