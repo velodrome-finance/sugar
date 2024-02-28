@@ -44,7 +44,7 @@ The returned data/struct of type `Lp` values represent:
  * `lp` - pool contract address
  * `symbol` - pool symbol
  * `decimals` - pool decimals
- * `total_supply` - pool tokens supply
+ * `liquidity` - pool tokens supply
  * `type` - tick spacing on v3 pools, 0/-1 for stable/volatile on v2 pools
  * `tick` - current tick on v3 pools, 0 on v2 pools
  * `price` - pool price on v3 pools, 0 on v2 pools
@@ -55,7 +55,7 @@ The returned data/struct of type `Lp` values represent:
  * `reserve1` - pool 2nd token reserves (nr. of tokens in the contract)
  * `staked1` - pool 2nd token staked amount
  * `gauge` - pool gauge address
- * `gauge_total_supply` - pool staked tokens (less/eq than/to pool total supply)
+ * `gauge_liquidity` - pool staked tokens (less/eq than/to pool total supply)
  * `gauge_alive` - indicates if the gauge is still active
  * `fee` - pool gauge fees contract address
  * `bribe` - pool gauge bribes contract address
