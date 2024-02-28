@@ -18,7 +18,6 @@ def main():
             os.getenv('REGISTRY_ADDRESS'),
             os.getenv('CONVERTOR_ADDRESS'),
             os.getenv('NFPM_ADDRESS'),
-            os.getenv('ALM_REGISTRY_ADDRESS'),
             {'from': account}
         )
 
