@@ -101,7 +101,7 @@ struct Lp:
   lp: address
   symbol: String[100]
   decimals: uint8
-  total_supply: uint256
+  liquidity: uint256
 
   type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
   tick: int24 # current tick on v3, 0 on v2
@@ -116,7 +116,7 @@ struct Lp:
   staked1: uint256
 
   gauge: address
-  gauge_total_supply: uint256
+  gauge_liquidity: uint256
   gauge_alive: bool
 
   fee: address
@@ -196,6 +196,7 @@ interface IPool:
   def fee() -> uint24: view # v3 fee level
   def unstakedFee() -> uint24: view # v3 unstaked fee level
   def ticks(_tick: int24) -> TickInfo: view # v3 tick data
+  def liquidity() -> uint128: view # v3 active liquidity
   def stakedLiquidity() -> uint128: view # v3 active staked liquidity
 
 interface IVoter:
@@ -240,6 +241,7 @@ interface ISlipstreamHelper:
   def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> PositionPrincipal: view
   def getSqrtRatioAtTick(_tick: int24) -> uint160: view
   def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> PositionPrincipal: view
+  def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> PositionPrincipal: view
 
 # Vars
 registry: public(IFactoryRegistry)
@@ -520,8 +522,8 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
-  pool_total_supply: uint256 = pool.totalSupply()
-  gauge_total_supply: uint256 = 0
+  pool_liquidity: uint256 = pool.totalSupply()
+  gauge_liquidity: uint256 = 0
   emissions: uint256 = 0
   emissions_token: address = empty(address)
   is_stable: bool = pool.stable()
@@ -548,16 +550,16 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
   if gauge.address != empty(address):
     acc_staked = gauge.balanceOf(_account)
     earned = gauge.earned(_account)
-    gauge_total_supply = gauge.totalSupply()
+    gauge_liquidity = gauge.totalSupply()
     emissions_token = gauge.rewardToken()
 
   if gauge_alive:
     emissions = gauge.rewardRate()
-    if gauge_total_supply > 0:
-      token0_fees = (pool.claimable0(_data[2]) * pool_total_supply) / gauge_total_supply
-      token1_fees = (pool.claimable1(_data[2]) * pool_total_supply) / gauge_total_supply
-      staked0 = (reserve0 * gauge_total_supply) / pool_total_supply
-      staked1 = (reserve1 * gauge_total_supply) / pool_total_supply
+    if gauge_liquidity > 0:
+      token0_fees = (pool.claimable0(_data[2]) * pool_liquidity) / gauge_liquidity
+      token1_fees = (pool.claimable1(_data[2]) * pool_liquidity) / gauge_liquidity
+      staked0 = (reserve0 * gauge_liquidity) / pool_liquidity
+      staked1 = (reserve1 * gauge_liquidity) / pool_liquidity
 
   if _account != empty(address):
     acc_balance = pool.balanceOf(_account)
@@ -579,10 +581,10 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
         id: 0,
         liquidity: acc_balance,
         staked: acc_staked,
-        amount0: (acc_balance * reserve0) / pool_total_supply,
-        amount1: (acc_balance * reserve1) / pool_total_supply,
-        staked0: (acc_staked * reserve0) / pool_total_supply,
-        staked1: (acc_staked * reserve1) / pool_total_supply,
+        amount0: (acc_balance * reserve0) / pool_liquidity,
+        amount1: (acc_balance * reserve1) / pool_liquidity,
+        staked0: (acc_staked * reserve0) / pool_liquidity,
+        staked1: (acc_staked * reserve1) / pool_liquidity,
         unstaked_earned0: claimable0,
         unstaked_earned1: claimable1,
         emissions_earned: earned,
@@ -597,7 +599,7 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     lp: _data[1],
     symbol: pool.symbol(),
     decimals: decimals,
-    total_supply: pool_total_supply,
+    liquidity: pool_liquidity,
 
     type: type,
     tick: 0,
@@ -612,7 +614,7 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     staked1: staked1,
 
     gauge: gauge.address,
-    gauge_total_supply: gauge_total_supply,
+    gauge_liquidity: gauge_liquidity,
     gauge_alive: gauge_alive,
 
     fee: self.voter.gaugeToFees(gauge.address),
@@ -654,6 +656,10 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = pool.tickSpacing()
+  pool_liquidity: uint128 = pool.liquidity()
+  gauge_liquidity: uint128 = pool.stakedLiquidity()
+  token0_fees: uint256 = 0
+  token1_fees: uint256 = 0
 
   slot: Slot = pool.slot0()
   positions: DynArray[Position, MAX_POSITIONS] = \
@@ -662,15 +668,23 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   if _account != empty(address):
     positions_count = self.nfpm.balanceOf(_account)
 
-  if gauge.address != empty(address):
+  if gauge.address == empty(address):
+    unstaked_fees: PositionPrincipal = self.slipstream_helper.poolFees(_data[1], pool_liquidity, slot.tick, slot.tick, slot.tick + tick_spacing)
+    token0_fees = unstaked_fees.amount0
+    token1_fees = unstaked_fees.amount1
+  else:
     fee_voting_reward = gauge.feesVotingReward()
     emissions_token = gauge.rewardToken()
 
     ratio_a: uint160 = self.slipstream_helper.getSqrtRatioAtTick(slot.tick)
     ratio_b: uint160 = self.slipstream_helper.getSqrtRatioAtTick(slot.tick + tick_spacing)
-    tick_staked: PositionPrincipal = self.slipstream_helper.getAmountsForLiquidity(slot.sqrtPriceX96, ratio_a, ratio_b, pool.stakedLiquidity())
-    staked0 += tick_staked.amount0
-    staked1 += tick_staked.amount1
+    tick_staked: PositionPrincipal = self.slipstream_helper.getAmountsForLiquidity(slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity)
+    staked0 = tick_staked.amount0
+    staked1 = tick_staked.amount1
+
+    staked_fees: PositionPrincipal = self.slipstream_helper.poolFees(_data[1], gauge_liquidity, slot.tick, slot.tick, slot.tick + tick_spacing)
+    token0_fees = staked_fees.amount0
+    token1_fees = staked_fees.amount1
 
     if gauge_alive:
       emissions = gauge.rewardRate()
@@ -724,7 +738,7 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     lp: pool.address,
     symbol: "",
     decimals: 0,
-    total_supply: 0,
+    liquidity: convert(pool_liquidity, uint256),
 
     type: tick_spacing,
     tick: slot.tick,
@@ -739,7 +753,7 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     staked1: staked1,
 
     gauge: gauge.address,
-    gauge_total_supply: 0,
+    gauge_liquidity: convert(gauge_liquidity, uint256),
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
@@ -751,8 +765,8 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
 
     pool_fee: convert(pool.fee(), uint256),
     unstaked_fee: convert(pool.unstakedFee(), uint256),
-    token0_fees: convert(gauge_fees.token0, uint256),
-    token1_fees: convert(gauge_fees.token1, uint256),
+    token0_fees: token0_fees,
+    token1_fees: token1_fees,
 
     positions: positions
   })
