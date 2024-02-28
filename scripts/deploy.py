@@ -18,6 +18,7 @@ def main():
             os.getenv('REGISTRY_ADDRESS'),
             os.getenv('CONVERTOR_ADDRESS'),
             os.getenv('NFPM_ADDRESS'),
+            os.getenv('SLIPSTREAM_HELPER_ADDRESS'),
             {'from': account}
         )
 
