@@ -50,8 +50,10 @@ The returned data/struct of type `Lp` values represent:
  * `price` - pool price on v3 pools, 0 on v2 pools
  * `token0` - pool 1st token address
  * `reserve0` - pool 1st token reserves (nr. of tokens in the contract)
+ * `staked0` - pool 1st token staked amount
  * `token1` - pool 2nd token address
  * `reserve1` - pool 2nd token reserves (nr. of tokens in the contract)
+ * `staked1` - pool 2nd token staked amount
  * `gauge` - pool gauge address
  * `gauge_total_supply` - pool staked tokens (less/eq than/to pool total supply)
  * `gauge_alive` - indicates if the gauge is still active
@@ -68,11 +70,17 @@ The returned data/struct of type `Lp` values represent:
     * `id` - NFT ID on v3 pools, 0 on v2 pools
     * `liquidity` - liquidity amount on v3, deposited LP tokens on v2
     * `staked` -  staked/unstaked liquidity amount on v3, amount of staked tokens on v2
+    * `amount0` - amount of unstaked token0 in the position
+    * `amount1` - amount of unstaked token1 in the position
+    * `staked1` - amount of staked token0 in the position
+    * `staked1` - amount of staked token1 in the position
     * `unstaked_earned0` - unstaked token0 fees earned
     * `unstaked_earned1` - unstaked token1 fees earned
     * `emissions_earned` - emissions earned from staked position
     * `tick_lower` - lower tick of position on v3, 0 on v2
     * `tick_upper` - upper tick of position on v3, 0 on v2
+    * `price_lower` - price ratio at lower tick on v3, 0 on v2
+    * `price_upper` - price ratio at upper tick on v3, 0 on v2
 
 ---
 
