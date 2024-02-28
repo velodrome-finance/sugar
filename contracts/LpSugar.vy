@@ -77,7 +77,6 @@ struct Position:
   tick_upper: int24 # Position upper tick on v3, 0 on v2
   price_lower: uint160 # Price at lower tick on v3, 0 on v2
   price_upper: uint160 # Price at upper tick on v3, 0 on v2
-  alm: bool # True if Position is deposited into ALM on v3, False on v2
 
 struct Price:
   tick_price: int24
@@ -131,10 +130,6 @@ struct Lp:
   unstaked_fee: uint256 # unstaked fee % on v3, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
-
-  alm_vault: address # ALM vault address on v3, empty address on v2
-  alm_reserve0: uint256 # ALM token0 reserves on v3, 0 on v2
-  alm_reserve1: uint256 # ALM token1 reserves on v3, 0 on v2
 
   positions: DynArray[Position, MAX_POSITIONS]
 
@@ -251,14 +246,13 @@ registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
 nfpm: public(INFPositionManager)
-alm_registry: public(address) # todo: add ALM interface when ALM contracts are ready
 slipstream_helper: public(ISlipstreamHelper)
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address, _convertor: address, \
-    _nfpm: address, _alm_registry: address, _slipstream_helper: address):
+    _nfpm: address, _slipstream_helper: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -266,7 +260,6 @@ def __init__(_voter: address, _registry: address, _convertor: address, \
   self.registry = IFactoryRegistry(_registry)
   self.nfpm = INFPositionManager(_nfpm)
   self.convertor = _convertor
-  self.alm_registry = _alm_registry
   self.slipstream_helper = ISlipstreamHelper(_slipstream_helper)
 
 @internal
@@ -592,8 +585,7 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
         tick_lower: 0,
         tick_upper: 0,
         price_lower: 0,
-        price_upper: 0,
-        alm: False
+        price_upper: 0
       })
     )
 
@@ -630,10 +622,6 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     unstaked_fee: 0,
     token0_fees: token0_fees,
     token1_fees: token1_fees,
-
-    alm_vault: empty(address),
-    alm_reserve0: 0,
-    alm_reserve1: 0,
 
     positions: positions
   })
@@ -725,7 +713,6 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
         tick_upper: position_data.tickUpper,
         price_lower: self.slipstream_helper.getSqrtRatioAtTick(position_data.tickLower),
         price_upper: self.slipstream_helper.getSqrtRatioAtTick(position_data.tickUpper),
-        alm: False # todo: populate real ALM data when ALM contracts are ready
       })
     )
 
@@ -762,11 +749,6 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     unstaked_fee: convert(pool.unstakedFee(), uint256),
     token0_fees: convert(gauge_fees.token0, uint256),
     token1_fees: convert(gauge_fees.token1, uint256),
-
-    # todo: populate real ALM data when ALM contracts are ready
-    alm_vault: empty(address),
-    alm_reserve0: 0,
-    alm_reserve1: 0,
 
     positions: positions
   })

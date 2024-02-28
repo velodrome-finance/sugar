@@ -64,9 +64,6 @@ The returned data/struct of type `Lp` values represent:
  * `unstaked_fee` - unstaked fee percentage on v3 pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
- * `alm_vault` - ALM vault address on v3 if it exists, empty address on v2
- * `alm_reserve0` - ALM vault token0 reserves on v3, 0 on v2
- * `alm_reserve1` - ALM vault token1 reserves on v3, 0 on v2
  * `positions` - a list of account pool position data, it is a struct of type `Position` with the following values:
     * `id` - NFT ID on v3 pools, 0 on v2 pools
     * `liquidity` - liquidity amount on v3, deposited LP tokens on v2
@@ -76,7 +73,6 @@ The returned data/struct of type `Lp` values represent:
     * `emissions_earned` - emissions earned from staked position
     * `tick_lower` - lower tick of position on v3, 0 on v2
     * `tick_upper` - upper tick of position on v3, 0 on v2
-    * `alm` - true if position is deposited into ALM on v3, false on v2
 
 ---
 
