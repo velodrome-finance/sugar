@@ -66,29 +66,35 @@ The returned data/struct of type `Lp` values represent:
  * `unstaked_fee` - unstaked fee percentage on v3 pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
- * `positions` - a list of account pool position data, it is a struct of type `Position` with the following values:
-    * `id` - NFT ID on v3 pools, 0 on v2 pools
-    * `liquidity` - liquidity amount on v3, deposited LP tokens on v2
-    * `staked` -  staked/unstaked liquidity amount on v3, amount of staked tokens on v2
-    * `amount0` - amount of unstaked token0 in the position
-    * `amount1` - amount of unstaked token1 in the position
-    * `staked1` - amount of staked token0 in the position
-    * `staked1` - amount of staked token1 in the position
-    * `unstaked_earned0` - unstaked token0 fees earned
-    * `unstaked_earned1` - unstaked token1 fees earned
-    * `emissions_earned` - emissions earned from staked position
-    * `tick_lower` - lower tick of position on v3, 0 on v2
-    * `tick_upper` - upper tick of position on v3, 0 on v2
-    * `price_lower` - price ratio at lower tick on v3, 0 on v2
-    * `price_upper` - price ratio at upper tick on v3, 0 on v2
 
 ---
 
 The available methods are:
- * `all(_limit: uint256, _offset: uint256, _account: address) -> Lp[]` -
+ * `all(_limit: uint256, _offset: uint256) -> Lp[]` -
    returns a paginated list of `Lp` structs.
- * `byIndex(_index: uint256, _account: address) -> Lp` - returns the
+ * `byIndex(_index: uint256) -> Lp` - returns the
    `Lp` data for a specific index of a pool.
+
+---
+
+To get the positions of an account, use this function:
+ * `positions(_account: address) -> Position[]`
+
+The returned data is a struct of type `Position` with the following values:
+  * `id` - NFT ID on v3 pools, 0 on v2 pools
+  * `liquidity` - liquidity amount on v3, deposited LP tokens on v2
+  * `staked` -  staked/unstaked liquidity amount on v3, amount of staked tokens on v2
+  * `amount0` - amount of unstaked token0 in the position
+  * `amount1` - amount of unstaked token1 in the position
+  * `staked1` - amount of staked token0 in the position
+  * `staked1` - amount of staked token1 in the position
+  * `unstaked_earned0` - unstaked token0 fees earned
+  * `unstaked_earned1` - unstaked token1 fees earned
+  * `emissions_earned` - emissions earned from staked position
+  * `tick_lower` - lower tick of position on v3, 0 on v2
+  * `tick_upper` - upper tick of position on v3, 0 on v2
+  * `price_lower` - price value at lower tick on v3, 0 on v2
+  * `price_upper` - price value at upper tick on v3, 0 on v2
 
 ---
 
