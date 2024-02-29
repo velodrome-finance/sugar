@@ -13,9 +13,10 @@ MAX_TOKENS: constant(uint256) = 2000
 MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
-MAX_POSITIONS: constant(uint256) = 10
+MAX_POSITIONS: constant(uint256) = 500
 MAX_PRICES: constant(uint256) = 20
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
+Q96: constant(uint160) = 2**96
 
 # Slot0 from CLPool.sol
 struct Slot:
@@ -31,8 +32,7 @@ struct GaugeFees:
   token0: uint128
   token1: uint128
 
-# Position Principal from Slipstream SugarHelper
-struct PositionPrincipal:
+struct Amounts:
   amount0: uint256
   amount1: uint256
 
@@ -40,7 +40,9 @@ struct PositionPrincipal:
 struct PositionData:
   nonce: uint96
   operator: address
-  poolId: uint80
+  token0: address
+  token1: address
+  tickSpacing: uint24
   tickLower: int24
   tickUpper: int24
   liquidity: uint128
@@ -64,6 +66,7 @@ struct TickInfo:
 
 struct Position:
   id: uint256 # NFT ID on v3, 0 on v2
+  lp: address
   liquidity: uint256 # Liquidity amount on v3, amount of LP tokens on v2
   staked: uint256 # liq amount staked on v3, amount of staked LP tokens on v2
   amount0: uint256 # amount of unstaked token0 on both v2 and v3
@@ -131,8 +134,6 @@ struct Lp:
   token0_fees: uint256
   token1_fees: uint256
 
-  positions: DynArray[Position, MAX_POSITIONS]
-
 struct LpEpochReward:
   token: address
   amount: uint256
@@ -170,7 +171,7 @@ interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
   def getFee(_pool_addr: address, _stable: bool) -> uint256: view
-  def getPool(_token0: address, _token1: address, _fee: uint24) -> address: view
+  def getPool(_token0: address, _token1: address, _fee: int24) -> address: view
 
 interface IPool:
   def token0() -> address: view
@@ -238,17 +239,17 @@ interface IReward:
   def earned(_token: address, _venft_id: uint256) -> uint256: view
 
 interface ISlipstreamHelper:
-  def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> PositionPrincipal: view
+  def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> Amounts: view
   def getSqrtRatioAtTick(_tick: int24) -> uint160: view
-  def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> PositionPrincipal: view
-  def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> PositionPrincipal: view
+  def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> Amounts: view
+  def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
 
 # Vars
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
 nfpm: public(INFPositionManager)
-slipstream_helper: public(ISlipstreamHelper)
+cl_helper: public(ISlipstreamHelper)
 
 # Methods
 
@@ -262,7 +263,7 @@ def __init__(_voter: address, _registry: address, _convertor: address, \
   self.registry = IFactoryRegistry(_registry)
   self.nfpm = INFPositionManager(_nfpm)
   self.convertor = _convertor
-  self.slipstream_helper = ISlipstreamHelper(_slipstream_helper)
+  self.cl_helper = ISlipstreamHelper(_slipstream_helper)
 
 @internal
 @view
@@ -450,13 +451,11 @@ def _token(_address: address, _account: address) -> Token:
 
 @external
 @view
-def all(_limit: uint256, _offset: uint256, _account: address) \
-    -> DynArray[Lp, MAX_LPS]:
+def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
   """
   @notice Returns a collection of pool data
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip
-  @param _account The account to check the staked and earned balances
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
@@ -474,19 +473,18 @@ def all(_limit: uint256, _offset: uint256, _account: address) \
 
     # If this is a CL factory...
     if convert(3, address) == pool_data[3]:
-      col.append(self._byDataCL(pool_data, token0, token1, _account))
+      col.append(self._cl_lp(pool_data, token0, token1))
     else:
-      col.append(self._byData(pool_data, token0, token1, _account))
+      col.append(self._v2_lp(pool_data, token0, token1))
 
   return col
 
 @external
 @view
-def byIndex(_index: uint256, _account: address) -> Lp:
+def byIndex(_index: uint256) -> Lp:
   """
   @notice Returns pool data at a specific stored index
   @param _index The index to lookup
-  @param _account The account to check the staked and earned balances
   @return Lp struct
   """
   offset: uint256 = 0
@@ -495,7 +493,6 @@ def byIndex(_index: uint256, _account: address) -> Lp:
     offset = _index - 1
 
   pools: DynArray[address[4], MAX_POOLS] = self._pools(1, offset)
-
   pool_data: address[4] = pools[_index]
   pool: IPool = IPool(pool_data[1])
   token0: address = pool.token0()
@@ -503,18 +500,16 @@ def byIndex(_index: uint256, _account: address) -> Lp:
 
   # If this is a CL factory...
   if convert(3, address) == pool_data[3]:
-    return self._byDataCL(pool_data, token0, token1, _account)
+    return self._cl_lp(pool_data, token0, token1)
 
-  return self._byData(pool_data, token0, token1, _account)
+  return self._v2_lp(pool_data, token0, token1)
 
 @internal
 @view
-def _byData(_data: address[4], _token0: address, _token1: address, \
-    _account: address) -> Lp:
+def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
-  @param _account The user account
   @return Lp struct
   """
   pool: IPool = IPool(_data[1])
@@ -527,7 +522,7 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
   emissions: uint256 = 0
   emissions_token: address = empty(address)
   is_stable: bool = pool.stable()
-  pool_fee: uint256 = IPoolFactory(_data[0]).getFee(_data[1], is_stable)
+  pool_fee: uint256 = IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = pool.poolFees()
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
@@ -542,14 +537,12 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
   reserve1: uint256 = pool.reserve1()
   staked0: uint256 = 0
   staked1: uint256 = 0
-
   type: int24 = -1
+
   if is_stable:
     type = 0
 
   if gauge.address != empty(address):
-    acc_staked = gauge.balanceOf(_account)
-    earned = gauge.earned(_account)
     gauge_liquidity = gauge.totalSupply()
     emissions_token = gauge.rewardToken()
 
@@ -560,40 +553,6 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
       token1_fees = (pool.claimable1(_data[2]) * pool_liquidity) / gauge_liquidity
       staked0 = (reserve0 * gauge_liquidity) / pool_liquidity
       staked1 = (reserve1 * gauge_liquidity) / pool_liquidity
-
-  if _account != empty(address):
-    acc_balance = pool.balanceOf(_account)
-    claimable0 = pool.claimable0(_account)
-    claimable1 = pool.claimable1(_account)
-    claimable_delta0: uint256 = pool.index0() - pool.supplyIndex0(_account)
-    claimable_delta1: uint256 = pool.index1() - pool.supplyIndex1(_account)
-
-    if claimable_delta0 > 0:
-      claimable0 += (acc_balance * claimable_delta0) / 10**convert(decimals, uint256)
-    if claimable_delta1 > 0:
-      claimable1 += (acc_balance * claimable_delta1) / 10**convert(decimals, uint256)
-
-  positions: DynArray[Position, MAX_POSITIONS] = empty(DynArray[Position, MAX_POSITIONS])
-
-  if acc_balance > 0 or acc_staked > 0 or earned > 0 or claimable0 > 0:
-    positions.append(
-      Position({
-        id: 0,
-        liquidity: acc_balance,
-        staked: acc_staked,
-        amount0: (acc_balance * reserve0) / pool_liquidity,
-        amount1: (acc_balance * reserve1) / pool_liquidity,
-        staked0: (acc_staked * reserve0) / pool_liquidity,
-        staked1: (acc_staked * reserve1) / pool_liquidity,
-        unstaked_earned0: claimable0,
-        unstaked_earned1: claimable1,
-        emissions_earned: earned,
-        tick_lower: 0,
-        tick_upper: 0,
-        price_lower: 0,
-        price_upper: 0
-      })
-    )
 
   return Lp({
     lp: _data[1],
@@ -628,14 +587,174 @@ def _byData(_data: address[4], _token0: address, _token1: address, \
     unstaked_fee: 0,
     token0_fees: token0_fees,
     token1_fees: token1_fees,
-
-    positions: positions
   })
+
+@external
+@view
+def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
+  """
+  @notice Returns a collection of positions
+  @param _account The account to fetch positions for
+  @return Array for Lp structs
+  """
+  positions: DynArray[Position, MAX_POSITIONS] = \
+    empty(DynArray[Position, MAX_POSITIONS])
+
+  if _account == empty(address):
+    return positions
+
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  # TODO: Remove
+  factories.append(0x77C839b1381C1792A1D5D5ed06F506B2Ff0f4B51)
+  factories_count: uint256 = len(factories)
+
+  for index in range(0, MAX_FACTORIES):
+    if index >= factories_count:
+      break
+
+    factory: IPoolFactory = IPoolFactory(factories[index])
+
+    if self._is_v2_factory(factory.address):
+      pools_count: uint256 = factory.allPoolsLength()
+
+      for pindex in range(0, MAX_POOLS):
+        if pindex >= pools_count:
+          break
+
+        pool_addr: address = factory.allPools(pindex)
+
+        if pool_addr == self.convertor:
+          continue
+
+        pos: Position = self._v2_position(_account, pool_addr)
+
+        if pos.lp != empty(address):
+          positions.append(pos)
+
+    if self._is_cl_factory(factory.address):
+      positions_count: uint256 = self.nfpm.balanceOf(_account)
+
+      for pindex in range(0, MAX_POSITIONS):
+        if pindex >= positions_count:
+          break
+
+        pos: Position = self._cl_position(pindex, _account, factory.address)
+
+        if pos.lp != empty(address):
+          positions.append(pos)
+
+  return positions
 
 @internal
 @view
-def _byDataCL(_data: address[4], _token0: address, _token1: address, \
-    _account: address) -> Lp:
+def _cl_position(_index: uint256, _account: address, _factory: address) -> Position:
+  """
+  @notice Returns concentrated pool position data
+  @param _index The position index in the NF Position Manager
+  @param _account The account to fetch positions for
+  @param _factory The CL factory address
+  @return A Position struct
+  """
+  pos: Position = empty(Position)
+  pos.id = self.nfpm.tokenOfOwnerByIndex(_account, _index)
+
+  data: PositionData = self.nfpm.positions(pos.id)
+
+  pos.lp = IPoolFactory(_factory).getPool(
+    data.token0,
+    data.token1,
+    convert(data.tickSpacing, int24)
+  )
+
+  if pos.lp == empty(address):
+    return empty(Position)
+
+  staked: bool = False
+  pool: IPool = IPool(pos.lp)
+  gauge: ICLGauge = ICLGauge(self.voter.gauges(pos.lp))
+  slot: Slot = pool.slot0()
+
+  amounts: Amounts = self.cl_helper.principal(
+    self.nfpm.address, pos.id, slot.sqrtPriceX96
+  )
+  pos.amount0 = amounts.amount0
+  pos.amount1 = amounts.amount1
+
+  pos.liquidity = convert(data.liquidity, uint256)
+  pos.tick_lower = data.tickLower
+  pos.tick_upper = data.tickUpper
+
+  pos.price_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
+  pos.price_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
+  pos.price_lower = (pos.price_lower / Q96)**2
+  pos.price_upper = (pos.price_lower / Q96)**2
+
+  pos.unstaked_earned0 = convert(data.tokensOwed0, uint256)
+  pos.unstaked_earned1 = convert(data.tokensOwed1, uint256)
+
+  if gauge.address != empty(address):
+    pos.emissions_earned = gauge.earned(_account, pos.id)
+    staked = gauge.stakedContains(_account, pos.id)
+
+  if staked:
+    pos.staked = pos.liquidity
+    pos.staked0 = pos.amount0
+    pos.staked1 = pos.amount1
+    pos.amount0 = 0
+    pos.amount1 = 0
+    pos.liquidity = 0
+
+  return pos
+
+@internal
+@view
+def _v2_position(_account: address, _pool: address) -> Position:
+  """
+  @notice Returns v2 pool position data
+  @param _account The account to fetch positions for
+  @param _factory The pool address
+  @return A Position struct
+  """
+  pool: IPool = IPool(_pool)
+  gauge: IGauge = IGauge(self.voter.gauges(_pool))
+  decimals: uint8 = pool.decimals()
+
+  pos: Position = empty(Position)
+  pos.lp = pool.address
+  pos.liquidity = pool.balanceOf(_account)
+  pos.unstaked_earned0 = pool.claimable0(_account)
+  pos.unstaked_earned1 = pool.claimable1(_account)
+  claimable_delta0: uint256 = pool.index0() - pool.supplyIndex0(_account)
+  claimable_delta1: uint256 = pool.index1() - pool.supplyIndex1(_account)
+
+  if claimable_delta0 > 0:
+    pos.unstaked_earned0 += \
+      (pos.liquidity * claimable_delta0) / 10**convert(decimals, uint256)
+  if claimable_delta1 > 0:
+    pos.unstaked_earned1 += \
+      (pos.liquidity * claimable_delta1) / 10**convert(decimals, uint256)
+
+  if gauge.address != empty(address):
+    pos.staked = gauge.balanceOf(_account)
+    pos.emissions_earned = gauge.earned(_account)
+
+  if pos.liquidity + pos.staked + pos.emissions_earned + pos.unstaked_earned0 == 0:
+    return empty(Position)
+
+  pool_liquidity: uint256 = pool.totalSupply()
+  reserve0: uint256 = pool.reserve0()
+  reserve1: uint256 = pool.reserve1()
+
+  pos.amount0 = (pos.liquidity * reserve0) / pool_liquidity
+  pos.amount1 = (pos.liquidity * reserve1) / pool_liquidity
+  pos.staked0 = (pos.staked * reserve0) / pool_liquidity
+  pos.staked1 = (pos.staked * reserve1) / pool_liquidity
+
+  return pos
+
+@internal
+@view
+def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   @notice Returns CL pool data based on the factory, pool and gauge addresses
   @param _data The addresses to lookup
@@ -652,7 +771,6 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   emissions_token: address = empty(address)
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
-  positions_count: uint256 = 0
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = pool.tickSpacing()
@@ -662,77 +780,35 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
   token1_fees: uint256 = 0
 
   slot: Slot = pool.slot0()
-  positions: DynArray[Position, MAX_POSITIONS] = \
-    empty(DynArray[Position, MAX_POSITIONS])
-
-  if _account != empty(address):
-    positions_count = self.nfpm.balanceOf(_account)
+  tick_low: int24 = slot.tick - tick_spacing
+  tick_high: int24 = slot.tick + tick_spacing
 
   if gauge.address == empty(address):
-    unstaked_fees: PositionPrincipal = self.slipstream_helper.poolFees(_data[1], pool_liquidity, slot.tick, slot.tick, slot.tick + tick_spacing)
+    unstaked_fees: Amounts = self.cl_helper.poolFees(
+      pool.address, pool_liquidity, slot.tick, tick_low, tick_high
+    )
     token0_fees = unstaked_fees.amount0
     token1_fees = unstaked_fees.amount1
   else:
     fee_voting_reward = gauge.feesVotingReward()
     emissions_token = gauge.rewardToken()
 
-    ratio_a: uint160 = self.slipstream_helper.getSqrtRatioAtTick(slot.tick)
-    ratio_b: uint160 = self.slipstream_helper.getSqrtRatioAtTick(slot.tick + tick_spacing)
-    tick_staked: PositionPrincipal = self.slipstream_helper.getAmountsForLiquidity(slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity)
-    staked0 = tick_staked.amount0
-    staked1 = tick_staked.amount1
+    ratio_a: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_low)
+    ratio_b: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_high)
+    staked_amounts: Amounts = self.cl_helper.getAmountsForLiquidity(
+      slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity
+    )
+    staked0 = staked_amounts.amount0
+    staked1 = staked_amounts.amount1
 
-    staked_fees: PositionPrincipal = self.slipstream_helper.poolFees(_data[1], gauge_liquidity, slot.tick, slot.tick, slot.tick + tick_spacing)
+    staked_fees: Amounts = self.cl_helper.poolFees(
+      pool.address, gauge_liquidity, slot.tick, tick_low, tick_high
+    )
     token0_fees = staked_fees.amount0
     token1_fees = staked_fees.amount1
 
     if gauge_alive:
       emissions = gauge.rewardRate()
-
-  for index in range(0, MAX_POSITIONS):
-    if index >= positions_count:
-      break
-
-    position_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, index)
-    position_data: PositionData = self.nfpm.positions(position_id)
-    position_principal: PositionPrincipal = self.slipstream_helper.principal(self.nfpm.address, position_id, slot.sqrtPriceX96)
-    position_amount0: uint256 = 0
-    position_amount1: uint256 = 0
-    position_staked0: uint256 = 0
-    position_staked1: uint256 = 0
-
-    emissions_earned: uint256 = 0
-    staked: bool = False
-
-    if gauge.address != empty(address):
-      emissions_earned = gauge.earned(_account, position_id)
-      staked = gauge.stakedContains(_account, position_id)
-
-    if staked:
-      position_staked0 = position_principal.amount0
-      position_staked1 = position_principal.amount1
-    else:
-      position_amount0 = position_principal.amount0
-      position_amount1 = position_principal.amount1
-
-    positions.append(
-      Position({
-        id: position_id,
-        liquidity: convert(position_data.liquidity, uint256),
-        staked: convert(staked, uint256),
-        amount0: position_amount0,
-        amount1: position_amount1,
-        staked0: position_staked0,
-        staked1: position_staked1,
-        unstaked_earned0: convert(position_data.tokensOwed0, uint256),
-        unstaked_earned1: convert(position_data.tokensOwed1, uint256),
-        emissions_earned: emissions_earned,
-        tick_lower: position_data.tickLower,
-        tick_upper: position_data.tickUpper,
-        price_lower: self.slipstream_helper.getSqrtRatioAtTick(position_data.tickLower),
-        price_upper: self.slipstream_helper.getSqrtRatioAtTick(position_data.tickUpper),
-      })
-    )
 
   return Lp({
     lp: pool.address,
@@ -766,9 +842,7 @@ def _byDataCL(_data: address[4], _token0: address, _token1: address, \
     pool_fee: convert(pool.fee(), uint256),
     unstaked_fee: convert(pool.unstakedFee(), uint256),
     token0_fees: token0_fees,
-    token1_fees: token1_fees,
-
-    positions: positions
+    token1_fees: token1_fees
   })
 
 @external
