@@ -65,21 +65,21 @@ struct TickInfo:
   initialized: bool
 
 struct Position:
-  id: uint256 # NFT ID on v3, 0 on v2
+  id: uint256 # NFT ID on CL, 0 on v2
   lp: address
-  liquidity: uint256 # Liquidity amount on v3, amount of LP tokens on v2
-  staked: uint256 # liq amount staked on v3, amount of staked LP tokens on v2
-  amount0: uint256 # amount of unstaked token0 on both v2 and v3
-  amount1: uint256 # amount of unstaked token1 on both v2 and v3
-  staked0: uint256 # amount of staked token0 on both v2 and v3
-  staked1: uint256 # amount of staked token1 on both v2 and v3
-  unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and v3
-  unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and v3
-  emissions_earned: uint256 # staked liq emissions earned on both v2 and v3
-  tick_lower: int24 # Position lower tick on v3, 0 on v2
-  tick_upper: int24 # Position upper tick on v3, 0 on v2
-  price_lower: uint160 # Price at lower tick on v3, 0 on v2
-  price_upper: uint160 # Price at upper tick on v3, 0 on v2
+  liquidity: uint256 # Liquidity amount on CL, amount of LP tokens on v2
+  staked: uint256 # liq amount staked on CL, amount of staked LP tokens on v2
+  amount0: uint256 # amount of unstaked token0 on both v2 and CL
+  amount1: uint256 # amount of unstaked token1 on both v2 and CL
+  staked0: uint256 # amount of staked token0 on both v2 and CL
+  staked1: uint256 # amount of staked token1 on both v2 and CL
+  unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and CL
+  unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and CL
+  emissions_earned: uint256 # staked liq emissions earned on both v2 and CL
+  tick_lower: int24 # Position lower tick on CL, 0 on v2
+  tick_upper: int24 # Position upper tick on CL, 0 on v2
+  price_lower: uint160 # Price at lower tick on CL, 0 on v2
+  price_upper: uint160 # Price at upper tick on CL, 0 on v2
 
 struct Price:
   tick_price: int24
@@ -94,7 +94,7 @@ struct Token:
 
 struct SwapLp:
   lp: address
-  type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
+  type: int24 # tick spacing on CL, 0/-1 for stable/volatile on v2
   token0: address
   token1: address
   factory: address
@@ -106,9 +106,9 @@ struct Lp:
   decimals: uint8
   liquidity: uint256
 
-  type: int24 # tick spacing on v3, 0/-1 for stable/volatile on v2
-  tick: int24 # current tick on v3, 0 on v2
-  price: uint160 # current price on v3, 0 on v2
+  type: int24 # tick spacing on CL, 0/-1 for stable/volatile on v2
+  tick: int24 # current tick on CL, 0 on v2
+  price: uint160 # current price on CL, 0 on v2
 
   token0: address
   reserve0: uint256
@@ -129,8 +129,8 @@ struct Lp:
   emissions: uint256
   emissions_token: address
 
-  pool_fee: uint256 # staked fee % on v3, fee % on v2
-  unstaked_fee: uint256 # unstaked fee % on v3, 0 on v2
+  pool_fee: uint256 # staked fee % on CL, fee % on v2
+  unstaked_fee: uint256 # unstaked fee % on CL, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
 
@@ -190,15 +190,15 @@ interface IPool:
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
   def poolFees() -> address: view
-  def gauge() -> address: view # fetches gauge from v3 pool
-  def tickSpacing() -> int24: view # v3 tick spacing
-  def slot0() -> Slot: view # v3 slot data
-  def gaugeFees() -> GaugeFees: view # v3 gauge fees amounts
-  def fee() -> uint24: view # v3 fee level
-  def unstakedFee() -> uint24: view # v3 unstaked fee level
-  def ticks(_tick: int24) -> TickInfo: view # v3 tick data
-  def liquidity() -> uint128: view # v3 active liquidity
-  def stakedLiquidity() -> uint128: view # v3 active staked liquidity
+  def gauge() -> address: view # fetches gauge from CL pool
+  def tickSpacing() -> int24: view # CL tick spacing
+  def slot0() -> Slot: view # CL slot data
+  def gaugeFees() -> GaugeFees: view # CL gauge fees amounts
+  def fee() -> uint24: view # CL fee level
+  def unstakedFee() -> uint24: view # CL unstaked fee level
+  def ticks(_tick: int24) -> TickInfo: view # CL tick data
+  def liquidity() -> uint128: view # CL active liquidity
+  def stakedLiquidity() -> uint128: view # CL active staked liquidity
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -1192,7 +1192,7 @@ def prices(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
 @view
 def _price(_pool: address) -> DynArray[Price, MAX_PRICES]:
   """
-  @notice Returns price data at surrounding ticks for a v3 pool
+  @notice Returns price data at surrounding ticks for a CL pool
   @param _pool The pool to check price data of
   @return Array of Price structs
   """
