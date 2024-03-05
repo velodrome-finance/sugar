@@ -57,7 +57,7 @@ The returned data/struct of type `Lp` values represent:
  * `gauge` - pool gauge address
  * `gauge_liquidity` - pool staked tokens (less/eq than/to pool total supply)
  * `gauge_alive` - indicates if the gauge is still active
- * `fee` - pool gauge fees contract address
+ * `fee` - pool gauge fees contract address, CL pools use hundredths of a bip (i.e. 1e-6)
  * `bribe` - pool gauge bribes contract address
  * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
