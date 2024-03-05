@@ -13,7 +13,7 @@ MAX_TOKENS: constant(uint256) = 2000
 MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
-MAX_POSITIONS: constant(uint256) = 500
+MAX_POSITIONS: constant(uint256) = 50
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 # Slot0 from CLPool.sol
@@ -581,10 +581,13 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
 @external
 @view
-def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
+def positions(_limit: uint256, _offset: uint256, _account: address)\
+    -> DynArray[Position, MAX_POSITIONS]:
   """
   @notice Returns a collection of positions
   @param _account The account to fetch positions for
+  @param _limit The max amount of pools to process
+  @param _offset The amount of pools to skip (for optimization)
   @return Array for Lp structs
   """
   positions: DynArray[Position, MAX_POSITIONS] = \
@@ -592,6 +595,9 @@ def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
 
   if _account == empty(address):
     return positions
+
+  to_skip: uint256 = _offset
+  pools_done: uint256 = 0
 
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
@@ -606,8 +612,15 @@ def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
       pools_count: uint256 = factory.allPoolsLength()
 
       for pindex in range(0, MAX_POOLS):
-        if pindex >= pools_count:
+        if pindex >= pools_count or pools_done >= _limit:
           break
+
+        # Basically skip calls for offset records...
+        if to_skip > 0:
+          to_skip -= 1
+          continue
+        else:
+          pools_done += 1
 
         pool_addr: address = factory.allPools(pindex)
 
@@ -620,11 +633,19 @@ def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
           positions.append(pos)
 
     if self._is_cl_factory(factory.address):
+      # Assume there's no second CL factory :|
       positions_count: uint256 = self.nfpm.balanceOf(_account)
 
       for pindex in range(0, MAX_POSITIONS):
-        if pindex >= positions_count:
+        if pindex >= positions_count or pools_done >= _limit:
           break
+
+        # Basically skip calls for offset records...
+        if to_skip > 0:
+          to_skip -= 1
+          continue
+        else:
+          pools_done += 1
 
         pos: Position = self._cl_position(pindex, _account, factory.address)
 
@@ -679,8 +700,10 @@ def _cl_position(_index: uint256, _account: address, _factory: address) -> Posit
   pos.unstaked_earned1 = convert(data.tokensOwed1, uint256)
 
   if gauge.address != empty(address):
-    pos.emissions_earned = gauge.earned(_account, pos.id)
     staked = gauge.stakedContains(_account, pos.id)
+
+  if staked:
+    pos.emissions_earned = gauge.earned(_account, pos.id)
 
   if staked:
     pos.staked = pos.liquidity
