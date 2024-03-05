@@ -78,12 +78,12 @@ struct Position:
   emissions_earned: uint256 # staked liq emissions earned on both v2 and CL
   tick_lower: int24 # Position lower tick on CL, 0 on v2
   tick_upper: int24 # Position upper tick on CL, 0 on v2
-  price_lower: uint160 # Price at lower tick on CL, 0 on v2
-  price_upper: uint160 # Price at upper tick on CL, 0 on v2
 
 struct Price:
   tick_price: int24
   liquidity_gross: uint128
+  sqrt_ratio_lower: uint160 # sqrtRatio at lower tick on CL, 0 on v2
+  sqrt_ratio_upper: uint160 # sqrtRatio at upper tick on CL, 0 on v2
 
 struct Token:
   token_address: address
@@ -108,7 +108,7 @@ struct Lp:
 
   type: int24 # tick spacing on CL, 0/-1 for stable/volatile on v2
   tick: int24 # current tick on CL, 0 on v2
-  price: uint160 # current price on CL, 0 on v2
+  sqrt_ratio: uint160 # current sqrtRatio on CL, 0 on v2
 
   token0: address
   reserve0: uint256
@@ -562,7 +562,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     type: type,
     tick: 0,
-    price: 0,
+    sqrt_ratio: 0,
 
     token0: token0.address,
     reserve0: reserve0,
@@ -684,10 +684,8 @@ def _cl_position(_index: uint256, _account: address, _factory: address) -> Posit
   pos.tick_lower = data.tickLower
   pos.tick_upper = data.tickUpper
 
-  pos.price_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
-  pos.price_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
-  pos.price_lower = (pos.price_lower / Q96)**2
-  pos.price_upper = (pos.price_lower / Q96)**2
+  pos.sqrt_ratio_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
+  pos.sqrt_ratio_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
 
   pos.unstaked_earned0 = convert(data.tokensOwed0, uint256)
   pos.unstaked_earned1 = convert(data.tokensOwed1, uint256)
@@ -818,7 +816,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     type: tick_spacing,
     tick: slot.tick,
-    price: slot.sqrtPriceX96,
+    sqrt_ratio: slot.sqrtPriceX96,
 
     token0: token0.address,
     reserve0: token0.balanceOf(pool.address),

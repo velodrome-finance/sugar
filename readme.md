@@ -47,7 +47,7 @@ The returned data/struct of type `Lp` values represent:
  * `liquidity` - pool tokens supply
  * `type` - tick spacing on CL pools, 0/-1 for stable/volatile on v2 pools
  * `tick` - current tick on CL pools, 0 on v2 pools
- * `price` - pool price on CL pools, 0 on v2 pools
+ * `sqrt_ratio` - pool sqrt ratio X96 on CL pools, 0 on v2 pools
  * `token0` - pool 1st token address
  * `reserve0` - pool 1st token reserves (nr. of tokens in the contract)
  * `staked0` - pool 1st token staked amount
@@ -93,8 +93,8 @@ The returned data is a struct of type `Position` with the following values:
   * `emissions_earned` - emissions earned from staked position
   * `tick_lower` - lower tick of position on CL, 0 on v2
   * `tick_upper` - upper tick of position on CL, 0 on v2
-  * `price_lower` - price value at lower tick on CL, 0 on v2
-  * `price_upper` - price value at upper tick on CL, 0 on v2
+  * `sqrt_ratio_lower` - sqrt ratio X96 at lower tick on CL, 0 on v2
+  * `sqrt_ratio_upper` - sqrt ratio X96 at upper tick on CL, 0 on v2
 
 ---
 
