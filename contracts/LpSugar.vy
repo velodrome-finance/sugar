@@ -14,9 +14,7 @@ MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 16
 MAX_POSITIONS: constant(uint256) = 500
-MAX_PRICES: constant(uint256) = 20
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
-Q96: constant(uint160) = 2**96
 
 # Slot0 from CLPool.sol
 struct Slot:
@@ -78,10 +76,6 @@ struct Position:
   emissions_earned: uint256 # staked liq emissions earned on both v2 and CL
   tick_lower: int24 # Position lower tick on CL, 0 on v2
   tick_upper: int24 # Position upper tick on CL, 0 on v2
-
-struct Price:
-  tick_price: int24
-  liquidity_gross: uint128
   sqrt_ratio_lower: uint160 # sqrtRatio at lower tick on CL, 0 on v2
   sqrt_ratio_upper: uint160 # sqrtRatio at upper tick on CL, 0 on v2
 
@@ -276,8 +270,6 @@ def _pools(_limit: uint256, _offset: uint256)\
   @return Array of four addresses (factory, pool, gauge, type value: 0/2/3)
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
-  # TODO: Remove
-  factories.append(0x77C839b1381C1792A1D5D5ed06F506B2Ff0f4B51)
   factories_count: uint256 = len(factories)
 
   placeholder: address[4] = empty(address[4])
@@ -334,8 +326,6 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @return `SwapLp` structs
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
-  # TODO: Remove
-  factories.append(0x77C839b1381C1792A1D5D5ed06F506B2Ff0f4B51)
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
@@ -604,8 +594,6 @@ def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
     return positions
 
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
-  # TODO: Remove
-  factories.append(0x77C839b1381C1792A1D5D5ed06F506B2Ff0f4B51)
   factories_count: uint256 = len(factories)
 
   for index in range(0, MAX_FACTORIES):
@@ -1171,42 +1159,3 @@ def _is_cl_factory(_factory: address) -> bool:
   )[1]
 
   return len(response) > 0
-
-@external
-@view
-def prices(_pool: address, _factory: address) -> DynArray[Price, MAX_PRICES]:
-  """
-  @notice Returns price data at surrounding ticks for a pool
-  @param _pool The pool to check price data of
-  @param _factory The factory of the pool
-  @return Array of Price structs
-  """
-  if self._is_cl_factory(_factory):
-    return self._price(_pool)
-
-  return empty(DynArray[Price, MAX_PRICES])
-
-@internal
-@view
-def _price(_pool: address) -> DynArray[Price, MAX_PRICES]:
-  """
-  @notice Returns price data at surrounding ticks for a CL pool
-  @param _pool The pool to check price data of
-  @return Array of Price structs
-  """
-  prices: DynArray[Price, MAX_PRICES] = empty(DynArray[Price, MAX_PRICES])
-  pool: IPool = IPool(_pool)
-  tick_spacing: int24 = pool.tickSpacing()
-  slot: Slot = pool.slot0()
-
-  # fetch liquidity from the ticks surrounding the current tick
-  for index in range((-1 * MAX_PRICES / 2), (MAX_PRICES / 2)):
-    tick: int24 = slot.tick + (index * tick_spacing)
-    tick_info: TickInfo = pool.ticks(tick)
-
-    prices.append(Price({
-      tick_price: tick,
-      liquidity_gross: tick_info.liquidityGross
-    }))
-
-  return prices
