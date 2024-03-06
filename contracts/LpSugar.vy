@@ -647,9 +647,15 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
           continue
         else:
           pools_done += 1
-          
+
         pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
-        pos: Position = self._cl_position(pos_id, _account, factory.address)
+        pos: Position = self._cl_position(
+          pos_id,
+          _account,
+          empty(address),
+          empty(address),
+          factory.address
+        )
 
         if pos.lp != empty(address):
           positions.append(pos)
@@ -660,7 +666,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
       for pindex in range(0, MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit:
           break
-          
+
         # Basically skip calls for offset records...
         if to_skip > 0:
           to_skip -= 1
@@ -671,48 +677,66 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
         pool_addr: address = factory.allPools(pindex)
         gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
 
-        if gauge.address != empty(address):
-          staked_position_ids: DynArray[uint256, MAX_POSITIONS] = gauge.stakedValues(_account)
+        if gauge.address == empty(address):
+          continue
 
-          for sindex in range(0, MAX_POSITIONS):
-            if sindex >= len(staked_position_ids):
-              break
-            
-            pos: Position = self._cl_position(staked_position_ids[sindex], _account, factory.address)
+        staked_position_ids: DynArray[uint256, MAX_POSITIONS] = gauge.stakedValues(_account)
 
-            positions.append(pos)
+        for sindex in range(0, MAX_POSITIONS):
+          if sindex >= len(staked_position_ids):
+            break
 
+          pos: Position = self._cl_position(
+            staked_position_ids[sindex],
+            _account,
+            pool_addr,
+            gauge.address,
+            factory.address
+          )
+
+          positions.append(pos)
 
   return positions
 
 @internal
 @view
-def _cl_position(_id: uint256, _account: address, _factory: address) -> Position:
+def _cl_position(_id: uint256, _account: address,\
+    _pool:address, _gauge:address, _factory: address) -> Position:
   """
   @notice Returns concentrated pool position data
   @param _id The token ID of the position
   @param _account The account to fetch positions for
+  @param _pool The pool address
+  @param _gauge The pool gauge address
   @param _factory The CL factory address
   @return A Position struct
   """
   pos: Position = empty(Position)
   pos.id = _id
+  pos.lp = _pool
 
   data: PositionData = self.nfpm.positions(pos.id)
 
-  pos.lp = IPoolFactory(_factory).getPool(
-    data.token0,
-    data.token1,
-    convert(data.tickSpacing, int24)
-  )
+  # Try to find the pool if we're fetching an unstaked position
+  if pos.lp == empty(address):
+    pos.lp = IPoolFactory(_factory).getPool(
+      data.token0,
+      data.token1,
+      convert(data.tickSpacing, int24)
+    )
 
   if pos.lp == empty(address):
     return empty(Position)
 
-  staked: bool = False
   pool: IPool = IPool(pos.lp)
-  gauge: ICLGauge = ICLGauge(self.voter.gauges(pos.lp))
+  gauge: ICLGauge = ICLGauge(_gauge)
   slot: Slot = pool.slot0()
+  # If the _gauge is present, it's because we're fetching a staked position
+  staked: bool = _gauge != empty(address)
+
+  # Try to find the gauge if we're fetching an unstaked position
+  if _gauge == empty(address):
+    gauge = ICLGauge(self.voter.gauges(pos.lp))
 
   amounts: Amounts = self.cl_helper.principal(
     self.nfpm.address, pos.id, slot.sqrtPriceX96
@@ -730,12 +754,13 @@ def _cl_position(_id: uint256, _account: address, _factory: address) -> Position
   pos.unstaked_earned0 = convert(data.tokensOwed0, uint256)
   pos.unstaked_earned1 = convert(data.tokensOwed1, uint256)
 
-  if gauge.address != empty(address):
+  if staked == False and gauge.address != empty(address):
     staked = gauge.stakedContains(_account, pos.id)
 
   if staked:
     pos.emissions_earned = gauge.earned(_account, pos.id)
 
+  # Reverse the liquidity since a staked position uses full available liquidity
   if staked:
     pos.staked = pos.liquidity
     pos.staked0 = pos.amount0
