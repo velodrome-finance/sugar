@@ -218,6 +218,7 @@ interface ICLGauge:
   def rewardToken() -> address: view
   def feesVotingReward() -> address: view
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
+  def stakedValues(_account: address) -> DynArray[uint256, MAX_POSITIONS]: view
 
 interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
@@ -620,31 +621,56 @@ def positions(_account: address) -> DynArray[Position, MAX_POSITIONS]:
           positions.append(pos)
 
     if self._is_cl_factory(factory.address):
+      # fetch unstaked CL positions
       positions_count: uint256 = self.nfpm.balanceOf(_account)
 
       for pindex in range(0, MAX_POSITIONS):
         if pindex >= positions_count:
           break
 
-        pos: Position = self._cl_position(pindex, _account, factory.address)
+        pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
+
+        pos: Position = self._cl_position(pos_id, _account, factory.address)
 
         if pos.lp != empty(address):
           positions.append(pos)
+
+      # fetch staked CL positions
+      pools_count: uint256 = factory.allPoolsLength()
+
+      for pindex in range(0, MAX_POOLS):
+        if pindex >= pools_count:
+          break
+
+        pool_addr: address = factory.allPools(pindex)
+        gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
+
+        if gauge.address != empty(address):
+          staked_position_ids: DynArray[uint256, MAX_POSITIONS] = gauge.stakedValues(_account)
+
+          for sindex in range(0, MAX_POSITIONS):
+            if sindex >= len(staked_position_ids):
+              break
+            
+            pos: Position = self._cl_position(staked_position_ids[sindex], _account, factory.address)
+
+            positions.append(pos)
+
 
   return positions
 
 @internal
 @view
-def _cl_position(_index: uint256, _account: address, _factory: address) -> Position:
+def _cl_position(_id: uint256, _account: address, _factory: address) -> Position:
   """
   @notice Returns concentrated pool position data
-  @param _index The position index in the NF Position Manager
+  @param _id The token ID of the position
   @param _account The account to fetch positions for
   @param _factory The CL factory address
   @return A Position struct
   """
   pos: Position = empty(Position)
-  pos.id = self.nfpm.tokenOfOwnerByIndex(_account, _index)
+  pos.id = _id
 
   data: PositionData = self.nfpm.positions(pos.id)
 
