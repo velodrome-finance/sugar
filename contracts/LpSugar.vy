@@ -878,7 +878,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   return Lp({
     lp: pool.address,
     symbol: "",
-    decimals: 0,
+    decimals: 18,
     liquidity: convert(pool_liquidity, uint256),
 
     type: tick_spacing,
