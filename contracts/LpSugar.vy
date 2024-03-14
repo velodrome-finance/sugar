@@ -491,13 +491,9 @@ def byIndex(_index: uint256) -> Lp:
   @param _index The index to lookup
   @return Lp struct
   """
-  offset: uint256 = 0
-
-  if (_index > 0):
-    offset = _index - 1
-
-  pools: DynArray[address[4], MAX_POOLS] = self._pools(1, offset)
-  pool_data: address[4] = pools[_index]
+  # Basically index is the limit and the offset is always one...
+  # This will fire if _index is out of bounds
+  pool_data: address[4] = self._pools(1, _index)[_index]
   pool: IPool = IPool(pool_data[1])
   token0: address = pool.token0()
   token1: address = pool.token1()
