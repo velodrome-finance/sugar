@@ -322,7 +322,7 @@ def _pools(_limit: uint256, _offset: uint256)\
 def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
   @notice Returns a compiled list of pools for swaps from pool factories (sans v1)
-  @param _limit The max amount of tokens to return
+  @param _limit The max amount of pools to process
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
@@ -330,6 +330,8 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
+  to_skip: uint256 = _offset
+  left: uint256 = _limit
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -344,9 +346,20 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
     pools_count: uint256 = factory.allPoolsLength()
 
-    for pindex in range(_offset, _offset + MAX_POOLS):
-      if len(pools) >= _limit or pindex >= pools_count:
+    for pindex in range(0, MAX_POOLS):
+      if pindex >= pools_count:
         break
+
+      # If no pools to process are left...
+      if left == 0:
+        break
+
+      # Basically skip calls for offset records...
+      if to_skip > 0:
+        to_skip -= 1
+        continue
+      else:
+        left -= 1
 
       pool_addr: address = factory.allPools(pindex)
       pool: IPool = IPool(pool_addr)
