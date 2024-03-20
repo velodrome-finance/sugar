@@ -300,6 +300,10 @@ def _pools(_limit: uint256, _offset: uint256)\
       if pindex >= pools_count or len(pools) >= _limit + _offset:
         break
 
+      # Since the convertor pool, first pool on one of the factories...
+      if pindex == 0 and factory.allPools(0) == self.convertor:
+        continue
+
       # Basically skip calls for offset records...
       if to_skip > 0:
         to_skip -= 1
@@ -307,10 +311,6 @@ def _pools(_limit: uint256, _offset: uint256)\
         continue
 
       pool_addr: address = factory.allPools(pindex)
-
-      if pool_addr == self.convertor:
-        continue
-
       gauge_addr: address = self.voter.gauges(pool_addr)
 
       pools.append([factory.address, pool_addr, gauge_addr, factory_type])
