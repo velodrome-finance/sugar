@@ -838,7 +838,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
 
-  gauge_fees: GaugeFees = pool.gaugeFees()
   gauge_alive: bool = self.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
@@ -857,7 +856,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_low: int24 = slot.tick - tick_spacing
   tick_high: int24 = slot.tick + tick_spacing
 
-  if gauge.address == empty(address):
+  if gauge.address == empty(address) or gauge_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
       pool.address, pool_liquidity, slot.tick, tick_low, tick_high
     )
@@ -875,11 +874,14 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     staked0 = staked_amounts.amount0
     staked1 = staked_amounts.amount1
 
-    staked_fees: Amounts = self.cl_helper.poolFees(
-      pool.address, gauge_liquidity, slot.tick, tick_low, tick_high
+    # Estimate based on the ratio of staked liquidity...
+    gauge_fees: GaugeFees = pool.gaugeFees()
+    token0_fees = convert(
+      (gauge_fees.token0 * pool_liquidity) / gauge_liquidity, uint256
     )
-    token0_fees = staked_fees.amount0
-    token1_fees = staked_fees.amount1
+    token1_fees = convert(
+      (gauge_fees.token1 * pool_liquidity) / gauge_liquidity, uint256
+    )
 
     if gauge_alive:
       emissions = gauge.rewardRate()
