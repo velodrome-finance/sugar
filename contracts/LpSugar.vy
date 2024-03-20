@@ -49,19 +49,6 @@ struct PositionData:
   tokensOwed0: uint128
   tokensOwed1: uint128
 
-# Tick.Info from CLPool.sol
-struct TickInfo:
-  liquidityGross: uint128
-  liquidityNet: int128
-  stakedLiquidityNet: int128
-  feeGrowthOutside0: uint256
-  feeGrowthOutside1: uint256
-  rewardGrowthOutside: uint256
-  tickCumulativeOutside: int56
-  secondsPerLiquidityOutside: uint160
-  secondsOutside: uint32
-  initialized: bool
-
 struct Position:
   id: uint256 # NFT ID on CL, 0 on v2
   lp: address
@@ -190,7 +177,6 @@ interface IPool:
   def gaugeFees() -> GaugeFees: view # CL gauge fees amounts
   def fee() -> uint24: view # CL fee level
   def unstakedFee() -> uint24: view # CL unstaked fee level
-  def ticks(_tick: int24) -> TickInfo: view # CL tick data
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
 
