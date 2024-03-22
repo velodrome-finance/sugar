@@ -57,21 +57,20 @@ def LpEpochBribeStruct(sugar_contract):
 def test_initial_state(sugar_contract):
     assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
     assert sugar_contract.registry() == os.getenv('REGISTRY_ADDRESS')
-    assert sugar_contract.router() is not None
 
 
 def test_byIndex(sugar_contract, LpStruct):
-    lp = LpStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
+    lp = LpStruct(*sugar_contract.byIndex(0))
 
     assert lp is not None
-    assert len(lp) == 28
+    assert len(lp) == 25
     assert lp.lp is not None
     assert lp.gauge != ADDRESS_ZERO
 
 
 def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
-    first_lp = LpStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
-    second_lp = LpStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    first_lp = LpStruct(*sugar_contract.byIndex(0))
+    second_lp = LpStruct(*sugar_contract.byIndex(1))
     swap_lps = list(map(
         lambda _p: SwapLpStruct(*_p),
         sugar_contract.forSwaps(10, 0)
@@ -88,8 +87,8 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
 
 
 def test_tokens(sugar_contract, TokenStruct, LpStruct):
-    first_lp = LpStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
-    second_lp = LpStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    first_lp = LpStruct(*sugar_contract.byIndex(0))
+    second_lp = LpStruct(*sugar_contract.byIndex(1))
     tokens = list(map(
         lambda _p: TokenStruct(*_p),
         sugar_contract.tokens(10, 0, ADDRESS_ZERO, [])
@@ -109,11 +108,11 @@ def test_tokens(sugar_contract, TokenStruct, LpStruct):
 
 
 def test_all(sugar_contract, LpStruct):
-    first_lp = LpStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
-    second_lp = LpStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    first_lp = LpStruct(*sugar_contract.byIndex(0))
+    second_lp = LpStruct(*sugar_contract.byIndex(1))
     lps = list(map(
         lambda _p: LpStruct(*_p),
-        sugar_contract.all(10, 0, ADDRESS_ZERO)
+        sugar_contract.all(10, 0)
     ))
 
     assert lps is not None
@@ -129,10 +128,10 @@ def test_all(sugar_contract, LpStruct):
 
 
 def test_all_limit_offset(sugar_contract, LpStruct):
-    second_lp = LpStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    second_lp = LpStruct(*sugar_contract.byIndex(1))
     lps = list(map(
         lambda _p: LpStruct(*_p),
-        sugar_contract.all(1, 1, ADDRESS_ZERO)
+        sugar_contract.all(1, 1)
     ))
 
     assert lps is not None
@@ -150,7 +149,7 @@ def test_epochsByAddress_limit_offset(
         LpEpochStruct,
         LpEpochBribeStruct
         ):
-    first_lp = LpStruct(*sugar_contract.byIndex(0, ADDRESS_ZERO))
+    first_lp = LpStruct(*sugar_contract.byIndex(0))
     lp_epochs = list(map(
         lambda _p: LpEpochStruct(*_p),
         sugar_contract.epochsByAddress(20, 3, first_lp.lp)
@@ -185,7 +184,7 @@ def test_epochsLatest_limit_offset(
         LpStruct,
         LpEpochStruct
         ):
-    second_lp = LpStruct(*sugar_contract.byIndex(1, ADDRESS_ZERO))
+    second_lp = LpStruct(*sugar_contract.byIndex(1))
     lp_epoch = list(map(
         lambda _p: LpEpochStruct(*_p),
         sugar_contract.epochsByAddress(1, 0, second_lp.lp)
