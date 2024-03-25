@@ -196,7 +196,7 @@ interface IGauge:
   def rewardRate() -> uint256: view
   def rewardRateByEpoch(_ts: uint256) -> uint256: view
   def rewardToken() -> address: view
-  def lastTimeRewardApplicable() -> uint256: view
+  def periodFinish() -> uint256: view
 
 interface ICLGauge:
   def earned(_account: address, _position_id: uint256) -> uint256: view
@@ -206,7 +206,7 @@ interface ICLGauge:
   def feesVotingReward() -> address: view
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
   def stakedValues(_account: address) -> DynArray[uint256, MAX_POSITIONS]: view
-  def lastTimeRewardApplicable() -> uint256: view
+  def periodFinish() -> uint256: view
 
 interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
@@ -534,7 +534,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_liquidity = gauge.totalSupply()
     emissions_token = gauge.rewardToken()
 
-  if gauge_alive and gauge.lastTimeRewardApplicable() > block.timestamp:
+  if gauge_alive and gauge.periodFinish() > block.timestamp:
     emissions = gauge.rewardRate()
     if gauge_liquidity > 0:
       token0_fees = (pool.claimable0(_data[2]) * pool_liquidity) / gauge_liquidity
@@ -864,14 +864,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     # Estimate based on the ratio of staked liquidity...
     gauge_fees: GaugeFees = pool.gaugeFees()
-    token0_fees = convert(
-      (gauge_fees.token0 * pool_liquidity) / gauge_liquidity, uint256
-    )
-    token1_fees = convert(
-      (gauge_fees.token1 * pool_liquidity) / gauge_liquidity, uint256
-    )
+    # Convert to uint256 first to prevent overflows
+    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
+    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
 
-    if gauge_alive and gauge.lastTimeRewardApplicable() > block.timestamp:
+    if gauge_alive and gauge.periodFinish() > block.timestamp:
       emissions = gauge.rewardRate()
 
   return Lp({
