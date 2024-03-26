@@ -200,6 +200,7 @@ interface IGauge:
 
 interface ICLGauge:
   def earned(_account: address, _position_id: uint256) -> uint256: view
+  def rewards(_position_id: uint256) -> uint256: view
   def rewardRate() -> uint256: view
   def rewardRateByEpoch(_ts: uint256) -> uint256: view
   def rewardToken() -> address: view
@@ -755,7 +756,7 @@ def _cl_position(_id: uint256, _account: address,\
     staked = gauge.stakedContains(_account, pos.id)
 
   if staked:
-    pos.emissions_earned = gauge.earned(_account, pos.id)
+    pos.emissions_earned = gauge.earned(_account, pos.id) + gauge.rewards(pos.id)
 
   # Reverse the liquidity since a staked position uses full available liquidity
   if staked:
