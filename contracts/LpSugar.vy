@@ -129,7 +129,7 @@ struct Lp:
   staked1: uint256
 
   gauge: address
-  gauge_liquidity: uint256
+  active_liquidity: uint256
   gauge_alive: bool
 
   fee: address
@@ -537,7 +537,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   earned: uint256 = 0
   acc_staked: uint256 = 0
   pool_liquidity: uint256 = pool.totalSupply()
-  gauge_liquidity: uint256 = 0
+  active_liquidity: uint256 = 0
   emissions: uint256 = 0
   emissions_token: address = empty(address)
   is_stable: bool = pool.stable()
@@ -562,16 +562,16 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     type = 0
 
   if gauge.address != empty(address):
-    gauge_liquidity = gauge.totalSupply()
+    active_liquidity = gauge.totalSupply()
     emissions_token = gauge.rewardToken()
 
   if gauge_alive and gauge.periodFinish() > block.timestamp:
     emissions = gauge.rewardRate()
-    if gauge_liquidity > 0:
-      token0_fees = (pool.claimable0(_data[2]) * pool_liquidity) / gauge_liquidity
-      token1_fees = (pool.claimable1(_data[2]) * pool_liquidity) / gauge_liquidity
-      staked0 = (reserve0 * gauge_liquidity) / pool_liquidity
-      staked1 = (reserve1 * gauge_liquidity) / pool_liquidity
+    if active_liquidity > 0:
+      token0_fees = (pool.claimable0(_data[2]) * pool_liquidity) / active_liquidity 
+      token1_fees = (pool.claimable1(_data[2]) * pool_liquidity) / active_liquidity 
+      staked0 = (reserve0 * active_liquidity) / pool_liquidity
+      staked1 = (reserve1 * active_liquidity) / pool_liquidity
 
   return Lp({
     lp: _data[1],
@@ -592,7 +592,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     staked1: staked1,
 
     gauge: gauge.address,
-    gauge_liquidity: gauge_liquidity,
+    active_liquidity: active_liquidity,
     gauge_alive: gauge_alive,
 
     fee: self.voter.gaugeToFees(gauge.address),
@@ -867,7 +867,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   staked1: uint256 = 0
   tick_spacing: int24 = pool.tickSpacing()
   pool_liquidity: uint128 = pool.liquidity()
-  gauge_liquidity: uint128 = convert(pool.ticks(pool.slot0().tick).stakedLiquidityNet, uint128)
+  active_liquidity: uint128 = convert(pool.ticks(pool.slot0().tick).stakedLiquidityNet, uint128)
   token0_fees: uint256 = 0
   token1_fees: uint256 = 0
 
@@ -875,7 +875,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_low: int24 = slot.tick - tick_spacing
   tick_high: int24 = slot.tick + tick_spacing
 
-  if gauge.address == empty(address) or gauge_liquidity == 0:
+  if gauge.address == empty(address) or active_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
       pool.address, pool_liquidity, slot.tick, tick_low, tick_high
     )
@@ -888,7 +888,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     ratio_a: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_low)
     ratio_b: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_high)
     staked_amounts: Amounts = self.cl_helper.getAmountsForLiquidity(
-      slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity
+      slot.sqrtPriceX96, ratio_a, ratio_b, active_liquidity 
     )
     staked0 = staked_amounts.amount0
     staked1 = staked_amounts.amount1
@@ -896,8 +896,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     # Estimate based on the ratio of staked liquidity...
     gauge_fees: GaugeFees = pool.gaugeFees()
     # Convert to uint256 first to prevent overflows
-    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
-    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
+    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / convert(active_liquidity, uint256)
+    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / convert(active_liquidity, uint256)
 
     if gauge_alive and gauge.periodFinish() > block.timestamp:
       emissions = gauge.rewardRate()
@@ -921,7 +921,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     staked1: staked1,
 
     gauge: gauge.address,
-    gauge_liquidity: convert(gauge_liquidity, uint256),
+    active_liquidity: convert(active_liquidity, uint256),
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
