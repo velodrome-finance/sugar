@@ -867,13 +867,15 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   staked1: uint256 = 0
   tick_spacing: int24 = pool.tickSpacing()
   pool_liquidity: uint128 = pool.liquidity()
-  active_liquidity: uint128 = convert(pool.ticks(pool.slot0().tick).stakedLiquidityNet, uint128)
   token0_fees: uint256 = 0
   token1_fees: uint256 = 0
 
   slot: Slot = pool.slot0()
   tick_low: int24 = slot.tick - tick_spacing
   tick_high: int24 = slot.tick + tick_spacing
+
+  tickInfo: TickInfo = pool.ticks(slot.tick)
+  active_liquidity: uint128 = convert(tickInfo.stakedLiquidityNet, uint128)
 
   if gauge.address == empty(address) or active_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
