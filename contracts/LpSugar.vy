@@ -12,7 +12,7 @@ MAX_POOLS: constant(uint256) = 2000
 MAX_TOKENS: constant(uint256) = 2000
 MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
-MAX_REWARDS: constant(uint256) = 16
+MAX_REWARDS: constant(uint256) = 50
 MAX_POSITIONS: constant(uint256) = 50
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
@@ -1085,7 +1085,6 @@ def _epochRewards(_ts: uint256, _reward: address) \
   reward: IReward = IReward(_reward)
   rewards_len: uint256 = reward.rewardsListLength()
 
-  # Bribes have a 16 max rewards limit anyway...
   for rindex in range(MAX_REWARDS):
     if rindex >= rewards_len:
       break
@@ -1209,7 +1208,6 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
 
   bribes_len: uint256 = bribe.rewardsListLength()
 
-  # Bribes have a 16 max rewards limit anyway...
   for bindex in range(MAX_REWARDS):
     if bindex >= bribes_len:
       break
