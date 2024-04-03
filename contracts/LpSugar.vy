@@ -896,11 +896,12 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     staked0 = staked_amounts.amount0
     staked1 = staked_amounts.amount1
 
+    gauge_liquidity: uint256 = convert(pool.stakedLiquidity(), uint256)
     # Estimate based on the ratio of staked liquidity...
     gauge_fees: GaugeFees = pool.gaugeFees()
     # Convert to uint256 first to prevent overflows
-    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / convert(active_liquidity, uint256)
-    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / convert(active_liquidity, uint256)
+    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / gauge_liquidity 
+    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / gauge_liquidity 
 
     if gauge_alive and gauge.periodFinish() > block.timestamp:
       emissions = gauge.rewardRate()
