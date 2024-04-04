@@ -877,6 +877,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tickInfo: TickInfo = pool.ticks(slot.tick)
 
   active_liquidity: uint128 = convert(abs(convert(tickInfo.stakedLiquidityNet, int256)), uint128)
+  gauge_liquidity: uint128 = pool.stakedLiquidity()
 
   if gauge.address == empty(address) or active_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
@@ -891,17 +892,16 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     ratio_a: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_low)
     ratio_b: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_high)
     staked_amounts: Amounts = self.cl_helper.getAmountsForLiquidity(
-      slot.sqrtPriceX96, ratio_a, ratio_b, active_liquidity 
+      slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity
     )
     staked0 = staked_amounts.amount0
     staked1 = staked_amounts.amount1
 
-    gauge_liquidity: uint256 = convert(pool.stakedLiquidity(), uint256)
     # Estimate based on the ratio of staked liquidity...
     gauge_fees: GaugeFees = pool.gaugeFees()
     # Convert to uint256 first to prevent overflows
-    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / gauge_liquidity 
-    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / gauge_liquidity 
+    token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
+    token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256) 
 
     if gauge_alive and gauge.periodFinish() > block.timestamp:
       emissions = gauge.rewardRate()
