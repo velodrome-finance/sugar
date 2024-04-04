@@ -876,18 +876,24 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   tickInfo: TickInfo = pool.ticks(slot.tick)
 
-  active_liquidity: uint128 = convert(abs(convert(tickInfo.stakedLiquidityNet, int256)), uint128)
+  active_liquidity: uint256 = convert(abs(convert(tickInfo.stakedLiquidityNet, int256)), uint256)
   gauge_liquidity: uint128 = pool.stakedLiquidity()
 
   if tick_spacing > 1:
-    distance_from_lower_tick: uint256 = convert(abs(convert(slot.tick, int256)), uint256) % convert(tick_spacing, uint256)
-    distance_from_higher_tick: uint256 = convert(tick_spacing, uint256) - distance_from_lower_tick
-    tick_lower: int256 = convert(slot.tick, int256) - convert(distance_from_lower_tick, int256)
-    tick_higher: int256 = convert(slot.tick, int256) + convert(distance_from_higher_tick, int256)
-    weighted_lower: uint256 = distance_from_higher_tick * convert(pool.ticks(convert(tick_lower, int24)).stakedLiquidityNet, uint256) / convert(tick_spacing, uint256)
-    weighted_higher: uint256 = distance_from_higher_tick * convert(pool.ticks(convert(tick_lower, int24)).stakedLiquidityNet, uint256) / convert(tick_spacing, uint256) 
+    distance_from_lower_tick: int24 = slot.tick % tick_spacing
+    distance_from_higher_tick: int24 = tick_spacing - distance_from_lower_tick
 
-    active_liquidity = convert(weighted_lower + weighted_higher, uint128)
+    lower_tick: int24 = slot.tick - distance_from_lower_tick
+    higher_tick: int24 = slot.tick + distance_from_higher_tick
+
+    if slot.tick < 0:
+      lower_tick = slot.tick - distance_from_higher_tick
+      higher_tick = slot.tick + distance_from_lower_tick
+
+    weighted_lower: uint256 = convert(distance_from_higher_tick, uint256) * convert(pool.ticks(lower_tick).stakedLiquidityNet, uint256) / convert(tick_spacing, uint256)
+    weighted_higher: uint256 = convert(distance_from_lower_tick, uint256) * convert(pool.ticks(higher_tick).stakedLiquidityNet, uint256) / convert(tick_spacing, uint256)
+
+    active_liquidity = weighted_lower + weighted_higher
 
   if gauge.address == empty(address) or gauge_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
@@ -935,7 +941,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     staked1: staked1,
 
     gauge: gauge.address,
-    active_liquidity: convert(active_liquidity, uint256),
+    active_liquidity: active_liquidity,
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
