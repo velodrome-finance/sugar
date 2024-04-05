@@ -257,6 +257,7 @@ interface ISlipstreamHelper:
   def getSqrtRatioAtTick(_tick: int24) -> uint160: view
   def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> Amounts: view
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
+  def getActiveLiquidity(_pool: address, _number_of_ticks: int24) -> uint256: view
 
 # Vars
 registry: public(IFactoryRegistry)
@@ -874,28 +875,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_low: int24 = slot.tick - tick_spacing
   tick_high: int24 = slot.tick + tick_spacing
 
-  tickInfo: TickInfo = pool.ticks(slot.tick)
-
-  active_liquidity: uint256 = convert(abs(convert(tickInfo.stakedLiquidityNet, int256)), uint256)
   gauge_liquidity: uint128 = pool.stakedLiquidity()
-
-  if tick_spacing > 1:
-    distance_from_lower_tick: int24 = slot.tick % tick_spacing
-    distance_from_higher_tick: int24 = tick_spacing - distance_from_lower_tick
-
-    lower_tick: int24 = slot.tick - distance_from_lower_tick
-    higher_tick: int24 = slot.tick + distance_from_higher_tick
-
-    if slot.tick < 0:
-      lower_tick = slot.tick - distance_from_higher_tick
-      higher_tick = slot.tick + distance_from_lower_tick
-
-    lower_tick_sln: int128 = pool.ticks(lower_tick).stakedLiquidityNet
-    higher_tick_sln: int128 = pool.ticks(higher_tick).stakedLiquidityNet
-    weighted_lower: int256 = convert(distance_from_higher_tick, int256) * convert(lower_tick_sln, int256) / convert(tick_spacing, int256)
-    weighted_higher: int256 = convert(distance_from_lower_tick, int256) * convert(higher_tick_sln, int256) / convert(tick_spacing, int256)
-
-    active_liquidity = convert(abs(weighted_lower) + abs(weighted_higher), uint256)
+  active_liquidity: uint256 = self.cl_helper.getActiveLiquidity(pool.address, 3)
 
   if gauge.address == empty(address) or gauge_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
