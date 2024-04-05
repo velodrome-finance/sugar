@@ -226,6 +226,7 @@ interface ISlipstreamHelper:
   def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> Amounts: view
   def getSqrtRatioAtTick(_tick: int24) -> uint160: view
   def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> Amounts: view
+  def fees(_nfpm: address, _position_id: uint256) -> Amounts: view
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
 
 # Vars
@@ -749,8 +750,9 @@ def _cl_position(_id: uint256, _account: address,\
   pos.sqrt_ratio_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
   pos.sqrt_ratio_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
 
-  pos.unstaked_earned0 = convert(data.tokensOwed0, uint256)
-  pos.unstaked_earned1 = convert(data.tokensOwed1, uint256)
+  amounts_fees: Amounts = self.cl_helper.fees(self.nfpm.address, pos.id)
+  pos.unstaked_earned0 = amounts_fees.amount0
+  pos.unstaked_earned1 = amounts_fees.amount1
 
   if staked == False and gauge.address != empty(address):
     staked = gauge.stakedContains(_account, pos.id)
