@@ -16,35 +16,6 @@ MAX_REWARDS: constant(uint256) = 50
 MAX_POSITIONS: constant(uint256) = 50
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
-# Tick.Info from CL Tick library
-struct TickInfo:
-  # the total position liquidity that references this tick
-  # includes both staked and unstaked liquidity
-  liquidityGross: uint128
-  # amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
-  # includes both staked and unstaked liquidity
-  liquidityNet: int128
-  # amount of net staked liquidity added (subtracted) when tick is crossed from left to right (right to left)
-  stakedLiquidityNet: int128
-  # fee growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
-  # only has relative meaning, not absolute — the value depends on when the tick is initialized
-  feeGrowthOutside0X128: uint256
-  feeGrowthOutside1X128: uint256
-  # reward growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
-  # only has relative meaning, not absolute — the value depends on when the tick is initialized
-  rewardGrowthOutsideX128: uint256
-  # the cumulative tick value on the other side of the tick
-  tickCumulativeOutside: int56
-  # the seconds per unit of liquidity on the _other_ side of this tick (relative to the current tick)
-  # only has relative meaning, not absolute — the value depends on when the tick is initialized
-  secondsPerLiquidityOutsideX128: uint160
-  # the seconds spent on the other side of the tick (relative to the current tick)
-  # only has relative meaning, not absolute — the value depends on when the tick is initialized
-  secondsOutside: uint32
-  # true if the tick is initialized, i.e. the value is exactly equivalent to the expression liquidityGross != 0
-  # these 8 bits are set to prevent fresh sstores when crossing newly initialized ticks
-  initialized: bool
-
 # Slot0 from CLPool.sol
 struct Slot:
   sqrtPriceX96: uint160
@@ -201,7 +172,6 @@ interface IPool:
   def balanceOf(_account: address) -> uint256: view
   def poolFees() -> address: view
   def gauge() -> address: view # fetches gauge from CL pool
-  def ticks(tick: int24) -> TickInfo: view # fetches tick info from CL pool
   def tickSpacing() -> int24: view # CL tick spacing
   def slot0() -> Slot: view # CL slot data
   def gaugeFees() -> GaugeFees: view # CL gauge fees amounts
@@ -257,7 +227,8 @@ interface ISlipstreamHelper:
   def getSqrtRatioAtTick(_tick: int24) -> uint160: view
   def principal(_nfpm: address, _position_id: uint256, _ratio: uint160) -> Amounts: view
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
-  def getActiveLiquidity(_pool: address, _number_of_ticks: int24) -> uint256: view
+  def getActiveStakedLiquidity(_pool: address, _number_of_ticks: int24) -> uint256: view
+  def getActiveTotalLiquidity(_pool: address, _number_of_ticks: int24) -> uint256: view
 
 # Vars
 registry: public(IFactoryRegistry)
@@ -878,13 +849,14 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   gauge_liquidity: uint128 = pool.stakedLiquidity()
  
   # calculate the active staked liquidity on the current tick
-  number_of_surrounding_ticks: int24 = 0 # number of ticks on each side to include the active_liquidity calculation
+  number_of_surrounding_ticks: int24 = 5 # number of ticks on each side to include in the active_liquidity calculation
 
-  if tick_spacing > 1:
-    # include +/- ticks if the pool is more volatile
-    number_of_surrounding_ticks = 1
+  if tick_spacing > 1000:
+    # include more +/- ticks if the pool is more volatile
+    number_of_surrounding_ticks = 10
 
-  active_liquidity: uint256 = self.cl_helper.getActiveLiquidity(pool.address, number_of_surrounding_ticks)
+  active_liquidity: uint256 = self.cl_helper.getActiveStakedLiquidity(pool.address, number_of_surrounding_ticks)
+  active_total_liquidity: uint256 = self.cl_helper.getActiveTotalLiquidity(pool.address, number_of_surrounding_ticks)
 
   if gauge.address == empty(address) or gauge_liquidity == 0:
     unstaked_fees: Amounts = self.cl_helper.poolFees(
@@ -917,7 +889,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     lp: pool.address,
     symbol: "",
     decimals: 18,
-    liquidity: convert(pool_liquidity, uint256),
+    liquidity: active_total_liquidity,
 
     type: tick_spacing,
     tick: slot.tick,
