@@ -17,11 +17,11 @@ struct Lock:
   initial_deposit: uint256
   total_claimed: uint256
   unclaimed_before_split: uint256
-  split_count: uint256
-  cliff_length: uint256
-  start: uint256
-  end: uint256
   token: address
+  split_count: uint40
+  cliff_length: uint40
+  start: uint40
+  end: uint40
   vault: address
   minter: address
 
@@ -31,10 +31,10 @@ struct GovNft:
   amount: uint256 # current locked amount
   total_claimed: uint256
   claimable: uint256
-  split_count: uint256
-  cliff_length: uint256
-  start: uint256
-  end: uint256
+  split_count: uint40
+  cliff_length: uint40
+  start: uint40
+  end: uint40
   token: address
   vault: address
   minter: address
