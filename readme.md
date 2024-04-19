@@ -1,6 +1,6 @@
-# Velodrome Sugar 🍭
+# Aerodrome Sugar 🍭
 
-Sugar comes with contracts to help working with Velodrome Finance data!
+Sugar comes with contracts to help working with Aerodrome Finance data!
 
 ## How come?!
 
@@ -35,8 +35,7 @@ Below is the list of datasets we support.
 
 ### Liquidity Pools Data
 
-> [!NOTE]
-> `LpSugar.vy` is deployed at `0xc734656F0112CA18cdcaD424ddd8949F3D4c1DdD`
+`LpSugar.vy` is deployed at `0xCA10F2EEfcCC3cDAEd50113227132037718947Da`
 
 It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
@@ -154,8 +153,7 @@ To fetch a list of rewards for a specific veNFT, this method is available:
 
 ### Vote-Escrow Locked NFT (veNFT) Data
 
-> [!NOTE]
-> `VeSugar.vy` is deployed at `0x37403dBd6f1b583ea244F7956fF9e37EF45c63eB`
+`VeSugar.vy` is deployed at `0x9A53b9f397645891453e70675fF49D91951fbe96`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
@@ -165,7 +163,6 @@ The returned data/struct of type `VeNFT` values represent:
   * `decimals` - veNFT token decimals
   * `amount` - veNFT locked amount
   * `voting_amount` - veNFT voting power
-  * `governance_amount` - veNFT voting power in governance
   * `rebase_amount` - veNFT accrued reabses amount
   * `expires_at` - veNFT lock expiration timestamp
   * `voted_at` - veNFT last vote timestamp
@@ -173,7 +170,6 @@ The returned data/struct of type `VeNFT` values represent:
     `LpVotes`
   * `token` - veNFT locked token address
   * `permanent` - veNFT permanent lock enabled flag
-  * `delegate_id` - token ID of the veNFT being delegated to
 
 The pool votes struct values represent:
   * `lp` - the pool address
@@ -192,8 +188,7 @@ The available methods are:
 
 ### Relay Data
 
-> [!NOTE]
-> `RelaySugar.vy` is deployed at `0x062185EEF2726EFc11880856CD356FA2Ac2B38Ff`
+`RelaySugar.vy` is deployed at `0x56870657bEaE842156057B138dd3a85bF0dfe2C1`
 
 It allows fetching Relay autocompounder/autoconverter data.
 The returned data/struct of type `Relay` values represent:
@@ -230,18 +225,18 @@ The available methods are:
 
 To setup the environment, build the Docker image first:
 ```sh
-docker build ./ -t velodrome/sugar
+docker build ./ -t aerodrome/sugar
 ```
 
 Next start the container with existing environment variables:
 ```sh
-docker run --env-file=env.example --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
+docker run --env-file=env.example --rm -v $(pwd):/app -w /app -it aerodrome/sugar sh
 ```
 The environment has Brownie and Vyper already installed.
 
 To run the tests inside the container, use:
 ```sh
-brownie test --network=optimism-test
+brownie test --network=base-test
 ```
 
 ## Why the contracts are not verified?

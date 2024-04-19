@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 # @version ^0.3.6
 
-# @title Velodrome Finance LP Sugar v3
+# @title Aerodrome Finance LP Sugar v3
 # @author stas, ethzoomer
 # @notice Makes it nicer to work with the liquidity pools.
 
@@ -232,22 +232,19 @@ interface ISlipstreamHelper:
 # Vars
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
-convertor: public(address)
 nfpm: public(INFPositionManager)
 cl_helper: public(ISlipstreamHelper)
 
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _convertor: address, \
-    _nfpm: address, _slipstream_helper: address):
+def __init__(_voter: address, _registry: address, _nfpm: address, _slipstream_helper: address):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
   self.nfpm = INFPositionManager(_nfpm)
-  self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
 
 @internal
@@ -290,10 +287,6 @@ def _pools(_limit: uint256, _offset: uint256)\
       if pindex >= pools_count or len(pools) >= _limit + _offset:
         break
 
-      # Since the convertor pool, first pool on one of the factories...
-      if pindex == 0 and factory.allPools(0) == self.convertor:
-        continue
-
       # Basically skip calls for offset records...
       if to_skip > 0:
         to_skip -= 1
@@ -311,7 +304,7 @@ def _pools(_limit: uint256, _offset: uint256)\
 @view
 def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
-  @notice Returns a compiled list of pools for swaps from pool factories (sans v1)
+  @notice Returns a compiled list of pools for swaps from pool factories
   @param _limit The max amount of pools to process
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
@@ -329,10 +322,6 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
     factory: IPoolFactory = IPoolFactory(factories[index])
     is_cl_factory: bool = self._is_cl_factory(factory.address)
-    is_v2_factory: bool = self._is_v2_factory(factory.address)
-
-    if is_v2_factory == False and is_cl_factory == False:
-      continue
 
     pools_count: uint256 = factory.allPoolsLength()
 
@@ -623,9 +612,6 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
           pools_done += 1
 
         pool_addr: address = factory.allPools(pindex)
-
-        if pool_addr == self.convertor:
-          continue
 
         pos: Position = self._v2_position(_account, pool_addr)
 

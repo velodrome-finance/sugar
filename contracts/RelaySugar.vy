@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: BUSL-1.1
-# @version ^0.3.6
+# @version >=0.3.6 <0.4.0
 
-# @title Velodrome Finance Relay Sugar v2
+# @title Aerodrome Finance Relay Sugar
 # @author stas, ZoomerAnon
 # @notice Makes it nicer to work with Relay.
 
-MAX_RELAYS: constant(uint256) = 50
-MAX_RESULTS: constant(uint256) = 1000
+MAX_RELAYS: constant(uint256) = 25
+MAX_RESULTS: constant(uint256) = 100
 MAX_PAIRS: constant(uint256) = 30
-MAX_REGISTRIES: constant(uint256) = 20
+MAX_REGISTRIES: constant(uint256) = 10
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct LpVotes:
@@ -146,7 +146,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   @param _account The account address to lookup deposits
   @return Relay struct
   """
-
+  
   relay: IRelay = IRelay(_relay)
   managed_id: uint256 = relay.mTokenId()
 
@@ -157,7 +157,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
 
     if account_venft_id == 0:
       break
-
+    
     account_venft_manager_id: uint256 = self.ve.idToManaged(account_venft_id)
     if account_venft_manager_id == managed_id:
       locked_reward: IReward = IReward(self.ve.managedToLocked(account_venft_manager_id))
