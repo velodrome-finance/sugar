@@ -885,11 +885,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     sqrt_ratio: slot.sqrtPriceX96,
 
     token0: token0.address,
-    reserve0: token0.balanceOf(pool.address),
+    reserve0: token0.balanceOf(pool.address) - token0_fees,
     staked0: staked0,
 
     token1: token1.address,
-    reserve1: token1.balanceOf(pool.address),
+    reserve1: token1.balanceOf(pool.address) - token1_fees,
     staked1: staked1,
 
     gauge: gauge.address,
