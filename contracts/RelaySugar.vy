@@ -5,10 +5,10 @@
 # @author stas, ZoomerAnon
 # @notice Makes it nicer to work with Relay.
 
-MAX_RELAYS: constant(uint256) = 50
-MAX_RESULTS: constant(uint256) = 1000
+MAX_RELAYS: constant(uint256) = 150
+MAX_RESULTS: constant(uint256) = 50
 MAX_PAIRS: constant(uint256) = 30
-MAX_REGISTRIES: constant(uint256) = 20
+MAX_REGISTRIES: constant(uint256) = 12
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct LpVotes:
@@ -114,6 +114,7 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   @return Array of Relay structs
   """
   relays: DynArray[Relay, MAX_RELAYS] = empty(DynArray[Relay, MAX_RELAYS])
+  relay_count: uint256 = 0
   for registry_index in range(0, MAX_REGISTRIES):
     if registry_index == len(self.registries):
       break
@@ -134,6 +135,10 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
 
         relay: Relay = self._byAddress(addresses[index], _account)
         relays.append(relay)
+
+        relay_count += 1
+        if relay_count == MAX_RELAYS:
+          return relays
 
   return relays
 
