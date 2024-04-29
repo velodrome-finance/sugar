@@ -13,7 +13,7 @@ MAX_TOKENS: constant(uint256) = 2000
 MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 50
-MAX_POSITIONS: constant(uint256) = 50
+MAX_POSITIONS: constant(uint256) = 100
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 # Slot0 from CLPool.sol
