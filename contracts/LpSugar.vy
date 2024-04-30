@@ -234,11 +234,12 @@ registry: public(IFactoryRegistry)
 voter: public(IVoter)
 nfpm: public(INFPositionManager)
 cl_helper: public(ISlipstreamHelper)
+oldFactory: public(address)
 
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _nfpm: address, _slipstream_helper: address):
+def __init__(_voter: address, _registry: address, _nfpm: address, _slipstream_helper: address, _old_factory: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -246,6 +247,7 @@ def __init__(_voter: address, _registry: address, _nfpm: address, _slipstream_he
   self.registry = IFactoryRegistry(_registry)
   self.nfpm = INFPositionManager(_nfpm)
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
+  self.oldFactory = _old_factory
 
 @internal
 @view
@@ -258,6 +260,7 @@ def _pools(_limit: uint256, _offset: uint256)\
   @return Array of four addresses (factory, pool, gauge, type value: 0/2/3)
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories.append(self.oldFactory)
   factories_count: uint256 = len(factories)
 
   placeholder: address[4] = empty(address[4])
@@ -310,6 +313,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @return `SwapLp` structs
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories.append(self.oldFactory)
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
@@ -589,6 +593,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   pools_done: uint256 = 0
 
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories.append(self.oldFactory)
   factories_count: uint256 = len(factories)
 
   for index in range(0, MAX_FACTORIES):
