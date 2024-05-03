@@ -868,6 +868,17 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge_alive and gauge.periodFinish() > block.timestamp:
     emissions = gauge.rewardRate()
 
+  token0_balance_pool: uint256 = token0.balanceOf(pool.address)
+  token1_balance_pool: uint256 = token1.balanceOf(pool.address)
+
+  reserve0: uint256 = token0_balance_pool
+  reserve1: uint256 = token1_balance_pool
+  if token0_fees < token0_balance_pool: 
+    reserve0 = token0_balance_pool - token0_fees
+  if token1_fees < token1_balance_pool:
+    reserve1 = token1_balance_pool - token1_fees
+
+
   return Lp({
     lp: pool.address,
     symbol: "",
@@ -879,11 +890,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     sqrt_ratio: slot.sqrtPriceX96,
 
     token0: token0.address,
-    reserve0: token0.balanceOf(pool.address) - token0_fees,
+    reserve0: reserve0,
     staked0: staked0,
 
     token1: token1.address,
-    reserve1: token1.balanceOf(pool.address) - token1_fees,
+    reserve1: reserve1, 
     staked1: staked1,
 
     gauge: gauge.address,
