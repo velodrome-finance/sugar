@@ -847,13 +847,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_low: int24 = slot.tick - tick_spacing
   tick_high: int24 = slot.tick + tick_spacing
 
-  if gauge.address == empty(address) or gauge_liquidity == 0:
-    unstaked_fees: Amounts = self.cl_helper.poolFees(
-      pool.address, pool_liquidity, slot.tick, tick_low, tick_high
-    )
-    token0_fees = unstaked_fees.amount0
-    token1_fees = unstaked_fees.amount1
-  else:
+  if gauge_liquidity > 0 and gauge.address != empty(address):
     fee_voting_reward = gauge.feesVotingReward()
     emissions_token = gauge.rewardToken()
 
@@ -871,8 +865,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token0_fees = (convert(gauge_fees.token0, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
     token1_fees = (convert(gauge_fees.token1, uint256) * convert(pool_liquidity, uint256)) / convert(gauge_liquidity, uint256)
 
-    if gauge_alive and gauge.periodFinish() > block.timestamp:
-      emissions = gauge.rewardRate()
+  if gauge_alive and gauge.periodFinish() > block.timestamp:
+    emissions = gauge.rewardRate()
 
   return Lp({
     lp: pool.address,
