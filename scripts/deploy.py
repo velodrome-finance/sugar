@@ -19,6 +19,9 @@ def main():
             os.getenv('CONVERTOR_ADDRESS'),
             os.getenv('NFPM_ADDRESS'),
             os.getenv('SLIPSTREAM_HELPER_ADDRESS'),
+            os.getenv('TOKEN_REGISTRY_ADDRESS'),
+            os.getenv('POOL_FACTORY_ADDRESS'),
+            os.getenv('GAUGE_FACTORY_ADDRESS'),
             {'from': account}
         )
 

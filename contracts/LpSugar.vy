@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 # @version ^0.3.6
 
-# @title Velodrome Finance LP Sugar v3
+# @title Velodrome Finance Superchain Sugar v3
 # @author stas, ethzoomer
 # @notice Makes it nicer to work with the liquidity pools.
 
@@ -229,26 +229,41 @@ interface ISlipstreamHelper:
   def fees(_nfpm: address, _position_id: uint256) -> Amounts: view
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
 
+# Superchain interfaces
+
+interface ITokenRegistry:
+  def isWhitelistedToken(_token_addr: address) -> bool: view
+
+interface IGaugeFactory:
+  def gauges(_pool_addr: address) -> address: view
+  def isAlive(_gauge_addr: address) -> bool: view
+
 # Vars
 registry: public(IFactoryRegistry)
-voter: public(IVoter)
-convertor: public(address)
-nfpm: public(INFPositionManager)
-cl_helper: public(ISlipstreamHelper)
+# voter: public(IVoter)
+# convertor: public(address)
+# nfpm: public(INFPositionManager)
+# cl_helper: public(ISlipstreamHelper)
+token_registry: public(ITokenRegistry)
+pool_factory: public(IPoolFactory)
+gauge_factory: public(IGaugeFactory)
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address, _convertor: address, \
-    _nfpm: address, _slipstream_helper: address):
+    _nfpm: address, _slipstream_helper: address, _token_registry: address, _pool_factory: address, _gauge_factory: address):
   """
   @dev Sets up our external contract addresses
   """
-  self.voter = IVoter(_voter)
+  # self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
-  self.nfpm = INFPositionManager(_nfpm)
-  self.convertor = _convertor
-  self.cl_helper = ISlipstreamHelper(_slipstream_helper)
+  # self.nfpm = INFPositionManager(_nfpm)
+  # self.convertor = _convertor
+  # self.cl_helper = ISlipstreamHelper(_slipstream_helper)
+  self.token_registry = ITokenRegistry(_token_registry)
+  self.pool_factory = IPoolFactory(_pool_factory)
+  self.gauge_factory = IGaugeFactory(_gauge_factory)
 
 @internal
 @view
@@ -260,7 +275,11 @@ def _pools(_limit: uint256, _offset: uint256)\
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of four addresses (factory, pool, gauge, type value: 0/2/3)
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  # factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = [self.pool_factory.address]
+  if self._raw_call(self.registry.address, method_id("poolFactories()")):
+    factories = self.registry.poolFactories()
+
   factories_count: uint256 = len(factories)
 
   placeholder: address[4] = empty(address[4])
@@ -291,8 +310,8 @@ def _pools(_limit: uint256, _offset: uint256)\
         break
 
       # Since the convertor pool, first pool on one of the factories...
-      if pindex == 0 and factory.allPools(0) == self.convertor:
-        continue
+      # if pindex == 0 and factory.allPools(0) == self.convertor:
+      #   continue
 
       # Basically skip calls for offset records...
       if to_skip > 0:
@@ -301,7 +320,7 @@ def _pools(_limit: uint256, _offset: uint256)\
         continue
 
       pool_addr: address = factory.allPools(pindex)
-      gauge_addr: address = self.voter.gauges(pool_addr)
+      gauge_addr: address = self.gauge_factory.gauges(pool_addr) 
 
       pools.append([factory.address, pool_addr, gauge_addr, factory_type])
 
@@ -316,7 +335,11 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  # factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = [self.pool_factory.address]
+  if self._raw_call(self.pool_factory.address, method_id("poolFactories()")):
+    factories = self.registry.poolFactories()
+
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
@@ -440,7 +463,7 @@ def _token(_address: address, _account: address) -> Token:
     symbol: token.symbol(),
     decimals: token.decimals(),
     account_balance: bal,
-    listed: self.voter.isWhitelistedToken(_address)
+    listed: self.token_registry.isWhitelistedToken(_address)
   })
 
 @external
@@ -518,7 +541,9 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   token1: IERC20 = IERC20(_token1)
   token0_fees: uint256 = token0.balanceOf(pool_fees)
   token1_fees: uint256 = token1.balanceOf(pool_fees)
-  gauge_alive: bool = self.voter.isAlive(gauge.address)
+
+  gauge_alive: bool = self.gauge_factory.isAlive(gauge.address)
+  
   decimals: uint8 = pool.decimals()
   claimable0: uint256 = 0
   claimable1: uint256 = 0
@@ -566,8 +591,12 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_liquidity: gauge_liquidity,
     gauge_alive: gauge_alive,
 
-    fee: self.voter.gaugeToFees(gauge.address),
-    bribe: self.voter.gaugeToBribe(gauge.address),
+    fee: empty(address),
+    bribe: empty(address),
+
+    # No fees or bribes contracts currently
+    # fee: self.voter.gaugeToFees(gauge.address),
+    # bribe: self.voter.gaugeToBribe(gauge.address),
     factory: _data[0],
 
     emissions: emissions,
@@ -599,7 +628,11 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   to_skip: uint256 = _offset
   pools_done: uint256 = 0
 
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  # factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = [self.pool_factory.address]
+  if self._raw_call(self.pool_factory.address, method_id("poolFactories()")):
+    factories = self.registry.poolFactories()
+
   factories_count: uint256 = len(factories)
 
   for index in range(0, MAX_FACTORIES):
@@ -624,8 +657,9 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
         pool_addr: address = factory.allPools(pindex)
 
-        if pool_addr == self.convertor:
-          continue
+        # No convertor
+        # if pool_addr == self.convertor:
+        #   continue
 
         pos: Position = self._v2_position(_account, pool_addr)
 
@@ -634,7 +668,8 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
     if self._is_cl_factory(factory.address):
       # fetch unstaked CL positions
-      positions_count: uint256 = self.nfpm.balanceOf(_account)
+      # positions_count: uint256 = self.nfpm.balanceOf(_account)
+      positions_count: uint256 = 0
 
       for pindex in range(0, MAX_POSITIONS):
         if pindex >= positions_count or pools_done >= _limit:
@@ -647,7 +682,8 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
         else:
           pools_done += 1
 
-        pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
+        # pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
+        pos_id: uint256 = 0
         pos: Position = self._cl_position(
           pos_id,
           _account,
@@ -674,7 +710,10 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
           pools_done += 1
 
         pool_addr: address = factory.allPools(pindex)
-        gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
+
+        gauge: ICLGauge = ICLGauge(empty(address))
+        if self._raw_call(self.gauge_factory.address, concat(method_id("gauges(address)"), convert(pool_addr, bytes32))):
+          gauge = ICLGauge(self.gauge_factory.gauges(pool_addr))
 
         if gauge.address == empty(address):
           continue
@@ -714,7 +753,8 @@ def _cl_position(_id: uint256, _account: address,\
   pos.id = _id
   pos.lp = _pool
 
-  data: PositionData = self.nfpm.positions(pos.id)
+  # data: PositionData = self.nfpm.positions(pos.id)
+  data: PositionData = empty(PositionData)
 
   # Try to find the pool if we're fetching an unstaked position
   if pos.lp == empty(address):
@@ -735,11 +775,15 @@ def _cl_position(_id: uint256, _account: address,\
 
   # Try to find the gauge if we're fetching an unstaked position
   if _gauge == empty(address):
-    gauge = ICLGauge(self.voter.gauges(pos.lp))
+    gauge = ICLGauge(empty(address))
+    if self._raw_call(self.gauge_factory.address, concat(method_id("gauges(address)"), convert(pos.lp, bytes32))):
+      gauge = ICLGauge(self.gauge_factory.gauges(pos.lp))
+    # gauge = ICLGauge(self.voter.gauges(pos.lp))
 
-  amounts: Amounts = self.cl_helper.principal(
-    self.nfpm.address, pos.id, slot.sqrtPriceX96
-  )
+  # amounts: Amounts = self.cl_helper.principal(
+  #   self.nfpm.address, pos.id, slot.sqrtPriceX96
+  # )
+  amounts: Amounts = empty(Amounts)
   pos.amount0 = amounts.amount0
   pos.amount1 = amounts.amount1
 
@@ -747,10 +791,13 @@ def _cl_position(_id: uint256, _account: address,\
   pos.tick_lower = data.tickLower
   pos.tick_upper = data.tickUpper
 
-  pos.sqrt_ratio_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
-  pos.sqrt_ratio_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
+  pos.sqrt_ratio_lower = 0
+  pos.sqrt_ratio_upper = 0
+  # pos.sqrt_ratio_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
+  # pos.sqrt_ratio_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
 
-  amounts_fees: Amounts = self.cl_helper.fees(self.nfpm.address, pos.id)
+  # amounts_fees: Amounts = self.cl_helper.fees(self.nfpm.address, pos.id)
+  amounts_fees: Amounts = empty(Amounts)
   pos.unstaked_earned0 = amounts_fees.amount0
   pos.unstaked_earned1 = amounts_fees.amount1
 
@@ -781,7 +828,9 @@ def _v2_position(_account: address, _pool: address) -> Position:
   @return A Position struct
   """
   pool: IPool = IPool(_pool)
-  gauge: IGauge = IGauge(self.voter.gauges(_pool))
+
+  gauge: IGauge = IGauge(self.gauge_factory.gauges(_pool))
+
   decimals: uint8 = pool.decimals()
 
   pos: Position = empty(Position)
@@ -829,7 +878,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
 
-  gauge_alive: bool = self.voter.isAlive(gauge.address)
+  gauge_alive: bool = self.gauge_factory.isAlive(gauge.address)
+
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
@@ -848,20 +898,26 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_high: int24 = slot.tick + tick_spacing
 
   if gauge.address == empty(address) or gauge_liquidity == 0:
-    unstaked_fees: Amounts = self.cl_helper.poolFees(
-      pool.address, pool_liquidity, slot.tick, tick_low, tick_high
-    )
+    # unstaked_fees: Amounts = self.cl_helper.poolFees(
+    #   pool.address, pool_liquidity, slot.tick, tick_low, tick_high
+    # )
+    unstaked_fees: Amounts = empty(Amounts)
     token0_fees = unstaked_fees.amount0
     token1_fees = unstaked_fees.amount1
   else:
     fee_voting_reward = gauge.feesVotingReward()
     emissions_token = gauge.rewardToken()
 
-    ratio_a: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_low)
-    ratio_b: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_high)
-    staked_amounts: Amounts = self.cl_helper.getAmountsForLiquidity(
-      slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity
-    )
+    # ratio_a: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_low)
+    # ratio_b: uint160 = self.cl_helper.getSqrtRatioAtTick(tick_high)
+    ratio_a: uint160 = 0 
+    ratio_b: uint160 = 0
+
+    # staked_amounts: Amounts = self.cl_helper.getAmountsForLiquidity(
+    #   slot.sqrtPriceX96, ratio_a, ratio_b, gauge_liquidity
+    # )
+    staked_amounts: Amounts = empty(Amounts)
+
     staked0 = staked_amounts.amount0
     staked1 = staked_amounts.amount1
 
@@ -897,7 +953,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
-    bribe: self.voter.gaugeToBribe(gauge.address),
+    # bribe: self.voter.gaugeToBribe(gauge.address),
+    bribe: empty(address),
     factory: _data[0],
 
     emissions: emissions,
@@ -931,7 +988,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
 
     pool_data: address[4] = pools[index]
 
-    if self.voter.isAlive(pool_data[2]) == False:
+    if self.gauge_factory.isAlive(pool_data[2]) == False:
       continue
 
     col.append(self._epochLatestByAddress(pool_data[1], pool_data[2]))
@@ -963,7 +1020,10 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   @return A LpEpoch struct
   """
   gauge: IGauge = IGauge(_gauge)
-  bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
+
+  # No bribe contract for now
+  bribe: IReward = IReward(empty(address))
+  # bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
 
   epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
   epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
@@ -972,6 +1032,10 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
     bribe.getPriorSupplyIndex(epoch_end_ts)
   )
 
+  # no fees contract for now
+  fees: address = empty(address)
+  # self.voter.gaugeToFees(gauge.address)
+
   return LpEpoch({
     ts: epoch_start_ts,
     lp: _address,
@@ -979,7 +1043,7 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
     emissions: gauge.rewardRateByEpoch(epoch_start_ts),
     bribes: self._epochRewards(epoch_start_ts, bribe.address),
     fees: self._epochRewards(
-      epoch_start_ts, self.voter.gaugeToFees(gauge.address)
+      epoch_start_ts, fees
     )
   })
 
@@ -999,12 +1063,14 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
     empty(DynArray[LpEpoch, MAX_EPOCHS])
 
-  gauge: IGauge = IGauge(self.voter.gauges(_address))
+  gauge: IGauge = IGauge(self.gauge_factory.gauges(_address))
 
-  if self.voter.isAlive(gauge.address) == False:
+  if self.gauge_factory.isAlive(gauge.address) == False:
     return epochs
 
-  bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
+  # No bribe contract for now
+  bribe: IReward = IReward(empty(address))
+  # bribe: IReward = IReward(self.voter.gaugeToBribe(gauge.address))
 
   curr_epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
 
@@ -1018,6 +1084,11 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     bribe_supply_index: uint256 = bribe.getPriorSupplyIndex(epoch_end_ts)
     bribe_supply_cp: uint256[2] = bribe.supplyCheckpoints(bribe_supply_index)
 
+
+    # No Fees contract for now
+    fees: address = empty(address)
+    # self.voter.gaugeToFees(gauge.address)
+
     epochs.append(LpEpoch({
       ts: epoch_start_ts,
       lp: _address,
@@ -1025,7 +1096,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       emissions: gauge.rewardRateByEpoch(epoch_start_ts),
       bribes: self._epochRewards(epoch_start_ts, bribe.address),
       fees: self._epochRewards(
-        epoch_start_ts, self.voter.gaugeToFees(gauge.address)
+        epoch_start_ts, fees
       )
     }))
 
@@ -1117,7 +1188,7 @@ def rewardsByAddress(_venft_id: uint256, _pool: address) \
   @param _pool The pool address to get rewards for
   @return Array for VeNFT Reward structs
   """
-  gauge_addr: address = self.voter.gauges(_pool)
+  gauge_addr: address = self.gauge_factory.gauges(_pool)
 
   return self._poolRewards(_venft_id, _pool, gauge_addr)
 
@@ -1139,8 +1210,11 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
   if _pool == empty(address) or _gauge == empty(address):
     return col
 
-  fee: IReward = IReward(self.voter.gaugeToFees(_gauge))
-  bribe: IReward = IReward(self.voter.gaugeToBribe(_gauge))
+  # No fees or bribes contracts currently
+  fee: IReward = IReward(empty(address))
+  bribe: IReward = IReward(empty(address))
+  # fee: IReward = IReward(self.voter.gaugeToFees(_gauge))
+  # bribe: IReward = IReward(self.voter.gaugeToBribe(_gauge))
 
   token0: address = pool.token0()
   token1: address = pool.token1()
@@ -1228,6 +1302,25 @@ def _is_cl_factory(_factory: address) -> bool:
   response: Bytes[32] = raw_call(
       _factory,
       method_id("unstakedFeeModule()"),
+      max_outsize=32,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  return len(response) > 0
+
+@internal
+@view
+def _raw_call(_to: address, _data: Bytes[36]) -> bool:
+  """
+  @notice Returns true if the call was successfull
+  @param _to The address to call
+  @param _data The data to send
+  """
+  response: Bytes[32] = raw_call(
+      _to,
+      _data,
       max_outsize=32,
       is_delegate_call=False,
       is_static_call=True,

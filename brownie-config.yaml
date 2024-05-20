@@ -5,4 +5,4 @@ networks:
     cmd_settings:
       accounts: 1
       mnemonic: brownie
-      fork: https://opt-mainnet.g.alchemy.com/v2/TYO_nS5GvA15ccCxYMEzTkAxQHrqk801
+      fork: https://mainnet.mode.network

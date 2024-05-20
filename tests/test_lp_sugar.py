@@ -55,8 +55,10 @@ def LpEpochBribeStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
-    assert sugar_contract.registry() == os.getenv('REGISTRY_ADDRESS')
+    assert sugar_contract.token_registry() \
+            == os.getenv('TOKEN_REGISTRY_ADDRESS')
+    assert sugar_contract.pool_factory() == os.getenv('POOL_FACTORY_ADDRESS')
+    assert sugar_contract.gauge_factory() == os.getenv('GAUGE_FACTORY_ADDRESS')
 
 
 def test_byIndex(sugar_contract, LpStruct):
@@ -88,7 +90,6 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
 
 def test_tokens(sugar_contract, TokenStruct, LpStruct):
     first_lp = LpStruct(*sugar_contract.byIndex(0))
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
     tokens = list(map(
         lambda _p: TokenStruct(*_p),
         sugar_contract.tokens(10, 0, ADDRESS_ZERO, [])
@@ -97,14 +98,13 @@ def test_tokens(sugar_contract, TokenStruct, LpStruct):
     assert tokens is not None
     assert len(tokens) > 1
 
-    token0, token1, token2 = tokens[0: 3]
+    token0, token1 = tokens[0: 2]
 
     assert token0.token_address == first_lp.token0
     assert token0.symbol is not None
     assert token0.decimals > 0
 
     assert token1.token_address == first_lp.token1
-    assert token2.token_address == second_lp.token0
 
 
 def test_all(sugar_contract, LpStruct):
@@ -143,62 +143,62 @@ def test_all_limit_offset(sugar_contract, LpStruct):
     assert lp1.lp == second_lp.lp
 
 
-def test_epochsByAddress_limit_offset(
-        sugar_contract,
-        LpStruct,
-        LpEpochStruct,
-        LpEpochBribeStruct
-        ):
-    first_lp = LpStruct(*sugar_contract.byIndex(0))
-    lp_epochs = list(map(
-        lambda _p: LpEpochStruct(*_p),
-        sugar_contract.epochsByAddress(20, 3, first_lp.lp)
-    ))
+# def test_epochsByAddress_limit_offset(
+#         sugar_contract,
+#         LpStruct,
+#         LpEpochStruct,
+#         LpEpochBribeStruct
+#         ):
+#     first_lp = LpStruct(*sugar_contract.byIndex(0))
+#     lp_epochs = list(map(
+#         lambda _p: LpEpochStruct(*_p),
+#         sugar_contract.epochsByAddress(20, 3, first_lp.lp)
+#     ))
+#
+#     assert lp_epochs is not None
+#     assert len(lp_epochs) > 10
+#
+#     epoch = lp_epochs[1]
+    # epoch_bribes = list(map(
+    #     lambda _b: LpEpochBribeStruct(*_b),
+    #     epoch.bribes
+    # ))
+    # epoch_fees = list(map(
+    #     lambda _f: LpEpochBribeStruct(*_f),
+    #     epoch.fees
+    # ))
 
-    assert lp_epochs is not None
-    assert len(lp_epochs) > 10
+    # assert epoch.lp == first_lp.lp
+    # assert epoch.votes > 0
+    # assert epoch.emissions > 0
 
-    epoch = lp_epochs[1]
-    epoch_bribes = list(map(
-        lambda _b: LpEpochBribeStruct(*_b),
-        epoch.bribes
-    ))
-    epoch_fees = list(map(
-        lambda _f: LpEpochBribeStruct(*_f),
-        epoch.fees
-    ))
-
-    assert epoch.lp == first_lp.lp
-    assert epoch.votes > 0
-    assert epoch.emissions > 0
-
-    if len(epoch_bribes) > 0:
-        assert epoch_bribes[0].amount > 0
-
-    if len(epoch_fees) > 0:
-        assert epoch_fees[0].amount > 0
+    # if len(epoch_bribes) > 0:
+    #     assert epoch_bribes[0].amount > 0
+    #
+    # if len(epoch_fees) > 0:
+    #     assert epoch_fees[0].amount > 0
 
 
-def test_epochsLatest_limit_offset(
-        sugar_contract,
-        LpStruct,
-        LpEpochStruct
-        ):
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
-    lp_epoch = list(map(
-        lambda _p: LpEpochStruct(*_p),
-        sugar_contract.epochsByAddress(1, 0, second_lp.lp)
-    ))
-    latest_epoch = list(map(
-        lambda _p: LpEpochStruct(*_p),
-        sugar_contract.epochsLatest(1, 1)
-    ))
-
-    assert lp_epoch is not None
-    assert len(latest_epoch) == 1
-
-    pepoch = LpEpochStruct(*lp_epoch[0])
-    lepoch = LpEpochStruct(*latest_epoch[0])
-
-    assert lepoch.lp == pepoch.lp
-    assert lepoch.ts == pepoch.ts
+# def test_epochsLatest_limit_offset(
+#         sugar_contract,
+#         LpStruct,
+#         LpEpochStruct
+#         ):
+#     second_lp = LpStruct(*sugar_contract.byIndex(1))
+#     lp_epoch = list(map(
+#         lambda _p: LpEpochStruct(*_p),
+#         sugar_contract.epochsByAddress(1, 0, second_lp.lp)
+#     ))
+#     latest_epoch = list(map(
+#         lambda _p: LpEpochStruct(*_p),
+#         sugar_contract.epochsLatest(1, 1)
+#     ))
+#
+#     assert lp_epoch is not None
+#     assert len(latest_epoch) == 1
+#
+#     pepoch = LpEpochStruct(*lp_epoch[0])
+#     lepoch = LpEpochStruct(*latest_epoch[0])
+#
+#     assert lepoch.lp == pepoch.lp
+#     assert lepoch.ts == pepoch.ts
