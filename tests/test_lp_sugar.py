@@ -73,7 +73,7 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
     second_lp = LpStruct(*sugar_contract.byIndex(1))
     swap_lps = list(map(
         lambda _p: SwapLpStruct(*_p),
-        sugar_contract.forSwaps(10, 0)
+        sugar_contract.forSwaps(10, 1)
     ))
 
     assert swap_lps is not None
