@@ -323,6 +323,21 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   to_skip: uint256 = _offset
   left: uint256 = _limit
 
+  if _offset == 0:
+    convertor: IPool = IPool(self.convertor)
+    type: int24 = -1
+    if convertor.stable():
+      type = 0
+    pools.append(SwapLp({
+      lp: self.convertor,
+      type: type,
+      token0: convertor.token0(),
+      token1: convertor.token1(),
+      factory: empty(address),
+      pool_fee: 0 
+    }))
+    left -= 1
+
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
       break
