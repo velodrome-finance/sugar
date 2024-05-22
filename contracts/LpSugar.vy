@@ -369,7 +369,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         reserve0 = pool.reserve0()
         pool_fee = factory.getFee(pool_addr, (type == 0))
 
-      if reserve0 > 0:
+      if reserve0 > 0 or pool_addr == self.convertor:
         pools.append(SwapLp({
           lp: pool_addr,
           type: type,
