@@ -320,7 +320,10 @@ def _pools(_limit: uint256, _offset: uint256)\
         continue
 
       pool_addr: address = factory.allPools(pindex)
-      gauge_addr: address = self.gauge_factory.gauges(pool_addr) 
+      gauge_addr: address = empty(address)
+      if self.gauge_factory.address != empty(address):
+        gauge_addr = self.gauge_factory.gauges(pool_addr)
+      # gauge_addr: address = self.gauge_factory.gauges(pool_addr) 
 
       pools.append([factory.address, pool_addr, gauge_addr, factory_type])
 
@@ -337,7 +340,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   """
   # factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories: DynArray[address, MAX_FACTORIES] = [self.pool_factory.address]
-  if self._raw_call(self.pool_factory.address, method_id("poolFactories()")):
+  if self._raw_call(self.registry.address, method_id("poolFactories()")):
     factories = self.registry.poolFactories()
 
   factories_count: uint256 = len(factories)
@@ -542,7 +545,9 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   token0_fees: uint256 = token0.balanceOf(pool_fees)
   token1_fees: uint256 = token1.balanceOf(pool_fees)
 
-  gauge_alive: bool = self.gauge_factory.isAlive(gauge.address)
+  gauge_alive: bool = False 
+  if self.gauge_factory.address != empty(address):
+    gauge_alive = self.gauge_factory.isAlive(gauge.address)
   
   decimals: uint8 = pool.decimals()
   claimable0: uint256 = 0
@@ -630,7 +635,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
   # factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories: DynArray[address, MAX_FACTORIES] = [self.pool_factory.address]
-  if self._raw_call(self.pool_factory.address, method_id("poolFactories()")):
+  if self._raw_call(self.registry.address, method_id("poolFactories()")):
     factories = self.registry.poolFactories()
 
   factories_count: uint256 = len(factories)
@@ -712,7 +717,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
         pool_addr: address = factory.allPools(pindex)
 
         gauge: ICLGauge = ICLGauge(empty(address))
-        if self._raw_call(self.gauge_factory.address, concat(method_id("gauges(address)"), convert(pool_addr, bytes32))):
+        if self.gauge_factory.address != empty(address):
           gauge = ICLGauge(self.gauge_factory.gauges(pool_addr))
 
         if gauge.address == empty(address):
@@ -776,7 +781,7 @@ def _cl_position(_id: uint256, _account: address,\
   # Try to find the gauge if we're fetching an unstaked position
   if _gauge == empty(address):
     gauge = ICLGauge(empty(address))
-    if self._raw_call(self.gauge_factory.address, concat(method_id("gauges(address)"), convert(pos.lp, bytes32))):
+    if self.gauge_factory.address != empty(address):
       gauge = ICLGauge(self.gauge_factory.gauges(pos.lp))
     # gauge = ICLGauge(self.voter.gauges(pos.lp))
 
@@ -829,7 +834,9 @@ def _v2_position(_account: address, _pool: address) -> Position:
   """
   pool: IPool = IPool(_pool)
 
-  gauge: IGauge = IGauge(self.gauge_factory.gauges(_pool))
+  gauge: IGauge = IGauge(empty(address))
+  if self.gauge_factory.address != empty(address):
+    gauge = IGauge(self.gauge_factory.gauges(_pool))
 
   decimals: uint8 = pool.decimals()
 
@@ -988,7 +995,12 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
 
     pool_data: address[4] = pools[index]
 
-    if self.gauge_factory.isAlive(pool_data[2]) == False:
+    gauge_alive: bool = False
+    if self.gauge_factory.address != empty(address):
+      gauge_alive = self.gauge_factory.isAlive(pool_data[2])
+
+    # if self.gauge_factory.isAlive(pool_data[2]) == False:
+    if gauge_alive == False:
       continue
 
     col.append(self._epochLatestByAddress(pool_data[1], pool_data[2]))
@@ -1036,11 +1048,16 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   fees: address = empty(address)
   # self.voter.gaugeToFees(gauge.address)
 
+  emissions: uint256 = 0 
+  if gauge.address != empty(address):
+    emissions = gauge.rewardRateByEpoch(epoch_start_ts)
+
   return LpEpoch({
     ts: epoch_start_ts,
     lp: _address,
     votes: bribe_supply_cp[1],
-    emissions: gauge.rewardRateByEpoch(epoch_start_ts),
+    # emissions: gauge.rewardRateByEpoch(epoch_start_ts),
+    emissions: emissions,
     bribes: self._epochRewards(epoch_start_ts, bribe.address),
     fees: self._epochRewards(
       epoch_start_ts, fees
@@ -1063,9 +1080,15 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
     empty(DynArray[LpEpoch, MAX_EPOCHS])
 
-  gauge: IGauge = IGauge(self.gauge_factory.gauges(_address))
+  gauge: IGauge = IGauge(empty(address))
+  if self.gauge_factory.address != empty(address):
+    gauge = IGauge(self.gauge_factory.gauges(_address))
 
-  if self.gauge_factory.isAlive(gauge.address) == False:
+  gauge_alive: bool = False
+  if self.gauge_factory.address != empty(address):
+    gauge_alive = self.gauge_factory.isAlive(gauge.address)
+
+  if gauge_alive == False:
     return epochs
 
   # No bribe contract for now
@@ -1089,11 +1112,15 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     fees: address = empty(address)
     # self.voter.gaugeToFees(gauge.address)
 
+    emissions: uint256 = 0 
+    if gauge.address != empty(address):
+      emissions = gauge.rewardRateByEpoch(epoch_start_ts)
+
     epochs.append(LpEpoch({
       ts: epoch_start_ts,
       lp: _address,
       votes: bribe_supply_cp[1],
-      emissions: gauge.rewardRateByEpoch(epoch_start_ts),
+      emissions: emissions,
       bribes: self._epochRewards(epoch_start_ts, bribe.address),
       fees: self._epochRewards(
         epoch_start_ts, fees
@@ -1188,7 +1215,9 @@ def rewardsByAddress(_venft_id: uint256, _pool: address) \
   @param _pool The pool address to get rewards for
   @return Array for VeNFT Reward structs
   """
-  gauge_addr: address = self.gauge_factory.gauges(_pool)
+  gauge_addr: address = empty(address)
+  if self.gauge_factory.address != empty(address):
+    gauge_addr = self.gauge_factory.gauges(_pool)
 
   return self._poolRewards(_venft_id, _pool, gauge_addr)
 
