@@ -76,6 +76,11 @@ def __init__(_factory: address):
 
 @external
 @view
+def all_collections() -> DynArray[address, MAX_COLLECTIONS]:
+  return self.factory.govNFTs()
+
+@external
+@view
 def owned(_account: address, _collection: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
   @notice Returns all owned GovNFTs for the given account and collection
