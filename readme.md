@@ -217,7 +217,7 @@ The available methods are:
 
 ### GovNFT Data
 
-`GovNFTSugar.vy` is deployed at `0x35D5b1Fd5aeABF937a54484D65cDf4f1bDbEC8F7`
+`GovNFTSugar.vy` is deployed at `0x11fb355C760970Afe336871CC464Af63CAb4F8e7`
 
 It allows fetching GovNFT data.
 The returned data/struct of type `GovNft` values represent:

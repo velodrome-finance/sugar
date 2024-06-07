@@ -7,6 +7,7 @@
 
 # Constants
 
+MAX_COLLECTIONS: constant(uint256) = 50
 MAX_RESULTS: constant(uint256) = 300
 MAX_NFTS: constant(uint256) = 2000
 
@@ -44,6 +45,9 @@ struct GovNft:
 
 # Contracts / Interfaces
 
+interface IGovNFTFactory:
+  def govNFTs() -> DynArray[address, MAX_COLLECTIONS]: view
+
 interface IGovNFT:
   def balanceOf(_account: address) -> uint256: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
@@ -57,98 +61,102 @@ interface IToken:
   def delegates(_account: address) -> address: view
 
 # Vars
-nft: public(IGovNFT)
+factory: public(IGovNFTFactory)
+collections: public(DynArray[address, MAX_COLLECTIONS])
 
 # Methods
 
 @external
-def __init__(_nft: address):
+def __init__(_factory: address):
   """
-  @dev Set up the GovNFT contract
+  @dev Set up the GovNFTFactory contract
   """
-  self.nft = IGovNFT(_nft)
+  self.factory = IGovNFTFactory(_factory)
+  self.collections = self.factory.govNFTs()
 
 @external
 @view
-def owned(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
+def owned(_account: address, _collection: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
-  @notice Returns all owned GovNFTs for the given account
+  @notice Returns all owned GovNFTs for the given account and collection
   @return Array of GovNft structs
   """
-  return self._owned(_account)
+  return self._owned(_account, _collection)
 
 @internal
 @view
-def _owned(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
+def _owned(_account: address, _collection: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
-  @notice Returns all owned GovNFTs for the given account
+  @notice Returns all owned GovNFTs for the given account and collection
   @return Array of GovNft structs
   """
   govnfts: DynArray[GovNft, MAX_RESULTS] = empty(DynArray[GovNft, MAX_RESULTS])
   
-  govnft_balance: uint256 = self.nft.balanceOf(_account)
+  nft: IGovNFT = IGovNFT(_collection)
+  govnft_balance: uint256 = nft.balanceOf(_account)
 
   for govnft_index in range(0, MAX_NFTS):
     if govnft_index == govnft_balance:
       break
-    govnft_id: uint256 = self.nft.tokenOfOwnerByIndex(_account, govnft_index)
+    govnft_id: uint256 = nft.tokenOfOwnerByIndex(_account, govnft_index)
 
-    govnft: GovNft = self._byId(govnft_id)
+    govnft: GovNft = self._byId(govnft_id, _collection)
     govnfts.append(govnft)
 
   return govnfts
 
 @external
 @view
-def minted(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
+def minted(_account: address, _collection: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
-  @notice Returns all minted GovNFTs for the given account
+  @notice Returns all minted GovNFTs for the given account and collection
   @return Array of GovNft structs
   """
-  return self._minted(_account)
+  return self._minted(_account, _collection)
 
 @internal
 @view
-def _minted(_account: address) -> DynArray[GovNft, MAX_RESULTS]:
+def _minted(_account: address, _collection: address) -> DynArray[GovNft, MAX_RESULTS]:
   """
-  @notice Returns all minted GovNFTs for the given account
+  @notice Returns all minted GovNFTs for the given account and collection
   @return Array of GovNft structs
   """
   govnfts: DynArray[GovNft, MAX_RESULTS] = empty(DynArray[GovNft, MAX_RESULTS])
 
-  supply: uint256 = self.nft.totalSupply()
+  nft: IGovNFT = IGovNFT(_collection)
+  supply: uint256 = nft.totalSupply()
 
   for govnft_id in range(1, MAX_NFTS):
     if govnft_id > supply:
       break
-    lock: Lock = self.nft.locks(govnft_id)
+    lock: Lock = nft.locks(govnft_id)
 
     if lock.minter == _account:
-      govnft: GovNft = self._byId(govnft_id)
+      govnft: GovNft = self._byId(govnft_id, _collection)
       govnfts.append(govnft)
 
   return govnfts
 
 @external
 @view
-def byId(_govnft_id: uint256) -> GovNft:
+def byId(_govnft_id: uint256, _collection: address) -> GovNft:
   """
-  @notice Returns GovNFT data based on ID
-  @param _govnft_id The GovNFT ID to look up
+  @notice Returns GovNFT data based on ID and collection
+  @param _govnft_id The GovNFT ID and collection to look up
   @return GovNft struct
   """
-  return self._byId(_govnft_id)
+  return self._byId(_govnft_id, _collection)
 
 @internal
 @view
-def _byId(_govnft_id: uint256) -> GovNft:
+def _byId(_govnft_id: uint256, _collection: address) -> GovNft:
   """
-  @notice Returns GovNFT data based on ID
-  @param _govnft_id The GovNFT ID to look up
+  @notice Returns GovNFT data based on ID and collection
+  @param _govnft_id The GovNFT ID and collection to look up
   @return GovNft struct
   """
-
-  lock: Lock = self.nft.locks(_govnft_id)
+  nft: IGovNFT = IGovNFT(_collection)
+  lock: Lock = nft.locks(_govnft_id)
 
   token_addr: address = lock.token
   token: IToken = IToken(token_addr)
@@ -156,9 +164,9 @@ def _byId(_govnft_id: uint256) -> GovNft:
   return GovNft({
     id: _govnft_id,
     total_locked: lock.total_locked,
-    amount: self.nft.locked(_govnft_id),
+    amount: nft.locked(_govnft_id),
     total_claimed: lock.total_claimed,
-    claimable: self.nft.unclaimed(_govnft_id),
+    claimable: nft.unclaimed(_govnft_id),
     split_count: lock.split_count,
     cliff_length: lock.cliff_length,
     start: lock.start,
@@ -166,7 +174,7 @@ def _byId(_govnft_id: uint256) -> GovNft:
     token: token_addr,
     vault: lock.vault,
     minter: lock.minter,
-    owner: self.nft.ownerOf(_govnft_id),
-    address: self.nft.address,
+    owner: nft.ownerOf(_govnft_id),
+    address: _collection,
     delegated: token.delegates(lock.vault)
   })
