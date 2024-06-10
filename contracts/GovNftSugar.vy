@@ -43,6 +43,12 @@ struct GovNft:
   address: address # address of GovNFT
   delegated: address # address of delegate
 
+struct Collection:
+  address: address
+  owner: address
+  name: String[100]
+  symbol: String[100]
+
 # Contracts / Interfaces
 
 interface IGovNFTFactory:
@@ -56,6 +62,9 @@ interface IGovNFT:
   def locks(_govnft_id: uint256) -> Lock: view
   def unclaimed(_govnft_id: uint256) -> uint256: view
   def locked(_govnft_id: uint256) -> uint256: view
+  def name() -> String[100]: view
+  def symbol() -> String[100]: view
+  def owner() -> address: view
 
 interface IToken:
   def delegates(_account: address) -> address: view
@@ -76,8 +85,24 @@ def __init__(_factory: address):
 
 @external
 @view
-def all_collections() -> DynArray[address, MAX_COLLECTIONS]:
-  return self.factory.govNFTs()
+def all_collections() -> DynArray[Collection, MAX_COLLECTIONS]:
+  all_collections: DynArray[Collection, MAX_COLLECTIONS] = empty(DynArray[Collection, MAX_COLLECTIONS])
+
+  for index in range(0, MAX_COLLECTIONS):
+    if index >= len(self.collections):
+      break
+    
+    nft: IGovNFT = IGovNFT(self.collections[index])
+
+    all_collections.append(
+      Collection({
+        address: self.collections[index],
+        owner: nft.owner(),
+        name: nft.name(),
+        symbol: nft.symbol()
+      })
+    )
+  return all_collections
 
 @external
 @view
