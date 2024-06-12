@@ -74,8 +74,7 @@ interface IToken:
   def delegates(_account: address) -> address: view
 
 # Vars
-factory: public(IGovNFTFactory) # GovNFT factory
-implementations: public(DynArray[address, MAX_COLLECTIONS]) # implementations (collections) created by factory
+factory: public(IGovNFTFactory)
 
 # Methods
 
@@ -85,7 +84,6 @@ def __init__(_factory: address):
   @dev Set up the GovNFTFactory contract
   """
   self.factory = IGovNFTFactory(_factory)
-  self.implementations = self.factory.govNFTs()
 
 @external
 @view
@@ -95,16 +93,17 @@ def collections() -> DynArray[Collection, MAX_COLLECTIONS]:
   @return Array of Collection structs
   """
   collections: DynArray[Collection, MAX_COLLECTIONS] = empty(DynArray[Collection, MAX_COLLECTIONS])
+  implementations: DynArray[address, MAX_COLLECTIONS] = self.factory.govNFTs()
 
   for index in range(0, MAX_COLLECTIONS):
-    if index >= len(self.implementations):
+    if index >= len(implementations):
       break
     
-    nft: IGovNFT = IGovNFT(self.implementations[index])
+    nft: IGovNFT = IGovNFT(implementations[index])
 
     collections.append(
       Collection({
-        address: self.implementations[index],
+        address: implementations[index],
         owner: nft.owner(),
         name: nft.name(),
         symbol: nft.symbol(),
