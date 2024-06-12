@@ -13,6 +13,7 @@ MAX_NFTS: constant(uint256) = 2000
 
 # Structs
 
+# Lock struct from GovNFT.sol
 struct Lock:
   total_locked: uint256
   initial_deposit: uint256
@@ -26,6 +27,7 @@ struct Lock:
   vault: address
   minter: address
 
+# Representation of an individual GovNFT
 struct GovNft:
   id: uint256
   total_locked: uint256 # total locked amount
@@ -43,11 +45,13 @@ struct GovNft:
   address: address # address of GovNFT
   delegated: address # address of delegate
 
+# Representation of a GovNFT collection created by the factory
 struct Collection:
   address: address
   owner: address
   name: String[100]
   symbol: String[100]
+  supply: uint256
 
 # Contracts / Interfaces
 
@@ -70,8 +74,8 @@ interface IToken:
   def delegates(_account: address) -> address: view
 
 # Vars
-factory: public(IGovNFTFactory)
-collections: public(DynArray[address, MAX_COLLECTIONS])
+factory: public(IGovNFTFactory) # GovNFT factory
+implementations: public(DynArray[address, MAX_COLLECTIONS]) # implementations (collections) created by factory
 
 # Methods
 
@@ -81,28 +85,33 @@ def __init__(_factory: address):
   @dev Set up the GovNFTFactory contract
   """
   self.factory = IGovNFTFactory(_factory)
-  self.collections = self.factory.govNFTs()
+  self.implementations = self.factory.govNFTs()
 
 @external
 @view
-def all_collections() -> DynArray[Collection, MAX_COLLECTIONS]:
-  all_collections: DynArray[Collection, MAX_COLLECTIONS] = empty(DynArray[Collection, MAX_COLLECTIONS])
+def collections() -> DynArray[Collection, MAX_COLLECTIONS]:
+  """
+  @notice Returns all GovNFT collections created by the factory
+  @return Array of Collection structs
+  """
+  collections: DynArray[Collection, MAX_COLLECTIONS] = empty(DynArray[Collection, MAX_COLLECTIONS])
 
   for index in range(0, MAX_COLLECTIONS):
-    if index >= len(self.collections):
+    if index >= len(self.implementations):
       break
     
-    nft: IGovNFT = IGovNFT(self.collections[index])
+    nft: IGovNFT = IGovNFT(self.implementations[index])
 
-    all_collections.append(
+    collections.append(
       Collection({
-        address: self.collections[index],
+        address: self.implementations[index],
         owner: nft.owner(),
         name: nft.name(),
-        symbol: nft.symbol()
+        symbol: nft.symbol(),
+        supply: nft.totalSupply()
       })
     )
-  return all_collections
+  return collections
 
 @external
 @view
