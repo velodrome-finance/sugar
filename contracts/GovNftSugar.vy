@@ -197,7 +197,7 @@ def _byId(_govnft_id: uint256, _collection: address) -> GovNft:
   lock: Lock = nft.locks(_govnft_id)
 
   token_addr: address = lock.token
-  token: IToken = IToken(token_addr)
+  delegate: address = self._raw_call_delegates(token_addr, lock.vault)
 
   return GovNft({
     id: _govnft_id,
@@ -214,5 +214,37 @@ def _byId(_govnft_id: uint256, _collection: address) -> GovNft:
     minter: lock.minter,
     owner: nft.ownerOf(_govnft_id),
     address: _collection,
-    delegated: token.delegates(lock.vault)
+    delegated: delegate
   })
+
+@internal
+@view
+def _raw_call_delegates(_token: address, _account: address) -> address:
+  """
+  @notice Returns the delegated address if the token supports it, otherwise empty address
+  @param _token The token to call
+  @param _account The account to check the delegation of
+  """
+  if self._raw_call(_token, concat(method_id("delegates()"), convert(_account, bytes32))):
+    return IToken(_token).delegates(_account)
+  return empty(address)
+
+@internal
+@view
+def _raw_call(_to: address, _data: Bytes[36]) -> bool:
+  """
+  @notice Returns true if the call was successfull
+  @param _to The address to call
+  @param _data The data to send
+  """
+  response: Bytes[32] = raw_call(
+      _to,
+      _data,
+      max_outsize=32,
+      gas=100000,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  return len(response) > 0
