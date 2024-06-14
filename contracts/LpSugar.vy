@@ -697,6 +697,118 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
   return positions
 
+@external
+@view
+def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _factory: address)\
+    -> DynArray[Position, MAX_POSITIONS]:
+  """
+  @notice Returns a collection of positions
+  @param _account The account to fetch positions for
+  @param _limit The max amount of pools to process
+  @param _offset The amount of pools to skip (for optimization)
+  @param _factory The factory address to fetch positions for
+  @return Array for Lp structs
+  """
+  positions: DynArray[Position, MAX_POSITIONS] = \
+    empty(DynArray[Position, MAX_POSITIONS])
+
+  if _account == empty(address) or _factory == empty(address):
+    return positions
+
+  to_skip: uint256 = _offset
+  pools_done: uint256 = 0
+
+  factory: IPoolFactory = IPoolFactory(_factory)
+
+  if self._is_v2_factory(factory.address):
+    pools_count: uint256 = factory.allPoolsLength()
+
+    for pindex in range(0, MAX_POOLS):
+      if pindex >= pools_count or pools_done >= _limit:
+        break
+
+      # Basically skip calls for offset records...
+      if to_skip > 0:
+        to_skip -= 1
+        continue
+      else:
+        pools_done += 1
+
+      pool_addr: address = factory.allPools(pindex)
+
+      if pool_addr == self.convertor:
+        continue
+
+      pos: Position = self._v2_position(_account, pool_addr)
+
+      if pos.lp != empty(address):
+        positions.append(pos)
+
+  if self._is_cl_factory(factory.address):
+    # fetch unstaked CL positions
+    positions_count: uint256 = self.nfpm.balanceOf(_account)
+
+    for pindex in range(0, MAX_POSITIONS):
+      if pindex >= positions_count or pools_done >= _limit:
+        break
+
+      # Basically skip calls for offset records...
+      if to_skip > 0:
+        to_skip -= 1
+        continue
+      else:
+        pools_done += 1
+
+      pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
+      pos: Position = self._cl_position(
+        pos_id,
+        _account,
+        empty(address),
+        empty(address),
+        factory.address
+      )
+
+      if pos.lp != empty(address):
+        positions.append(pos)
+
+    # fetch staked CL positions
+    pools_count: uint256 = factory.allPoolsLength()
+
+    for pindex in range(0, MAX_POOLS):
+      if pindex >= pools_count or pools_done >= _limit:
+        break
+
+      # Basically skip calls for offset records...
+      if to_skip > 0:
+        to_skip -= 1
+        continue
+      else:
+        pools_done += 1
+
+      pool_addr: address = factory.allPools(pindex)
+      gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
+
+      if gauge.address == empty(address):
+        continue
+
+      staked_position_ids: DynArray[uint256, MAX_POSITIONS] = gauge.stakedValues(_account)
+
+      for sindex in range(0, MAX_POSITIONS):
+        if sindex >= len(staked_position_ids):
+          break
+
+        pos: Position = self._cl_position(
+          staked_position_ids[sindex],
+          _account,
+          pool_addr,
+          gauge.address,
+          factory.address
+        )
+
+        positions.append(pos)
+
+  return positions
+
 @internal
 @view
 def _cl_position(_id: uint256, _account: address,\
