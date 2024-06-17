@@ -28,6 +28,7 @@ struct VeNFT:
   token: address
   permanent: bool
   delegate_id: uint256
+  managed_id: uint256
 
 # Our contracts / Interfaces
 
@@ -200,5 +201,6 @@ def _byId(_id: uint256) -> VeNFT:
     votes: votes,
     token: self.token,
     permanent: perma,
-    delegate_id: delegate_id
+    delegate_id: delegate_id,
+    managed_id: managed_id
   })
