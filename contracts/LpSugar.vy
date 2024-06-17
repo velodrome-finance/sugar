@@ -179,6 +179,7 @@ interface IPool:
   def unstakedFee() -> uint24: view # CL unstaked fee level
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
+  def nft() -> address: view # CL NFPM
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -213,6 +214,7 @@ interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
+  def factory() -> address: view
 
 interface IReward:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
@@ -233,20 +235,18 @@ interface ISlipstreamHelper:
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
-nfpm: public(INFPositionManager)
 cl_helper: public(ISlipstreamHelper)
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address, _convertor: address, \
-    _nfpm: address, _slipstream_helper: address):
+    _slipstream_helper: address):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
-  self.nfpm = INFPositionManager(_nfpm)
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
 
@@ -581,7 +581,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
 @external
 @view
-def positions(_limit: uint256, _offset: uint256, _account: address)\
+def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: address)\
     -> DynArray[Position, MAX_POSITIONS]:
   """
   @notice Returns a collection of positions
@@ -601,6 +601,8 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
+
+  nfpm: INFPositionManager = INFPositionManager(_nfpm)
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -634,7 +636,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
     if self._is_cl_factory(factory.address):
       # fetch unstaked CL positions
-      positions_count: uint256 = self.nfpm.balanceOf(_account)
+      positions_count: uint256 = nfpm.balanceOf(_account)
 
       for pindex in range(0, MAX_POSITIONS):
         if pindex >= positions_count or pools_done >= _limit:
@@ -647,7 +649,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
         else:
           pools_done += 1
 
-        pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
+        pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
         pos: Position = self._cl_position(
           pos_id,
           _account,
@@ -699,54 +701,32 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
 @external
 @view
-def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _factory: address)\
+def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _nfpm: address)\
     -> DynArray[Position, MAX_POSITIONS]:
   """
   @notice Returns a collection of positions
   @param _account The account to fetch positions for
   @param _limit The max amount of pools to process
   @param _offset The amount of pools to skip (for optimization)
-  @param _factory The factory address to fetch positions for
+  @param _nfpm The INFPositionManager address used to fetch positions
   @return Array for Lp structs
   """
   positions: DynArray[Position, MAX_POSITIONS] = \
     empty(DynArray[Position, MAX_POSITIONS])
 
-  if _account == empty(address) or _factory == empty(address):
+  if _account == empty(address) or _nfpm == empty(address):
     return positions
 
   to_skip: uint256 = _offset
   pools_done: uint256 = 0
 
-  factory: IPoolFactory = IPoolFactory(_factory)
+  nfpm: INFPositionManager = INFPositionManager(_nfpm)
 
-  if self._is_v2_factory(factory.address):
-    pools_count: uint256 = factory.allPoolsLength()
-
-    for pindex in range(0, MAX_POOLS):
-      if pindex >= pools_count or pools_done >= _limit:
-        break
-
-      # Basically skip calls for offset records...
-      if to_skip > 0:
-        to_skip -= 1
-        continue
-      else:
-        pools_done += 1
-
-      pool_addr: address = factory.allPools(pindex)
-
-      if pool_addr == self.convertor:
-        continue
-
-      pos: Position = self._v2_position(_account, pool_addr)
-
-      if pos.lp != empty(address):
-        positions.append(pos)
+  factory: IPoolFactory = IPoolFactory(nfpm.factory())
 
   if self._is_cl_factory(factory.address):
     # fetch unstaked CL positions
-    positions_count: uint256 = self.nfpm.balanceOf(_account)
+    positions_count: uint256 = nfpm.balanceOf(_account)
 
     for pindex in range(0, MAX_POSITIONS):
       if pindex >= positions_count or pools_done >= _limit:
@@ -759,7 +739,7 @@ def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _fa
       else:
         pools_done += 1
 
-      pos_id: uint256 = self.nfpm.tokenOfOwnerByIndex(_account, pindex)
+      pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
       pos: Position = self._cl_position(
         pos_id,
         _account,
@@ -826,7 +806,9 @@ def _cl_position(_id: uint256, _account: address,\
   pos.id = _id
   pos.lp = _pool
 
-  data: PositionData = self.nfpm.positions(pos.id)
+  nfpm: INFPositionManager = INFPositionManager(IPool(_pool).nft())
+
+  data: PositionData = nfpm.positions(pos.id)
 
   # Try to find the pool if we're fetching an unstaked position
   if pos.lp == empty(address):
@@ -850,7 +832,7 @@ def _cl_position(_id: uint256, _account: address,\
     gauge = ICLGauge(self.voter.gauges(pos.lp))
 
   amounts: Amounts = self.cl_helper.principal(
-    self.nfpm.address, pos.id, slot.sqrtPriceX96
+    nfpm.address, pos.id, slot.sqrtPriceX96
   )
   pos.amount0 = amounts.amount0
   pos.amount1 = amounts.amount1
@@ -862,7 +844,7 @@ def _cl_position(_id: uint256, _account: address,\
   pos.sqrt_ratio_lower = self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
   pos.sqrt_ratio_upper = self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
 
-  amounts_fees: Amounts = self.cl_helper.fees(self.nfpm.address, pos.id)
+  amounts_fees: Amounts = self.cl_helper.fees(nfpm.address, pos.id)
   pos.unstaked_earned0 = amounts_fees.amount0
   pos.unstaked_earned1 = amounts_fees.amount1
 
