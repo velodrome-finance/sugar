@@ -581,7 +581,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
 @external
 @view
-def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: address)\
+def positions(_limit: uint256, _offset: uint256, _account: address)\
     -> DynArray[Position, MAX_POSITIONS]:
   """
   @notice Returns a collection of positions
@@ -601,8 +601,6 @@ def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: addre
 
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
-
-  nfpm: INFPositionManager = INFPositionManager(_nfpm)
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -635,6 +633,15 @@ def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: addre
           positions.append(pos)
 
     if self._is_cl_factory(factory.address):
+      # fetch staked CL positions
+      pools_count: uint256 = factory.allPoolsLength()
+
+      if pools_count == 0:
+        continue
+
+      first_pool: address = factory.allPools(0)
+      nfpm: INFPositionManager = INFPositionManager(IPool(first_pool).nft())
+
       # fetch unstaked CL positions
       positions_count: uint256 = nfpm.balanceOf(_account)
 
@@ -661,9 +668,6 @@ def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: addre
 
         if pos.lp != empty(address):
           positions.append(pos)
-
-      # fetch staked CL positions
-      pools_count: uint256 = factory.allPoolsLength()
 
       for pindex in range(0, MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit:
