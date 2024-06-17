@@ -217,7 +217,7 @@ The available methods are:
 
 ### GovNFT Data
 
-`GovNFTSugar.vy` is deployed at `0x35D5b1Fd5aeABF937a54484D65cDf4f1bDbEC8F7`
+`GovNFTSugar.vy` is deployed at `0x1382cbcEEd8b0d3683760961cafb81B381ba5D28`
 
 It allows fetching GovNFT data.
 The returned data/struct of type `GovNft` values represent:
@@ -235,16 +235,24 @@ The returned data/struct of type `GovNft` values represent:
   * `vault` - the vault address of the GovNFT
   * `minter` - the address of the creator of the GovNFT
   * `owner` - the owner of the GovNFT
-  * `address` - the address of the GovNFT contract
+  * `address` - the address of the GovNFT collection
   * `delegated` - the address that the underlying ERC20 token of the GovNFT is being delegated to
+
+The returned data/struct of type `Collection` values represent:
+
+  * `address` - address of the GovNFT collection
+  * `owner` - owner admin of the GovNFT collection contract
+  * `name` - name of the GovNFT collection
+  * `symbol` - symbol of the GovNFT collection
+  * `supply` - total number of GovNFTs in the collection
 
 ---
 
 The available methods are:
-
- * `owned(_account: address) -> GovNft[]` - returns a list of all `GovNft` structs owned by the given account.
- * `minted(_account: address) -> GovNft[]` - returns a list of all `GovNft` structs minted by the given account.
- * `byId(_govnft_id: uint256) -> GovNft` - returns the `GovNft` based on the given ID.
+ * `collections() -> Collection[]` - returns a list of all GovNFT `Collection` structs that have been created by the factory.
+ * `owned(_account: address, _collection: address) -> GovNft[]` - returns a list of all `GovNft` structs owned by the given account for the given collection.
+ * `minted(_account: address, _collection: address) -> GovNft[]` - returns a list of all `GovNft` structs minted by the given account for the given collection.
+ * `byId(_govnft_id: uint256, _collection: address) -> GovNft` - returns the `GovNft` based on the given ID and collection.
 
 ## Development
 
