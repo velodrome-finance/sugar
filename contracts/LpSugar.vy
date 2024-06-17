@@ -655,7 +655,8 @@ def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: addre
           _account,
           empty(address),
           empty(address),
-          factory.address
+          factory.address,
+          nfpm.address
         )
 
         if pos.lp != empty(address):
@@ -692,7 +693,8 @@ def positions(_limit: uint256, _offset: uint256, _account: address, _nfpm: addre
             _account,
             pool_addr,
             gauge.address,
-            factory.address
+            factory.address,
+            nfpm.address
           )
 
           positions.append(pos)
@@ -745,7 +747,8 @@ def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _nf
         _account,
         empty(address),
         empty(address),
-        factory.address
+        factory.address,
+        nfpm.address
       )
 
       if pos.lp != empty(address):
@@ -782,7 +785,8 @@ def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _nf
           _account,
           pool_addr,
           gauge.address,
-          factory.address
+          factory.address,
+          nfpm.address
         )
 
         positions.append(pos)
@@ -792,7 +796,7 @@ def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _nf
 @internal
 @view
 def _cl_position(_id: uint256, _account: address,\
-    _pool:address, _gauge:address, _factory: address) -> Position:
+    _pool:address, _gauge:address, _factory: address, _nfpm: address) -> Position:
   """
   @notice Returns concentrated pool position data
   @param _id The token ID of the position
@@ -806,7 +810,7 @@ def _cl_position(_id: uint256, _account: address,\
   pos.id = _id
   pos.lp = _pool
 
-  nfpm: INFPositionManager = INFPositionManager(IPool(_pool).nft())
+  nfpm: INFPositionManager = INFPositionManager(_nfpm)
 
   data: PositionData = nfpm.positions(pos.id)
 
