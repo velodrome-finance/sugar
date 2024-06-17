@@ -36,6 +36,7 @@ def SwapLpStruct(sugar_contract):
 
     yield namedtuple('SwapLpStruct', members)
 
+
 @pytest.fixture
 def PositionStruct(sugar_contract):
     method_output = sugar_contract.positionsByFactory.abi['outputs'][0]
@@ -149,11 +150,12 @@ def test_all_limit_offset(sugar_contract, LpStruct):
     assert lp1.lp == second_lp.lp
     assert lp1.lp == second_lp.lp
 
+
 def test_positionsByFactory(sugar_contract, PositionStruct):
-    limit: uint256 = 100
-    offset: uint256 = 0
-    account: address = os.getenv('TEST_ADDRESS')
-    nfpm: address = os.getenv('NFPM_ADDRESS')
+    limit = 100
+    offset = 0
+    account = os.getenv('TEST_ADDRESS')
+    nfpm = os.getenv('NFPM_ADDRESS')
 
     positions = list(map(
         lambda _p: PositionStruct(*_p),
@@ -167,6 +169,7 @@ def test_positionsByFactory(sugar_contract, PositionStruct):
 
     assert pos.id is not None
     assert pos.lp is not None
+
 
 def test_epochsByAddress_limit_offset(
         sugar_contract,
