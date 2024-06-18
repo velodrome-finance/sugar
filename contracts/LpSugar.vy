@@ -83,7 +83,6 @@ struct SwapLp:
 
 struct Lp:
   lp: address
-  nfpm: address
   symbol: String[100]
   decimals: uint8
   liquidity: uint256
@@ -115,6 +114,8 @@ struct Lp:
   unstaked_fee: uint256 # unstaked fee % on CL, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
+
+  nfpm: address
 
 struct LpEpochReward:
   token: address
@@ -541,7 +542,6 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp({
     lp: _data[1],
-    nfpm: empty(address),
     symbol: pool.symbol(),
     decimals: decimals,
     liquidity: pool_liquidity,
@@ -573,6 +573,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     unstaked_fee: 0,
     token0_fees: token0_fees,
     token1_fees: token1_fees,
+
+    nfpm: empty(address),
   })
 
 @external
@@ -913,7 +915,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp({
     lp: pool.address,
-    nfpm: _data[3],
     symbol: "",
     decimals: 18,
     liquidity: convert(pool_liquidity, uint256),
@@ -944,7 +945,9 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     pool_fee: convert(pool.fee(), uint256),
     unstaked_fee: convert(pool.unstakedFee(), uint256),
     token0_fees: token0_fees,
-    token1_fees: token1_fees
+    token1_fees: token1_fees,
+
+    nfpm: _data[3],
   })
 
 @external
