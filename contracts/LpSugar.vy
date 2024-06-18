@@ -599,7 +599,7 @@ def positionsByFactory(
     _factory: address
 ) -> DynArray[Position, MAX_POSITIONS]:
   """
-  @notice Returns a collection of positions for the given nfpm's factory
+  @notice Returns a collection of positions for the given factory
   @param _account The account to fetch positions for
   @param _limit The max amount of pools to process
   @param _offset The amount of pools to skip (for optimization)
