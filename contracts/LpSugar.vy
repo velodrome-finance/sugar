@@ -13,7 +13,7 @@ MAX_TOKENS: constant(uint256) = 2000
 MAX_LPS: constant(uint256) = 500
 MAX_EPOCHS: constant(uint256) = 200
 MAX_REWARDS: constant(uint256) = 50
-MAX_POSITIONS: constant(uint256) = 100
+MAX_POSITIONS: constant(uint256) = 200
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 # Slot0 from CLPool.sol
@@ -83,6 +83,7 @@ struct SwapLp:
 
 struct Lp:
   lp: address
+  nfpm: address
   symbol: String[100]
   decimals: uint8
   liquidity: uint256
@@ -147,6 +148,7 @@ interface IFactoryRegistry:
   def fallbackPoolFactory() -> address: view
   def poolFactories() -> DynArray[address, MAX_FACTORIES]: view
   def poolFactoriesLength() -> uint256: view
+  def factoriesToPoolFactory(_factory: address) -> address[2]: view
 
 interface IPoolFactory:
   def allPoolsLength() -> uint256: view
@@ -179,7 +181,6 @@ interface IPool:
   def unstakedFee() -> uint24: view # CL unstaked fee level
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
-  def nft() -> address: view # CL NFPM
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -258,7 +259,7 @@ def _pools(_limit: uint256, _offset: uint256)\
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip (for optimization)
   @notice Returns a compiled list of pool and its factory and gauge
-  @return Array of four addresses (factory, pool, gauge, type value: 0/2/3)
+  @return Array of four addresses (factory, pool, gauge, nfpm)
   """
   factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
@@ -270,21 +271,16 @@ def _pools(_limit: uint256, _offset: uint256)\
     empty(DynArray[address[4], MAX_POOLS])
 
   for index in range(0, MAX_FACTORIES):
+    # TODO: remove once v1 factory is delisted
+    if index == 1:
+      continue
+
     if index >= factories_count:
       break
 
-    factory_type: address = empty(address)
     factory: IPoolFactory = IPoolFactory(factories[index])
-
-    if self._is_v2_factory(factory.address):
-      factory_type = convert(2, address)
-    if self._is_cl_factory(factory.address):
-      factory_type = convert(3, address)
-
-    if factory_type == empty(address):
-      continue
-
     pools_count: uint256 = factory.allPoolsLength()
+    nfpm: address = self._fetch_nfpm(factory.address)
 
     for pindex in range(0, MAX_POOLS):
       if pindex >= pools_count or len(pools) >= _limit + _offset:
@@ -303,7 +299,7 @@ def _pools(_limit: uint256, _offset: uint256)\
       pool_addr: address = factory.allPools(pindex)
       gauge_addr: address = self.voter.gauges(pool_addr)
 
-      pools.append([factory.address, pool_addr, gauge_addr, factory_type])
+      pools.append([factory.address, pool_addr, gauge_addr, nfpm])
 
   return pools
 
@@ -324,16 +320,15 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   left: uint256 = _limit
 
   for index in range(0, MAX_FACTORIES):
+    # TODO: remove once v1 factory is delisted
+    if index == 1:
+      continue
+
     if index >= factories_count:
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
-    is_cl_factory: bool = self._is_cl_factory(factory.address)
-    is_v2_factory: bool = self._is_v2_factory(factory.address)
-
-    if is_v2_factory == False and is_cl_factory == False:
-      continue
-
+    nfpm: address = self._fetch_nfpm(factory.address)
     pools_count: uint256 = factory.allPoolsLength()
 
     for pindex in range(0, MAX_POOLS):
@@ -359,7 +354,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       reserve0: uint256 = 0
       pool_fee: uint256 = 0
 
-      if is_cl_factory:
+      if nfpm != empty(address):
         type = pool.tickSpacing()
         reserve0 = IERC20(token0).balanceOf(pool_addr)
         pool_fee = convert(pool.fee(), uint256)
@@ -465,8 +460,8 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
     token0: address = pool.token0()
     token1: address = pool.token1()
 
-    # If this is a CL factory...
-    if convert(3, address) == pool_data[3]:
+    # If this is a CL factory/NFPM present...
+    if pool_data[3] != empty(address):
       col.append(self._cl_lp(pool_data, token0, token1))
     else:
       col.append(self._v2_lp(pool_data, token0, token1))
@@ -488,8 +483,8 @@ def byIndex(_index: uint256) -> Lp:
   token0: address = pool.token0()
   token1: address = pool.token1()
 
-  # If this is a CL factory...
-  if convert(3, address) == pool_data[3]:
+  # If this is a CL factory/NFPM present...
+  if pool_data[3] != empty(address):
     return self._cl_lp(pool_data, token0, token1)
 
   return self._v2_lp(pool_data, token0, token1)
@@ -546,6 +541,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp({
     lp: _data[1],
+    nfpm: empty(address),
     symbol: pool.symbol(),
     decimals: decimals,
     liquidity: pool_liquidity,
@@ -590,6 +586,44 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   @param _offset The amount of pools to skip (for optimization)
   @return Array for Lp structs
   """
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+
+  return self._positions(_limit, _offset, _account, factories)
+
+@external
+@view
+def positionsByFactory(
+    _limit: uint256,
+    _offset: uint256,
+    _account: address,
+    _factory: address
+) -> DynArray[Position, MAX_POSITIONS]:
+  """
+  @notice Returns a collection of positions for the given nfpm's factory
+  @param _account The account to fetch positions for
+  @param _limit The max amount of pools to process
+  @param _offset The amount of pools to skip (for optimization)
+  @param _factory The INFPositionManager address used to fetch positions
+  @return Array for Lp structs
+  """
+  return self._positions(_limit, _offset, _account, [_factory])
+
+@internal
+@view
+def _positions(
+  _limit: uint256,
+  _offset: uint256,
+  _account: address,
+  _factories: DynArray[address, MAX_FACTORIES]
+) -> DynArray[Position, MAX_POSITIONS]:
+  """
+  @notice Returns a collection of positions for a set of factories
+  @param _account The account to fetch positions for
+  @param _limit The max amount of pools to process
+  @param _offset The amount of pools to skip (for optimization)
+  @param _factories The factories to fetch from
+  @return Array for Lp structs
+  """
   positions: DynArray[Position, MAX_POSITIONS] = \
     empty(DynArray[Position, MAX_POSITIONS])
 
@@ -599,16 +633,22 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   to_skip: uint256 = _offset
   pools_done: uint256 = 0
 
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
-  factories_count: uint256 = len(factories)
+  factories_count: uint256 = len(_factories)
 
   for index in range(0, MAX_FACTORIES):
+    # TODO: remove once v1 factory is delisted
+    if index == 1:
+      continue
+
     if index >= factories_count:
       break
 
-    factory: IPoolFactory = IPoolFactory(factories[index])
+    factory: IPoolFactory = IPoolFactory(_factories[index])
+    nfpm: INFPositionManager = \
+      INFPositionManager(self._fetch_nfpm(factory.address))
 
-    if self._is_v2_factory(factory.address):
+    # V2/Basic pool
+    if nfpm.address == empty(address):
       pools_count: uint256 = factory.allPoolsLength()
 
       for pindex in range(0, MAX_POOLS):
@@ -632,16 +672,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
         if pos.lp != empty(address):
           positions.append(pos)
 
-    if self._is_cl_factory(factory.address):
-      # fetch staked CL positions
-      pools_count: uint256 = factory.allPoolsLength()
-
-      if pools_count == 0:
-        continue
-
-      first_pool: address = factory.allPools(0)
-      nfpm: INFPositionManager = INFPositionManager(IPool(first_pool).nft())
-
+    else:
       # fetch unstaked CL positions
       positions_count: uint256 = nfpm.balanceOf(_account)
 
@@ -668,6 +699,9 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
 
         if pos.lp != empty(address):
           positions.append(pos)
+
+      # fetch staked CL positions
+      pools_count: uint256 = factory.allPoolsLength()
 
       for pindex in range(0, MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit:
@@ -702,98 +736,6 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
           )
 
           positions.append(pos)
-
-  return positions
-
-@external
-@view
-def positionsByFactory(_limit: uint256, _offset: uint256, _account: address, _nfpm: address)\
-    -> DynArray[Position, MAX_POSITIONS]:
-  """
-  @notice Returns a collection of positions for the given nfpm's factory
-  @param _account The account to fetch positions for
-  @param _limit The max amount of pools to process
-  @param _offset The amount of pools to skip (for optimization)
-  @param _nfpm The INFPositionManager address used to fetch positions
-  @return Array for Lp structs
-  """
-  positions: DynArray[Position, MAX_POSITIONS] = \
-    empty(DynArray[Position, MAX_POSITIONS])
-
-  if _account == empty(address) or _nfpm == empty(address):
-    return positions
-
-  to_skip: uint256 = _offset
-  pools_done: uint256 = 0
-
-  nfpm: INFPositionManager = INFPositionManager(_nfpm)
-
-  factory: IPoolFactory = IPoolFactory(nfpm.factory())
-
-  if self._is_cl_factory(factory.address):
-    # fetch unstaked CL positions
-    positions_count: uint256 = nfpm.balanceOf(_account)
-
-    for pindex in range(0, MAX_POSITIONS):
-      if pindex >= positions_count or pools_done >= _limit:
-        break
-
-      # Basically skip calls for offset records...
-      if to_skip > 0:
-        to_skip -= 1
-        continue
-      else:
-        pools_done += 1
-
-      pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
-      pos: Position = self._cl_position(
-        pos_id,
-        _account,
-        empty(address),
-        empty(address),
-        factory.address,
-        nfpm.address
-      )
-
-      if pos.lp != empty(address):
-        positions.append(pos)
-
-    # fetch staked CL positions
-    pools_count: uint256 = factory.allPoolsLength()
-
-    for pindex in range(0, MAX_POOLS):
-      if pindex >= pools_count or pools_done >= _limit:
-        break
-
-      # Basically skip calls for offset records...
-      if to_skip > 0:
-        to_skip -= 1
-        continue
-      else:
-        pools_done += 1
-
-      pool_addr: address = factory.allPools(pindex)
-      gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
-
-      if gauge.address == empty(address):
-        continue
-
-      staked_position_ids: DynArray[uint256, MAX_POSITIONS] = gauge.stakedValues(_account)
-
-      for sindex in range(0, MAX_POSITIONS):
-        if sindex >= len(staked_position_ids):
-          break
-
-        pos: Position = self._cl_position(
-          staked_position_ids[sindex],
-          _account,
-          pool_addr,
-          gauge.address,
-          factory.address,
-          nfpm.address
-        )
-
-        positions.append(pos)
 
   return positions
 
@@ -971,6 +913,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp({
     lp: pool.address,
+    nfpm: _data[3],
     symbol: "",
     decimals: 18,
     liquidity: convert(pool_liquidity, uint256),
@@ -1297,36 +1240,24 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
 
 @internal
 @view
-def _is_v2_factory(_factory: address) -> bool:
+def _fetch_nfpm(_factory: address) -> address:
   """
-  @notice Returns true if address is a v2 factory
+  @notice Returns the factory NFPM if available. CL pools should have one!
   @param _factory The factory address
   """
+  # Returns the votingRewardsFactory and the gaugeFactory
+  factory_data: address[2] = self.registry.factoriesToPoolFactory(_factory)
+
   response: Bytes[32] = raw_call(
-      _factory,
-      method_id("ZERO_FEE_INDICATOR()"),
+      factory_data[1],
+      method_id("nft()"),
       max_outsize=32,
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
   )[1]
 
-  return len(response) > 0
+  if len(response) > 0:
+    return convert(response, address)
 
-@internal
-@view
-def _is_cl_factory(_factory: address) -> bool:
-  """
-  @notice Returns true if address is a CL factory
-  @param _factory The factory address
-  """
-  response: Bytes[32] = raw_call(
-      _factory,
-      method_id("unstakedFeeModule()"),
-      max_outsize=32,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  return len(response) > 0
+  return empty(address)

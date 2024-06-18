@@ -42,6 +42,7 @@ It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
 
  * `lp` - pool contract address
+ * `nfpm` - pool non-fungible position manager contract address
  * `symbol` - pool symbol
  * `decimals` - pool decimals
  * `liquidity` - pool tokens supply
