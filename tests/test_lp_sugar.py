@@ -71,7 +71,7 @@ def test_byIndex(sugar_contract, LpStruct):
     lp = LpStruct(*sugar_contract.byIndex(0))
 
     assert lp is not None
-    assert len(lp) == 25
+    assert len(lp) == 26
     assert lp.lp is not None
     assert lp.gauge != ADDRESS_ZERO
 
@@ -155,11 +155,11 @@ def test_positionsByFactory(sugar_contract, PositionStruct):
     limit = 100
     offset = 0
     account = os.getenv('TEST_ADDRESS')
-    nfpm = os.getenv('NFPM_ADDRESS')
+    factory = os.getenv('TEST_FACTORY_ADDRESS')
 
     positions = list(map(
         lambda _p: PositionStruct(*_p),
-        sugar_contract.positionsByFactory(limit, offset, account, nfpm)
+        sugar_contract.positionsByFactory(limit, offset, account, factory)
     ))
 
     assert positions is not None
