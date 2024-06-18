@@ -272,10 +272,6 @@ def _pools(_limit: uint256, _offset: uint256)\
     empty(DynArray[address[4], MAX_POOLS])
 
   for index in range(0, MAX_FACTORIES):
-    # TODO: remove once v1 factory is delisted
-    if index == 1:
-      continue
-
     if index >= factories_count:
       break
 
@@ -321,10 +317,6 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   left: uint256 = _limit
 
   for index in range(0, MAX_FACTORIES):
-    # TODO: remove once v1 factory is delisted
-    if index == 1:
-      continue
-
     if index >= factories_count:
       break
 
@@ -638,10 +630,6 @@ def _positions(
   factories_count: uint256 = len(_factories)
 
   for index in range(0, MAX_FACTORIES):
-    # TODO: remove once v1 factory is delisted
-    if index == 1:
-      continue
-
     if index >= factories_count:
       break
 
