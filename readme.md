@@ -36,7 +36,7 @@ Below is the list of datasets we support.
 ### Liquidity Pools Data
 
 > [!NOTE]
-> `LpSugar.vy` is deployed at `0x1381B1E6aaFa01bD28e95AdaB35bdA8191826bC8`
+> `LpSugar.vy` is deployed at `0x207918402452D39245ba3981B3c401B3f55B610b`
 
 It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
