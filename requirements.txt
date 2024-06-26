@@ -1,4 +1,4 @@
-eth-brownie
-vyper
+eth-brownie==1.20.2
+vyper==0.3.10
 flake8
 titanoboa
