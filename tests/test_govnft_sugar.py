@@ -33,12 +33,15 @@ def test_initial_state(sugar_contract):
 
 
 def test_byId(sugar_contract, GovNftStruct):
-    govnft = GovNftStruct(*sugar_contract.byId(1, os.getenv('GOVNFT_COLLECTION_ADDRESS')))
+    govnft = GovNftStruct(
+        *sugar_contract.byId(1, os.getenv('GOVNFT_COLLECTION_ADDRESS'))
+    )
 
     assert govnft is not None
     assert len() == 15
     assert govnft.minter != ADDRESS_ZERO
     assert govnft.address != ADDRESS_ZERO
+
 
 def test_collections(sugar_contract, CollectionStruct):
     collections = list(map(
@@ -52,7 +55,9 @@ def test_collections(sugar_contract, CollectionStruct):
 
 
 def test_owned(sugar_contract, GovNftStruct):
-    govnft = GovNftStruct(*sugar_contract.byId(1, os.getenv('GOVNFT_COLLECTION_ADDRESS')))
+    govnft = GovNftStruct(
+        *sugar_contract.byId(1, os.getenv('GOVNFT_COLLECTION_ADDRESS'))
+    )
 
     assert govnft is not None
 
@@ -70,7 +75,9 @@ def test_owned(sugar_contract, GovNftStruct):
 
 
 def test_minted(sugar_contract, GovNftStruct):
-    govnft = GovNftStruct(*sugar_contract.byId(1, os.getenv('GOVNFT_COLLECTION_ADDRESS')))
+    govnft = GovNftStruct(
+        *sugar_contract.byId(1, os.getenv('GOVNFT_COLLECTION_ADDRESS'))
+    )
 
     assert govnft is not None
 
