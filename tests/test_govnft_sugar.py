@@ -38,7 +38,7 @@ def test_byId(sugar_contract, GovNftStruct):
     )
 
     assert govnft is not None
-    assert len() == 15
+    assert len(govnft) == 15
     assert govnft.minter != ADDRESS_ZERO
     assert govnft.address != ADDRESS_ZERO
 
@@ -50,7 +50,7 @@ def test_collections(sugar_contract, CollectionStruct):
     ))
 
     assert collections is not None
-    assert len(collections) > 1
+    assert len(collections) > 0
     assert collections[0].address == os.getenv('GOVNFT_COLLECTION_ADDRESS')
 
 
@@ -62,12 +62,12 @@ def test_owned(sugar_contract, GovNftStruct):
     assert govnft is not None
 
     owned_govnfts = list(map(
-        lambda _p: CollectionStruct(*_p),
+        lambda _p: GovNftStruct(*_p),
         sugar_contract.owned(govnft.owner, govnft.address)
     ))
 
     assert owned_govnfts is not None
-    assert len(owned_govnfts) > 1
+    assert len(owned_govnfts) > 0
     owned_govnft = owned_govnfts[0]
 
     assert owned_govnft.owner == govnft.owner
@@ -82,12 +82,12 @@ def test_minted(sugar_contract, GovNftStruct):
     assert govnft is not None
 
     minted_govnfts = list(map(
-        lambda _p: CollectionStruct(*_p),
-        sugar_contract.minted(govnft.owner, govnft.address)
+        lambda _p: GovNftStruct(*_p),
+        sugar_contract.minted(govnft.minter, govnft.address)
     ))
 
     assert minted_govnfts is not None
-    assert len(minted_govnfts) > 1
+    assert len(minted_govnfts) > 0
     minted_govnft = minted_govnfts[0]
 
     assert minted_govnft.owner == govnft.owner

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BUSL-1.1
-# @version >=0.3.6 <0.4.0
+# @version ^0.3.10
 
 # @title Velodrome Finance LP Sugar v3
 # @author stas, ethzoomer
