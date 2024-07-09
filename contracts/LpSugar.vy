@@ -1280,7 +1280,7 @@ def _safe_balance_of(_token: address, _address: address) -> uint256:
 @view
 def _safe_decimals(_token: address) -> uint8:
   """
-  @notice Returns the `ERC20.decimals()` result safely
+  @notice Returns the `ERC20.decimals()` result safely. Defaults to 18
   @param _token The token to call
   @param _address The address to get the balanceOf
   """
@@ -1290,7 +1290,7 @@ def _safe_decimals(_token: address) -> uint8:
       _token,
       method_id("decimals()"),
       max_outsize=32,
-      gas=10000,
+      gas=50000,
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
@@ -1299,7 +1299,7 @@ def _safe_decimals(_token: address) -> uint8:
   if success:
     return (convert(response, uint8))
 
-  return 0
+  return 18
 
 @internal
 @view
@@ -1314,7 +1314,7 @@ def _safe_symbol(_token: address) -> String[100]:
       _token,
       method_id("symbol()"),
       max_outsize=100,
-      gas=20000,
+      gas=50000,
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
