@@ -349,7 +349,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
 
       if nfpm != empty(address):
         type = pool.tickSpacing()
-        reserve0 = self._raw_call_balance_of(token0, pool_addr)
+        reserve0 = self._safe_balance_of(token0, pool_addr)
         pool_fee = convert(pool.fee(), uint256)
       else:
         if pool.stable():
@@ -421,12 +421,12 @@ def _token(_address: address, _account: address) -> Token:
   bal: uint256 = empty(uint256)
 
   if _account != empty(address):
-    bal = self._raw_call_balance_of(_address, _account)
+    bal = self._safe_balance_of(_address, _account)
 
   return Token({
     token_address: _address,
-    symbol: self._raw_call_symbol(_address),
-    decimals: self._raw_call_decimals(_address),
+    symbol: self._safe_symbol(_address),
+    decimals: self._safe_decimals(_address),
     account_balance: bal,
     listed: self.voter.isWhitelistedToken(_address)
   })
@@ -504,8 +504,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   pool_fees: address = pool.poolFees()
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
-  token0_fees: uint256 = self._raw_call_balance_of(_token0, pool_fees)
-  token1_fees: uint256 = self._raw_call_balance_of(_token1, pool_fees)
+  token0_fees: uint256 = self._safe_balance_of(_token0, pool_fees)
+  token1_fees: uint256 = self._safe_balance_of(_token1, pool_fees)
   gauge_alive: bool = self.voter.isAlive(gauge.address)
   decimals: uint8 = pool.decimals()
   claimable0: uint256 = 0
@@ -912,11 +912,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     sqrt_ratio: slot.sqrtPriceX96,
 
     token0: token0.address,
-    reserve0: self._raw_call_balance_of(_token0, pool.address),
+    reserve0: self._safe_balance_of(_token0, pool.address),
     staked0: staked0,
 
     token1: token1.address,
-    reserve1: self._raw_call_balance_of(_token1, pool.address),
+    reserve1: self._safe_balance_of(_token1, pool.address),
     staked1: staked1,
 
     gauge: gauge.address,
@@ -1255,7 +1255,7 @@ def _fetch_nfpm(_factory: address) -> address:
 
 @internal
 @view
-def _raw_call_balance_of(_token: address, _address: address) -> uint256:
+def _safe_balance_of(_token: address, _address: address) -> uint256:
   """
   @notice Returns the balance if the call to balanceOf was successfull, otherwise 0
   @param _token The token to call
@@ -1278,7 +1278,7 @@ def _raw_call_balance_of(_token: address, _address: address) -> uint256:
 
 @internal
 @view
-def _raw_call_decimals(_token: address) -> uint8:
+def _safe_decimals(_token: address) -> uint8:
   """
   @notice Returns the `ERC20.decimals()` result safely
   @param _token The token to call
@@ -1303,7 +1303,7 @@ def _raw_call_decimals(_token: address) -> uint8:
 
 @internal
 @view
-def _raw_call_symbol(_token: address) -> String[100]:
+def _safe_symbol(_token: address) -> String[100]:
   """
   @notice Returns the `ERC20.symbol()` result safely
   @param _token The token to call
