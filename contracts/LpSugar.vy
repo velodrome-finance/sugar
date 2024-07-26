@@ -65,6 +65,7 @@ struct Position:
   tick_upper: int24 # Position upper tick on CL, 0 on v2
   sqrt_ratio_lower: uint160 # sqrtRatio at lower tick on CL, 0 on v2
   sqrt_ratio_upper: uint160 # sqrtRatio at upper tick on CL, 0 on v2
+  alm: address
 
 struct Token:
   token_address: address
@@ -116,6 +117,7 @@ struct Lp:
   token1_fees: uint256
 
   nfpm: address
+  alm: address
 
 struct LpEpochReward:
   token: address
@@ -137,6 +139,15 @@ struct Reward:
   fee: address
   bribe: address
 
+# See:
+#   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L12-L60
+struct AlmManagedPositionInfo:
+  slippageD9: uint32
+  property: uint24
+  owner: address
+  pool: address
+  ammPositionIds: DynArray[uint256, 10]
+  # ...Params removed as we don't use those
 
 # Our contracts / Interfaces
 
@@ -182,6 +193,7 @@ interface IPool:
   def unstakedFee() -> uint24: view # CL unstaked fee level
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
+  def factory() -> address: view # CL factory address
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -233,17 +245,30 @@ interface ISlipstreamHelper:
   def fees(_nfpm: address, _position_id: uint256) -> Amounts: view
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
 
+interface IAlmFactory:
+  def poolToAddresses(pool: address) -> address[2]: view
+  def getImmutableParams() -> address[5]: view
+
+interface IAlmCore:
+  def managedPositionAt(_id: uint256) -> AlmManagedPositionInfo: view
+
+interface IAlmLpWrapper:
+  def positionId() -> uint256: view
+  def balanceOf(_account: address) -> uint256: view
+  def totalSupply() -> uint256: view
+
 # Vars
 registry: public(IFactoryRegistry)
 voter: public(IVoter)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
+alm_factory: public(IAlmFactory)
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address, _convertor: address, \
-    _slipstream_helper: address):
+    _slipstream_helper: address, _alm_factory: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -251,6 +276,7 @@ def __init__(_voter: address, _registry: address, _convertor: address, \
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
+  self.alm_factory = IAlmFactory(_alm_factory)
 
 @internal
 @view
@@ -567,6 +593,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token1_fees: token1_fees,
 
     nfpm: empty(address),
+    alm: empty(address),
   })
 
 @external
@@ -628,6 +655,7 @@ def _positions(
   pools_done: uint256 = 0
 
   factories_count: uint256 = len(_factories)
+  alm_core: IAlmCore = IAlmCore(self.alm_factory.getImmutableParams()[0])
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -690,9 +718,67 @@ def _positions(
         if pos.lp != empty(address):
           positions.append(pos)
 
-      # fetch staked CL positions
       pools_count: uint256 = factory.allPoolsLength()
 
+      # fetch ALM positions
+      for pindex in range(0, MAX_POOLS):
+        if pindex >= pools_count or pools_done >= _limit:
+          break
+
+        # Basically skip calls for offset records...
+        if to_skip > 0:
+          to_skip -= 1
+          continue
+        else:
+          pools_done += 1
+
+        pool_addr: address = factory.allPools(pindex)
+        alm_addresses: address[2] = self.alm_factory.poolToAddresses(pool_addr)
+        alm_staking: IGauge = IGauge(alm_addresses[0])
+        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
+
+        if alm_vault.address == empty(address):
+          continue
+
+        alm_user_liq: uint256 = alm_vault.balanceOf(_account)
+
+        if alm_user_liq == 0:
+          continue
+
+        alm_pos: AlmManagedPositionInfo = alm_core.managedPositionAt(
+          alm_vault.positionId()
+        )
+
+        pos: Position = self._cl_position(
+          alm_pos.ammPositionIds[0],
+          _account,
+          pool_addr,
+          # ... indicates it is not staked
+          empty(address),
+          factory.address,
+          nfpm.address
+        )
+
+        alm_liq: uint256 = alm_vault.totalSupply()
+        # adjust user share of the vault...
+        pos.amount0 = (alm_user_liq * pos.amount0) / alm_liq
+        pos.amount1 = (alm_user_liq * pos.amount1) / alm_liq
+        pos.staked0 = (alm_user_liq * pos.staked0) / alm_liq
+        pos.staked1 = (alm_user_liq * pos.staked1) / alm_liq
+
+        pos.emissions_earned = alm_staking.earned(_account)
+        # ignore dust as the rebalancing might report "fees"
+        pos.unstaked_earned0 = 0
+        pos.unstaked_earned1 = 0
+
+        pos.liquidity = (alm_user_liq * pos.liquidity) / alm_liq
+        pos.staked = (alm_user_liq * pos.staked) / alm_liq
+
+        pos.alm = alm_vault.address
+
+        positions.append(pos)
+
+      # fetch staked CL positions
       for pindex in range(0, MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit:
           break
@@ -731,8 +817,14 @@ def _positions(
 
 @internal
 @view
-def _cl_position(_id: uint256, _account: address,\
-    _pool:address, _gauge:address, _factory: address, _nfpm: address) -> Position:
+def _cl_position(
+    _id: uint256,
+    _account: address,
+    _pool:address,
+    _gauge:address,
+    _factory: address,
+    _nfpm: address
+  ) -> Position:
   """
   @notice Returns concentrated pool position data
   @param _id The token ID of the position
@@ -901,6 +993,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge_alive and gauge.periodFinish() > block.timestamp:
     emissions = gauge.rewardRate()
 
+  alm_addresses: address[2] = self.alm_factory.poolToAddresses(pool.address)
+
   return Lp({
     lp: pool.address,
     symbol: "",
@@ -936,6 +1030,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token1_fees: token1_fees,
 
     nfpm: _data[3],
+    alm: alm_addresses[1],
   })
 
 @external

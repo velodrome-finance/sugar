@@ -42,7 +42,6 @@ It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
 
  * `lp` - pool contract address
- * `nfpm` - pool non-fungible position manager contract address
  * `symbol` - pool symbol
  * `decimals` - pool decimals
  * `liquidity` - pool tokens supply
@@ -67,6 +66,8 @@ The returned data/struct of type `Lp` values represent:
  * `unstaked_fee` - unstaked fee percentage on CL pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
+ * `nfpm` - pool non-fungible position manager contract address
+ * `alm` - pool ALM vault contract address
 
 ---
 
@@ -83,6 +84,7 @@ To get the positions of an account, use this function:
 
 The returned data is a struct of type `Position` with the following values:
   * `id` - NFT ID on CL pools, 0 on v2 pools
+  * `lp` - liquidity pool contract address
   * `liquidity` - liquidity amount on CL, deposited LP tokens on v2
   * `staked` -  staked/unstaked liquidity amount on CL, amount of staked tokens on v2
   * `amount0` - amount of unstaked token0 in the position
@@ -96,6 +98,7 @@ The returned data is a struct of type `Position` with the following values:
   * `tick_upper` - upper tick of position on CL, 0 on v2
   * `sqrt_ratio_lower` - sqrt ratio X96 at lower tick on CL, 0 on v2
   * `sqrt_ratio_upper` - sqrt ratio X96 at upper tick on CL, 0 on v2
+  * `alm` - pool ALM vault contract address
 
 ---
 
