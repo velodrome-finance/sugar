@@ -254,7 +254,6 @@ interface IAlmCore:
 
 interface IAlmLpWrapper:
   def positionId() -> uint256: view
-  def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
 
 # Vars
@@ -740,7 +739,7 @@ def _positions(
         if alm_vault.address == empty(address):
           continue
 
-        alm_user_liq: uint256 = alm_vault.balanceOf(_account)
+        alm_user_liq: uint256 = alm_staking.balanceOf(_account)
 
         if alm_user_liq == 0:
           continue

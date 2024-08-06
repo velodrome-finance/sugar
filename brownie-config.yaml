@@ -5,4 +5,5 @@ networks:
     cmd_settings:
       accounts: 1
       mnemonic: brownie
-      fork: https://opt-mainnet.g.alchemy.com/v2/TYO_nS5GvA15ccCxYMEzTkAxQHrqk801
+      fork: https://optimism-mainnet.wallet.coinbase.com
+      evm_version: shanghai
