@@ -1426,6 +1426,7 @@ def _safe_symbol(_token: address) -> String[100]:
   @param _token The token to call
   """
   success: bool = False
+  # >=192 input size is required by Vyper's _abi_decode()
   response: Bytes[192] = b""
   success, response = raw_call(
       _token,
