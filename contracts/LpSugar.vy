@@ -1426,11 +1426,11 @@ def _safe_symbol(_token: address) -> String[100]:
   @param _token The token to call
   """
   success: bool = False
-  response: Bytes[100] = b""
+  response: Bytes[192] = b""
   success, response = raw_call(
       _token,
       method_id("symbol()"),
-      max_outsize=100,
+      max_outsize=192,
       gas=50000,
       is_delegate_call=False,
       is_static_call=True,
@@ -1438,7 +1438,7 @@ def _safe_symbol(_token: address) -> String[100]:
   )
 
   if success:
-    return IERC20(_token).symbol()
+    return _abi_decode(response, String[100])
 
   return "-NA-"
 
