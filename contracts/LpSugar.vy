@@ -735,6 +735,8 @@ def _positions(
         alm_addresses: address[2] = self.alm_factory.poolToAddresses(pool_addr)
         alm_staking: IGauge = IGauge(alm_addresses[0])
         alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
+        gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
+        staked: bool = False
 
         if alm_vault.address == empty(address):
           continue
@@ -748,12 +750,17 @@ def _positions(
           alm_vault.positionId()
         )
 
+        if gauge.address != empty(address) and len(alm_pos.ammPositionIds) > 0:
+          staked = gauge.stakedContains(
+            alm_core.address, alm_pos.ammPositionIds[0]
+          )
+
         pos: Position = self._cl_position(
           alm_pos.ammPositionIds[0],
-          _account,
+          # Account is the ALM Core contract here...
+          alm_core.address,
           pool_addr,
-          # ... indicates it is not staked
-          empty(address),
+          gauge.address if staked else empty(address),
           factory.address,
           nfpm.address
         )
