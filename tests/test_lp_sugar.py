@@ -135,6 +135,16 @@ def test_all(sugar_contract, LpStruct):
     assert lp2.gauge == second_lp.gauge
 
 
+def test_all_pagination(sugar_contract, LpStruct):
+    max_lps = sugar_contract.MAX_LPS()
+
+    for i in range(0, max_lps, max_lps):
+        lps = sugar_contract.all(max_lps, 0)
+
+        assert lps is not None
+        assert len(lps) > max_lps - 1
+
+
 def test_all_limit_offset(sugar_contract, LpStruct):
     second_lp = LpStruct(*sugar_contract.byIndex(1))
     lps = list(map(
