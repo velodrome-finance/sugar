@@ -689,22 +689,20 @@ def _positions(
         pos: Position = self._v2_position(_account, pool_addr)
 
         if pos.lp != empty(address):
-          positions.append(pos)
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
 
     else:
-      # fetch unstaked CL positions
+      # Fetch unstaked CL positions.
+      # Since we can't iterate over pools, offset and limit don't apply here.
+      # TODO: figure out a better way to paginate over unstaked positions.
       positions_count: uint256 = nfpm.balanceOf(_account)
 
       for pindex in range(0, MAX_POSITIONS):
-        if pindex >= positions_count or pools_done >= _limit:
+        if pindex >= positions_count:
           break
-
-        # Basically skip calls for offset records...
-        if to_skip > 0:
-          to_skip -= 1
-          continue
-        else:
-          pools_done += 1
 
         pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
         pos: Position = self._cl_position(
@@ -717,7 +715,10 @@ def _positions(
         )
 
         if pos.lp != empty(address):
-          positions.append(pos)
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
 
       pools_count: uint256 = factory.allPoolsLength()
 
@@ -784,7 +785,10 @@ def _positions(
 
         pos.alm = alm_vault.address
 
-        positions.append(pos)
+        if len(positions) < MAX_POSITIONS:
+          positions.append(pos)
+        else:
+          break
 
       # fetch staked CL positions
       for pindex in range(0, MAX_ITERATIONS):
@@ -819,7 +823,10 @@ def _positions(
             nfpm.address
           )
 
-          positions.append(pos)
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
 
   return positions
 
