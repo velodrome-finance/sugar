@@ -258,9 +258,8 @@ interface IAlmLpWrapper:
   def totalSupply() -> uint256: view
 
 # Vars
-registry: public(IFactoryRegistry)
 voter: public(IVoter) # Voter on root , LeafVoter on leaf chain
-factories: public(DynArray[address, MAX_FACTORIES])
+registry: public(IFactoryRegistry)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
@@ -268,14 +267,13 @@ alm_factory: public(IAlmFactory)
 # Methods
 
 @external
-def __init__(_registry: address, _voter: address, _factories: DynArray[address, MAX_FACTORIES], \
+def __init__(_voter: address, _registry: address,\
     _convertor: address, _slipstream_helper: address, _alm_factory: address):
   """
   @dev Sets up our external contract addresses
   """
-  self.registry = IFactoryRegistry(_registry)
   self.voter = IVoter(_voter)
-  self.factories = _factories
+  self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
@@ -290,7 +288,7 @@ def _pools(_limit: uint256, _offset: uint256)\
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of four addresses (factory, pool, gauge, nfpm)
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.factories
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
 
   to_skip: uint256 = _offset
@@ -338,7 +336,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.factories
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
@@ -610,7 +608,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   @param _offset The amount of pools to skip (for optimization)
   @return Array for Lp structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.factories
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
 
   return self._positions(_limit, _offset, _account, factories)
 
@@ -1346,15 +1344,11 @@ def _fetch_nfpm(_factory: address) -> address:
   @notice Returns the factory NFPM if available. CL pools should have one!
   @param _factory The factory address
   """
-  factory: address = _factory
-
-  if self.registry != empty(IFactoryRegistry):
-    # Returns the votingRewardsFactory and the gaugeFactory
-    factory_data: address[2] = self.registry.factoriesToPoolFactory(_factory)
-    factory = factory_data[1]
+  # Returns the votingRewardsFactory and the gaugeFactory
+  factory_data: address[2] = self.registry.factoriesToPoolFactory(_factory)
 
   response: Bytes[32] = raw_call(
-      factory,
+      factory_data[1],
       method_id("nft()"),
       max_outsize=32,
       is_delegate_call=False,

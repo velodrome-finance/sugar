@@ -15,9 +15,8 @@ def main():
 
     if 'lp' in contract_name:
         LpSugar.deploy(
-            os.getenv(chain_name + '_REGISTRY'),
             os.getenv(chain_name + '_VOTER'),
-            str(os.getenv(chain_name + '_FACTORIES')).split(','),
+            os.getenv(chain_name + '_REGISTRY'),
             os.getenv(chain_name + '_CONVERTOR'),
             os.getenv(chain_name + '_SLIPSTREAM_HELPER'),
             os.getenv(chain_name + '_ALM_FACTORY'),
