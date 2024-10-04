@@ -259,7 +259,8 @@ interface IAlmLpWrapper:
 
 # Vars
 registry: public(IFactoryRegistry)
-voter: public(IVoter)
+voter: public(IVoter) # Voter on root , LeafVoter on leaf chain
+factories: public(DynArray[address, MAX_FACTORIES])
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
@@ -267,13 +268,14 @@ alm_factory: public(IAlmFactory)
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _convertor: address, \
-    _slipstream_helper: address, _alm_factory: address):
+def __init__(_registry: address, _voter: address, _factories: DynArray[address, MAX_FACTORIES], \
+    _convertor: address, _slipstream_helper: address, _alm_factory: address):
   """
   @dev Sets up our external contract addresses
   """
-  self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
+  self.voter = IVoter(_voter)
+  self.factories = _factories
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
@@ -288,7 +290,7 @@ def _pools(_limit: uint256, _offset: uint256)\
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of four addresses (factory, pool, gauge, nfpm)
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = self.factories
   factories_count: uint256 = len(factories)
 
   to_skip: uint256 = _offset
@@ -336,7 +338,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = self.factories
   factories_count: uint256 = len(factories)
 
   pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
@@ -608,7 +610,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   @param _offset The amount of pools to skip (for optimization)
   @return Array for Lp structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = self.factories
 
   return self._positions(_limit, _offset, _account, factories)
 
@@ -656,7 +658,10 @@ def _positions(
   pools_done: uint256 = 0
 
   factories_count: uint256 = len(_factories)
-  alm_core: IAlmCore = IAlmCore(self.alm_factory.getImmutableParams()[0])
+
+  alm_core: IAlmCore = empty(IAlmCore)
+  if self.alm_factory != empty(IAlmFactory):
+    alm_core = IAlmCore(self.alm_factory.getImmutableParams()[0])
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -723,7 +728,7 @@ def _positions(
 
       # fetch ALM positions
       for pindex in range(0, MAX_POOLS):
-        if pindex >= pools_count or pools_done >= _limit:
+        if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
           break
 
         # Basically skip calls for offset records...
@@ -1000,8 +1005,10 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   if gauge_alive and gauge.periodFinish() > block.timestamp:
     emissions = gauge.rewardRate()
-
-  alm_addresses: address[2] = self.alm_factory.poolToAddresses(pool.address)
+  
+  alm_addresses: address[2] = [empty(address), empty(address)]
+  if self.alm_factory != empty(IAlmFactory):
+    alm_addresses = self.alm_factory.poolToAddresses(pool.address)
 
   return Lp({
     lp: pool.address,
@@ -1339,11 +1346,15 @@ def _fetch_nfpm(_factory: address) -> address:
   @notice Returns the factory NFPM if available. CL pools should have one!
   @param _factory The factory address
   """
-  # Returns the votingRewardsFactory and the gaugeFactory
-  factory_data: address[2] = self.registry.factoriesToPoolFactory(_factory)
+  factory: address = _factory
+
+  if self.registry != empty(IFactoryRegistry):
+    # Returns the votingRewardsFactory and the gaugeFactory
+    factory_data: address[2] = self.registry.factoriesToPoolFactory(_factory)
+    factory = factory_data[1]
 
   response: Bytes[32] = raw_call(
-      factory_data[1],
+      factory,
       method_id("nft()"),
       max_outsize=32,
       is_delegate_call=False,
