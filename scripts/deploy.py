@@ -37,7 +37,7 @@ def main():
             os.getenv(f'VOTER_{chain_id}'),
             {'from': account}
         )
-    
+
     if 'registry' in contract_name:
         FactoryRegistry.deploy(
             account,

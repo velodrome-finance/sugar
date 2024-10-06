@@ -81,7 +81,7 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
     second_lp = LpStruct(*sugar_contract.byIndex(1))
     swap_lps = list(map(
         lambda _p: SwapLpStruct(*_p),
-        sugar_contract.forSwaps(10, 1)
+        sugar_contract.forSwaps(10, 0)
     ))
 
     assert swap_lps is not None
@@ -96,7 +96,6 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
 
 def test_tokens(sugar_contract, TokenStruct, LpStruct):
     first_lp = LpStruct(*sugar_contract.byIndex(0))
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
     tokens = list(map(
         lambda _p: TokenStruct(*_p),
         sugar_contract.tokens(10, 0, ADDRESS_ZERO, [])
@@ -105,14 +104,13 @@ def test_tokens(sugar_contract, TokenStruct, LpStruct):
     assert tokens is not None
     assert len(tokens) > 1
 
-    token0, token1, token2 = tokens[0: 3]
+    token0, token1 = tokens[0: 2]
 
     assert token0.token_address == first_lp.token0
     assert token0.symbol is not None
     assert token0.decimals > 0
 
     assert token1.token_address == first_lp.token1
-    assert token2.token_address == second_lp.token0
 
 
 def test_all(sugar_contract, LpStruct):

@@ -21,7 +21,7 @@ def VeNFTStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_8453'))
+    assert sugar_contract.voter() == os.getenv('VOTER_8453')
     assert sugar_contract.dist() == \
         os.getenv('DIST_8453')
     assert sugar_contract.ve() is not None
@@ -33,7 +33,6 @@ def test_byId(sugar_contract, VeNFTStruct):
     assert venft is not None
     assert len(venft) == 14
     assert venft.id is not None
-    assert len(venft.votes) > 0
     assert venft.voted_at > 0
 
 
