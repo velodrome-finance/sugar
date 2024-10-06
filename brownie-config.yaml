@@ -7,5 +7,3 @@ networks:
       mnemonic: brownie
       fork: https://optimism-mainnet.wallet.coinbase.com
       evm_version: shanghai
-dependencies:
-    - openzeppelin/openzeppelin-contracts@5.0.2 
