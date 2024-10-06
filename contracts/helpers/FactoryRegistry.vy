@@ -9,9 +9,8 @@ MAX_FACTORIES: public(constant(uint256)) = 10
 
 owner: public(address)
 poolFactories: public(DynArray[address, MAX_FACTORIES]) # camelCase to have same signature as origin registry
-
-pool_factory_count: uint256
-pool_factory_exists: HashMap[address, bool]
+pool_factory_count: public(uint256)
+pool_factory_exists: public(HashMap[address, bool])
 
 @external
 def __init__(_owner: address):
