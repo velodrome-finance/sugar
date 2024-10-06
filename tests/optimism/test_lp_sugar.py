@@ -10,7 +10,7 @@ from web3.constants import ADDRESS_ZERO
 def sugar_contract(LpSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield LpSugar.at(os.getenv('LP_SUGAR_ADDRESS'))
+    yield LpSugar.at(os.getenv('LP_SUGAR_ADDRESS_10'))
 
 
 @pytest.fixture
@@ -63,8 +63,8 @@ def LpEpochBribeStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
-    assert sugar_contract.registry() == os.getenv('REGISTRY_ADDRESS')
+    assert sugar_contract.voter() == os.getenv('VOTER_10')
+    assert sugar_contract.registry() == os.getenv('REGISTRY_10')
 
 
 def test_byIndex(sugar_contract, LpStruct):
@@ -164,8 +164,8 @@ def test_all_limit_offset(sugar_contract, LpStruct):
 def test_positionsByFactory(sugar_contract, PositionStruct):
     limit = 100
     offset = 0
-    account = os.getenv('TEST_ADDRESS')
-    factory = os.getenv('TEST_FACTORY_ADDRESS')
+    account = os.getenv('TEST_ADDRESS_10')
+    factory = os.getenv('TEST_FACTORY_ADDRESS_10')
 
     positions = list(map(
         lambda _p: PositionStruct(*_p),
@@ -182,7 +182,7 @@ def test_positionsByFactory(sugar_contract, PositionStruct):
 
 
 def test_positions_ALM(sugar_contract, PositionStruct):
-    account = os.getenv('TEST_ALM_ADDRESS')
+    account = os.getenv('TEST_ALM_ADDRESS_10')
 
     positions = list(map(
         lambda _p: PositionStruct(*_p),

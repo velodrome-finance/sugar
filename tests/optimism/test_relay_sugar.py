@@ -10,7 +10,7 @@ from web3.constants import ADDRESS_ZERO
 def sugar_contract(RelaySugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield RelaySugar.at(os.getenv('RELAY_SUGAR_ADDRESS'))
+    yield RelaySugar.at(os.getenv('RELAY_SUGAR_ADDRESS_10'))
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def RelayStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
+    assert sugar_contract.voter() == os.getenv('VOTER_10')
     assert sugar_contract.registries(0) == \
         os.getenv('RELAY_REGISTRY_ADDRESSES').split(',')[0]
     assert sugar_contract.ve() is not None

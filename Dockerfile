@@ -13,3 +13,8 @@ RUN pip install -r requirements.txt
 
 RUN brownie networks modify optimism-test host=https://sepolia.optimism.io
 RUN brownie networks modify optimism-main host=https://optimism-mainnet.wallet.coinbase.com
+
+RUN brownie networks modify base-main host=https://mainnet.base.org
+
+RUN brownie networks add Bob bob-main host=https://rpc.gobob.xyz/ chainid=60808  
+RUN brownie networks add Mode mode-main host=https://mainnet.mode.network chainid=34443
