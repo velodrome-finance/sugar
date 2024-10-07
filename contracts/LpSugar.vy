@@ -263,12 +263,15 @@ registry: public(IFactoryRegistry)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
+root_pool_factory: public(address)
+root_pool_factory_slipstream: public(address)
 
 # Methods
 
 @external
 def __init__(_voter: address, _registry: address,\
-    _convertor: address, _slipstream_helper: address, _alm_factory: address):
+    _convertor: address, _slipstream_helper: address,\
+    _alm_factory: address, _root_pool_factory: address, _root_pool_factory_slipstream: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -277,6 +280,8 @@ def __init__(_voter: address, _registry: address,\
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
+  self.root_pool_factory = _root_pool_factory
+  self.root_pool_factory_slipstream = _root_pool_factory_slipstream
 
 @internal
 @view
@@ -302,6 +307,9 @@ def _pools(_limit: uint256, _offset: uint256)\
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
+    if factory.address == self.root_pool_factory or factory.address == self.root_pool_factory_slipstream:
+      continue
+
     pools_count: uint256 = factory.allPoolsLength()
     nfpm: address = self._fetch_nfpm(factory.address)
 
@@ -348,6 +356,9 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
+    if factory.address == self.root_pool_factory or factory.address == self.root_pool_factory_slipstream:
+      continue
+
     nfpm: address = self._fetch_nfpm(factory.address)
     pools_count: uint256 = factory.allPoolsLength()
 
@@ -666,6 +677,9 @@ def _positions(
       break
 
     factory: IPoolFactory = IPoolFactory(_factories[index])
+    if factory.address == self.root_pool_factory or factory.address == self.root_pool_factory_slipstream:
+      continue
+
     nfpm: INFPositionManager = \
       INFPositionManager(self._fetch_nfpm(factory.address))
 
