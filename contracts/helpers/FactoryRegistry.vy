@@ -4,18 +4,15 @@
 # @author velodrome.finance
 # @notice Sugar Factory Registry to keep track of leaf pool factories
 
-
 MAX_FACTORIES: public(constant(uint256)) = 10
 
 owner: public(address)
-poolFactories: public(DynArray[address, MAX_FACTORIES]) # camelCase to have same signature as origin registry
-pool_factory_count: public(uint256)
+pool_factories: public(DynArray[address, MAX_FACTORIES])
 pool_factory_exists: public(HashMap[address, bool])
 
 @external
 def __init__(_owner: address):
     self.owner = _owner
-    self.pool_factory_count = 0
 
 @internal
 def _only_owner():
@@ -25,13 +22,10 @@ def _only_owner():
 def approve(pool_factory: address):
     self._only_owner()
     
-    # Check if already present
     if self.pool_factory_exists[pool_factory]:
         raise "Already exists"
     
-    # Add the poolFactory to the list
-    self.poolFactories[self.pool_factory_count] = pool_factory
-    self.pool_factory_count += 1
+    self.pool_factories.append(pool_factory)
     self.pool_factory_exists[pool_factory] = True
 
 @external
@@ -42,13 +36,9 @@ def unapprove(pool_factory: address):
         raise "Not exists"
 
     for i in range(MAX_FACTORIES):
-        if self.poolFactories[i] == pool_factory:
-            # Remove the pool_factory by shifting elements
-            for j in range(0, MAX_FACTORIES):
-                if j < i: continue
-                if j >= self.pool_factory_count: break
-                self.poolFactories[j] = self.poolFactories[j + 1]
-            self.pool_factory_count -= 1
+        if self.pool_factories[i] == pool_factory:
+            self.pool_factories[i] = self.pool_factories[len(self.pool_factories) - 1]
+            self.pool_factories.pop()
             break
 
     self.pool_factory_exists[pool_factory] = False
@@ -57,3 +47,8 @@ def unapprove(pool_factory: address):
 @view
 def factoriesToPoolFactory(poolFactory: address) -> (address, address):
     return (empty(address), poolFactory)
+
+@external
+@view
+def poolFactories() -> DynArray[address, MAX_FACTORIES]:
+    return self.pool_factories
