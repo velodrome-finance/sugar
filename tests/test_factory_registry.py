@@ -16,6 +16,6 @@ def test_initial_state(factory_registry):
 
 
 def test_factories_to_pool_factory(factory_registry):
-    pool_factory: address = "0x1111111111111111111111111111111111111111"
+    pool_factory = "0x1111111111111111111111111111111111111111"
     result = factory_registry.factoriesToPoolFactory(pool_factory)
     assert result == [ADDRESS_ZERO, pool_factory]
