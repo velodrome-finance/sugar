@@ -20,8 +20,6 @@ def main():
             os.getenv(f'CONVERTOR_{chain_id}'),
             os.getenv(f'SLIPSTREAM_HELPER_{chain_id}'),
             os.getenv(f'ALM_FACTORY_{chain_id}'),
-            os.getenv(f'ROOT_POOL_FACTORY_{chain_id}'),
-            os.getenv(f'ROOT_POOL_FACTORY_SLIPSTREAM_{chain_id}'),
             {'from': account}
         )
 
