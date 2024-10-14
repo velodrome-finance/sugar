@@ -40,7 +40,7 @@ def main():
 
     if 'registry' in contract_name:
         FactoryRegistry.deploy(
-            account,
+            str(os.getenv(f'FACTORIES_{chain_id}')).split(','),
             {'from': account}
         )
 
