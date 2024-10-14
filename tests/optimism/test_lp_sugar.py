@@ -205,7 +205,7 @@ def test_epochsByAddress_limit_offset(
         LpEpochStruct,
         LpEpochBribeStruct
         ):
-    first_lp = LpStruct(*sugar_contract.byIndex(0))
+    first_lp = LpStruct(*sugar_contract.byIndex(1))
     lp_epochs = list(map(
         lambda _p: LpEpochStruct(*_p),
         sugar_contract.epochsByAddress(20, 3, first_lp.lp)
