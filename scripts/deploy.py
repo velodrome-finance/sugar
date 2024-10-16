@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: BUSL-1.1
 import os
 
-from brownie import accounts, VeSugar, LpSugar, RelaySugar
+from brownie import accounts, VeSugar, LpSugar, RelaySugar, FactoryRegistry
 
 
 def main():
     contract_name = str(os.getenv('CONTRACT')).lower()
+    chain_id = os.getenv('CHAIN_ID')
 
     if os.getenv('PROD'):
         account = accounts.load('sugar')
@@ -14,26 +15,32 @@ def main():
 
     if 'lp' in contract_name:
         LpSugar.deploy(
-            os.getenv('VOTER_ADDRESS'),
-            os.getenv('REGISTRY_ADDRESS'),
-            os.getenv('CONVERTOR_ADDRESS'),
-            os.getenv('SLIPSTREAM_HELPER_ADDRESS'),
-            os.getenv('ALM_FACTORY_ADDRESS'),
+            os.getenv(f'VOTER_{chain_id}'),
+            os.getenv(f'REGISTRY_{chain_id}'),
+            os.getenv(f'CONVERTOR_{chain_id}'),
+            os.getenv(f'SLIPSTREAM_HELPER_{chain_id}'),
+            os.getenv(f'ALM_FACTORY_{chain_id}'),
             {'from': account}
         )
 
     if 've' in contract_name:
         VeSugar.deploy(
-            os.getenv('VOTER_ADDRESS'),
-            os.getenv('DIST_ADDRESS'),
-            os.getenv('GOVERNOR_ADDRESS'),
+            os.getenv(f'VOTER_{chain_id}'),
+            os.getenv(f'DIST_{chain_id}'),
+            os.getenv(f'GOVERNOR_{chain_id}'),
             {'from': account}
         )
 
     if 'relay' in contract_name:
         RelaySugar.deploy(
-            str(os.getenv('RELAY_REGISTRY_ADDRESSES')).split(','),
-            os.getenv('VOTER_ADDRESS'),
+            str(os.getenv(f'RELAY_REGISTRY_ADDRESSES_{chain_id}')).split(','),
+            os.getenv(f'VOTER_{chain_id}'),
+            {'from': account}
+        )
+
+    if 'registry' in contract_name:
+        FactoryRegistry.deploy(
+            str(os.getenv(f'FACTORIES_{chain_id}')).split(','),
             {'from': account}
         )
 

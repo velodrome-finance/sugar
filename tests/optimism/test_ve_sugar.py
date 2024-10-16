@@ -9,7 +9,7 @@ from collections import namedtuple
 def sugar_contract(VeSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield VeSugar.at(os.getenv('VE_SUGAR_ADDRESS'))
+    yield VeSugar.at(os.getenv('VE_SUGAR_ADDRESS_10'))
 
 
 @pytest.fixture
@@ -21,9 +21,9 @@ def VeNFTStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
+    assert sugar_contract.voter() == os.getenv('VOTER_10')
     assert sugar_contract.dist() == \
-        os.getenv('DIST_ADDRESS')
+        os.getenv('DIST_10')
     assert sugar_contract.ve() is not None
 
 
