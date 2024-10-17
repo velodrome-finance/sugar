@@ -672,16 +672,17 @@ def _positions(
       break
 
     factory: IPoolFactory = IPoolFactory(_factories[index])
+
     if self._is_root_factory(factory.address):
       continue
 
+    pools_count: uint256 = factory.allPoolsLength()
+    
     nfpm: INFPositionManager = \
       INFPositionManager(self._fetch_nfpm(factory.address))
 
     # V2/Basic pool
     if nfpm.address == empty(address):
-      pools_count: uint256 = factory.allPoolsLength()
-
       for pindex in range(0, MAX_ITERATIONS):
         if pindex >= pools_count or pools_done >= _limit:
           break
@@ -701,22 +702,20 @@ def _positions(
         pos: Position = self._v2_position(_account, pool_addr)
 
         if pos.lp != empty(address):
-          positions.append(pos)
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
 
     else:
-      # fetch unstaked CL positions
+      # Fetch unstaked CL positions.
+      # Since we can't iterate over pools, offset and limit don't apply here.
+      # TODO: figure out a better way to paginate over unstaked positions.
       positions_count: uint256 = nfpm.balanceOf(_account)
 
       for pindex in range(0, MAX_POSITIONS):
-        if pindex >= positions_count or pools_done >= _limit:
+        if pindex >= positions_count:
           break
-
-        # Basically skip calls for offset records...
-        if to_skip > 0:
-          to_skip -= 1
-          continue
-        else:
-          pools_done += 1
 
         pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
         pos: Position = self._cl_position(
@@ -729,11 +728,12 @@ def _positions(
         )
 
         if pos.lp != empty(address):
-          positions.append(pos)
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
 
-      pools_count: uint256 = factory.allPoolsLength()
-
-      # fetch ALM positions
+      # Fetch CL positions (staked + ALM)
       for pindex in range(0, MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
           break
@@ -751,6 +751,31 @@ def _positions(
         alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
         gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
         staked: bool = False
+
+        # Fetch staked CL positions first!
+        if gauge.address != empty(address):
+          staked_position_ids: DynArray[uint256, MAX_POSITIONS] = \
+            gauge.stakedValues(_account)
+
+          for sindex in range(0, MAX_POSITIONS):
+            if sindex >= len(staked_position_ids):
+              break
+
+            pos: Position = self._cl_position(
+              staked_position_ids[sindex],
+              _account,
+              pool_addr,
+              gauge.address,
+              factory.address,
+              nfpm.address
+            )
+
+            if len(positions) < MAX_POSITIONS:
+              positions.append(pos)
+            else:
+              break
+
+        # Next, continue with fetching the ALM positions!
 
         if alm_vault.address == empty(address):
           continue
@@ -796,42 +821,10 @@ def _positions(
 
         pos.alm = alm_vault.address
 
-        positions.append(pos)
-
-      # fetch staked CL positions
-      for pindex in range(0, MAX_ITERATIONS):
-        if pindex >= pools_count or pools_done >= _limit:
-          break
-
-        # Basically skip calls for offset records...
-        if to_skip > 0:
-          to_skip -= 1
-          continue
-        else:
-          pools_done += 1
-
-        pool_addr: address = factory.allPools(pindex)
-        gauge: ICLGauge = ICLGauge(self.voter.gauges(pool_addr))
-
-        if gauge.address == empty(address):
-          continue
-
-        staked_position_ids: DynArray[uint256, MAX_POSITIONS] = gauge.stakedValues(_account)
-
-        for sindex in range(0, MAX_POSITIONS):
-          if sindex >= len(staked_position_ids):
-            break
-
-          pos: Position = self._cl_position(
-            staked_position_ids[sindex],
-            _account,
-            pool_addr,
-            gauge.address,
-            factory.address,
-            nfpm.address
-          )
-
+        if len(positions) < MAX_POSITIONS:
           positions.append(pos)
+        else:
+          break
 
   return positions
 
