@@ -258,8 +258,8 @@ interface IAlmLpWrapper:
   def totalSupply() -> uint256: view
 
 # Vars
+voter: public(IVoter) # Voter on root , LeafVoter on leaf chain
 registry: public(IFactoryRegistry)
-voter: public(IVoter)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
@@ -267,8 +267,8 @@ alm_factory: public(IAlmFactory)
 # Methods
 
 @external
-def __init__(_voter: address, _registry: address, _convertor: address, \
-    _slipstream_helper: address, _alm_factory: address):
+def __init__(_voter: address, _registry: address,\
+    _convertor: address, _slipstream_helper: address, _alm_factory: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -302,6 +302,9 @@ def _pools(_limit: uint256, _offset: uint256)\
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
+    if self._is_root_factory(factory.address):
+      continue
+
     pools_count: uint256 = factory.allPoolsLength()
     nfpm: address = self._fetch_nfpm(factory.address)
 
@@ -348,6 +351,9 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
+    if self._is_root_factory(factory.address):
+      continue
+
     nfpm: address = self._fetch_nfpm(factory.address)
     pools_count: uint256 = factory.allPoolsLength()
 
@@ -656,14 +662,22 @@ def _positions(
   pools_done: uint256 = 0
 
   factories_count: uint256 = len(_factories)
-  alm_core: IAlmCore = IAlmCore(self.alm_factory.getImmutableParams()[0])
+
+  alm_core: IAlmCore = empty(IAlmCore)
+  if self.alm_factory != empty(IAlmFactory):
+    alm_core = IAlmCore(self.alm_factory.getImmutableParams()[0])
 
   for index in range(0, MAX_FACTORIES):
     if index >= factories_count:
       break
 
     factory: IPoolFactory = IPoolFactory(_factories[index])
+
+    if self._is_root_factory(factory.address):
+      continue
+
     pools_count: uint256 = factory.allPoolsLength()
+    
     nfpm: INFPositionManager = \
       INFPositionManager(self._fetch_nfpm(factory.address))
 
@@ -721,7 +735,7 @@ def _positions(
 
       # Fetch CL positions (staked + ALM)
       for pindex in range(0, MAX_POOLS):
-        if pindex >= pools_count or pools_done >= _limit:
+        if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
           break
 
         # Basically skip calls for offset records...
@@ -991,8 +1005,10 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   if gauge_alive and gauge.periodFinish() > block.timestamp:
     emissions = gauge.rewardRate()
-
-  alm_addresses: address[2] = self.alm_factory.poolToAddresses(pool.address)
+  
+  alm_addresses: address[2] = [empty(address), empty(address)]
+  if self.alm_factory != empty(IAlmFactory):
+    alm_addresses = self.alm_factory.poolToAddresses(pool.address)
 
   return Lp({
     lp: pool.address,
@@ -1403,11 +1419,12 @@ def _safe_symbol(_token: address) -> String[100]:
   @param _token The token to call
   """
   success: bool = False
-  response: Bytes[100] = b""
+  # >=192 input size is required by Vyper's _abi_decode()
+  response: Bytes[192] = b""
   success, response = raw_call(
       _token,
       method_id("symbol()"),
-      max_outsize=100,
+      max_outsize=192,
       gas=50000,
       is_delegate_call=False,
       is_static_call=True,
@@ -1415,6 +1432,24 @@ def _safe_symbol(_token: address) -> String[100]:
   )
 
   if success:
-    return IERC20(_token).symbol()
+    return _abi_decode(response, String[100])
 
   return "-NA-"
+
+@internal
+@view
+def _is_root_factory(_factory: address) -> bool:
+  """
+  @notice Returns true if the factory is a root pool factory and false if it is a leaf pool factory.
+  @param _factory The factory address
+  """
+  success: bool = raw_call(
+      _factory,
+      method_id("bridge()"),
+      max_outsize=32,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[0]
+
+  return success

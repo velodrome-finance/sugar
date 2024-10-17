@@ -10,7 +10,7 @@ from web3.constants import ADDRESS_ZERO
 def sugar_contract(LpSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield LpSugar.at(os.getenv('LP_SUGAR_ADDRESS'))
+    yield LpSugar.at(os.getenv('LP_SUGAR_ADDRESS_8453'))
 
 
 @pytest.fixture
@@ -63,8 +63,8 @@ def LpEpochBribeStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_ADDRESS')
-    assert sugar_contract.registry() == os.getenv('REGISTRY_ADDRESS')
+    assert sugar_contract.voter() == os.getenv('VOTER_8453')
+    assert sugar_contract.registry() == os.getenv('REGISTRY_8453')
 
 
 def test_byIndex(sugar_contract, LpStruct):
@@ -81,7 +81,7 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
     second_lp = LpStruct(*sugar_contract.byIndex(1))
     swap_lps = list(map(
         lambda _p: SwapLpStruct(*_p),
-        sugar_contract.forSwaps(10, 1)
+        sugar_contract.forSwaps(10, 0)
     ))
 
     assert swap_lps is not None
@@ -96,7 +96,6 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
 
 def test_tokens(sugar_contract, TokenStruct, LpStruct):
     first_lp = LpStruct(*sugar_contract.byIndex(0))
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
     tokens = list(map(
         lambda _p: TokenStruct(*_p),
         sugar_contract.tokens(10, 0, ADDRESS_ZERO, [])
@@ -105,14 +104,13 @@ def test_tokens(sugar_contract, TokenStruct, LpStruct):
     assert tokens is not None
     assert len(tokens) > 1
 
-    token0, token1, token2 = tokens[0: 3]
+    token0, token1 = tokens[0: 2]
 
     assert token0.token_address == first_lp.token0
     assert token0.symbol is not None
     assert token0.decimals > 0
 
     assert token1.token_address == first_lp.token1
-    assert token2.token_address == second_lp.token0
 
 
 def test_all(sugar_contract, LpStruct):
@@ -164,8 +162,8 @@ def test_all_limit_offset(sugar_contract, LpStruct):
 def test_positionsByFactory(sugar_contract, PositionStruct):
     limit = 100
     offset = 0
-    account = os.getenv('TEST_ADDRESS')
-    factory = os.getenv('TEST_FACTORY_ADDRESS')
+    account = os.getenv('TEST_ADDRESS_8453')
+    factory = os.getenv('TEST_FACTORY_ADDRESS_8453')
 
     positions = list(map(
         lambda _p: PositionStruct(*_p),
@@ -182,7 +180,7 @@ def test_positionsByFactory(sugar_contract, PositionStruct):
 
 
 def test_positions_ALM(sugar_contract, PositionStruct):
-    account = os.getenv('TEST_ALM_ADDRESS')
+    account = os.getenv('TEST_ALM_ADDRESS_8453')
 
     positions = list(map(
         lambda _p: PositionStruct(*_p),
