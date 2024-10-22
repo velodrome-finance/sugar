@@ -264,6 +264,7 @@ registry: public(IFactoryRegistry)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
+canonical_chains: public(HashMap[uint256, bool])
 
 # Methods
 
@@ -278,6 +279,8 @@ def __init__(_voter: address, _registry: address,\
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
+  self.canonical_chains[10] = True
+  self.canonical_chains[8453] = True
 
 @internal
 @view
@@ -714,7 +717,7 @@ def _positions(
       positions_count: uint256 = nfpm.balanceOf(_account)
 
       chainid: uint256 = chain.id
-      if chainid == 10 or chainid == 8453:
+      if self.canonical_chains[chainid]:
         for pindex in range(0, MAX_POSITIONS):
           if pindex >= positions_count:
             break
@@ -750,7 +753,7 @@ def _positions(
 
         # Fetch unstaked CL positions.
         # Efficient on leaf
-        if chainid != 10 and chainid != 8453:
+        if not self.canonical_chains[chainid]:
           positions_ids: DynArray[uint256, MAX_POSITIONS] = \
             nfpm.userPositions(_account, pool_addr) 
 
