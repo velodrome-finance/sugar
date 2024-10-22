@@ -627,6 +627,78 @@ def positionsByFactory(
   """
   return self._positions(_limit, _offset, _account, [_factory])
 
+@external
+@view
+def unstakedPositions(
+    _limit: uint256,
+    _offset: uint256,
+    _account: address
+) -> DynArray[Position, MAX_POSITIONS]:
+  """
+  @notice Returns a collection of unstaked CL positions for canonical chains
+  @param _account The account to fetch positions for
+  @param _limit The max amount of positions to process
+  @param _offset The amount of positions to skip (for optimization)
+  @return Array for Lp structs
+  """
+  positions: DynArray[Position, MAX_POSITIONS] = \
+    empty(DynArray[Position, MAX_POSITIONS])
+
+  if not self.canonical_chains[chain.id] or _account == empty(address):
+    return positions
+
+  to_skip: uint256 = _offset
+  positions_done: uint256 = 0
+
+  factories: DynArray[address, MAX_FACTORIES] = self.registry.poolFactories()
+  factories_count: uint256 = len(factories)
+
+  for index in range(0, MAX_FACTORIES):
+    if index >= factories_count:
+      break
+
+    factory: IPoolFactory = IPoolFactory(factories[index])
+
+    nfpm: INFPositionManager = \
+      INFPositionManager(self._fetch_nfpm(factory.address))
+
+    if nfpm.address == empty(address) or self._is_root_factory(factory.address):
+      continue
+
+    # Fetch unstaked CL positions.
+    # Since we can't iterate over pools on non leaf, offset and limit don't apply here.
+    positions_count: uint256 = nfpm.balanceOf(_account)
+
+    for pindex in range(0, MAX_POSITIONS):
+      if pindex >= positions_count or positions_done >= _limit:
+        break
+
+      # Basically skip calls for offset records...
+      if to_skip > 0:
+        to_skip -= 1
+        continue
+      else:
+        positions_done += 1
+
+      pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
+      pos: Position = self._cl_position(
+        pos_id,
+        _account,
+        empty(address),
+        empty(address),
+        factory.address,
+        nfpm.address
+      )
+
+      if pos.lp != empty(address):
+        if len(positions) < MAX_POSITIONS:
+          positions.append(pos)
+        else:
+          break
+
+  return positions
+
+
 @internal
 @view
 def _positions(
