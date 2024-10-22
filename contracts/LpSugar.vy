@@ -230,6 +230,7 @@ interface INFPositionManager:
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def factory() -> address: view
+  def userPositions(_account: address, _pool_addr: address) -> DynArray[uint256, MAX_POSITIONS]: view # leaf only
 
 interface IReward:
   def getPriorSupplyIndex(_ts: uint256) -> uint256: view
@@ -709,33 +710,33 @@ def _positions(
 
     else:
       # Fetch unstaked CL positions.
-      # Since we can't iterate over pools, offset and limit don't apply here.
-      # TODO: figure out a better way to paginate over unstaked positions.
+      # Since we can't iterate over pools on non leaf, offset and limit don't apply here.
       positions_count: uint256 = nfpm.balanceOf(_account)
 
-      for pindex in range(0, MAX_POSITIONS):
-        if pindex >= positions_count:
-          break
-
-        pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
-        pos: Position = self._cl_position(
-          pos_id,
-          _account,
-          empty(address),
-          empty(address),
-          factory.address,
-          nfpm.address
-        )
-
-        if pos.lp != empty(address):
-          if len(positions) < MAX_POSITIONS:
-            positions.append(pos)
-          else:
+      chainid: uint256 = chain.id
+      if chainid == 10 or chainid == 8453:
+        for pindex in range(0, MAX_POSITIONS):
+          if pindex >= positions_count:
             break
 
-      # Fetch CL positions (staked + ALM)
+          pos_id: uint256 = nfpm.tokenOfOwnerByIndex(_account, pindex)
+          pos: Position = self._cl_position(
+            pos_id,
+            _account,
+            empty(address),
+            empty(address),
+            factory.address,
+            nfpm.address
+          )
+
+          if pos.lp != empty(address):
+            if len(positions) < MAX_POSITIONS:
+              positions.append(pos)
+            else:
+              break
+
       for pindex in range(0, MAX_POOLS):
-        if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
+        if pindex >= pools_count or pools_done >= _limit:
           break
 
         # Basically skip calls for offset records...
@@ -746,6 +747,35 @@ def _positions(
           pools_done += 1
 
         pool_addr: address = factory.allPools(pindex)
+
+        # Fetch unstaked CL positions.
+        # Efficient on leaf
+        if chainid != 10 and chainid != 8453:
+          positions_ids: DynArray[uint256, MAX_POSITIONS] = \
+            nfpm.userPositions(_account, pool_addr) 
+
+          for sindex in range(0, MAX_POSITIONS):
+            if sindex >= len(positions_ids):
+              break
+
+            pos: Position = self._cl_position(
+              positions_ids[sindex],
+              _account,
+              pool_addr,
+              empty(address),
+              factory.address,
+              nfpm.address
+            )
+
+            if len(positions) < MAX_POSITIONS:
+              positions.append(pos)
+            else:
+              break
+
+        # Fetch CL positions (staked + ALM)
+        if self.alm_factory == empty(IAlmFactory):
+          continue
+
         alm_addresses: address[2] = self.alm_factory.poolToAddresses(pool_addr)
         alm_staking: IGauge = IGauge(alm_addresses[0])
         alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
