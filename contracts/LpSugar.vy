@@ -151,16 +151,8 @@ struct AlmManagedPositionInfo:
   # ...Params removed as we don't use those
 
 # Our contracts / Interfaces
-
-interface IERC20:
-  def decimals() -> uint8: view
-  def symbol() -> String[100]: view
-  def balanceOf(_account: address) -> uint256: view
-
 interface IFactoryRegistry:
-  def fallbackPoolFactory() -> address: view
   def poolFactories() -> DynArray[address, MAX_FACTORIES]: view
-  def poolFactoriesLength() -> uint256: view
   def factoriesToPoolFactory(_factory: address) -> address[2]: view
 
 interface IPoolFactory:
@@ -194,7 +186,6 @@ interface IPool:
   def unstakedFee() -> uint24: view # CL unstaked fee level
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
-  def factory() -> address: view # CL factory address
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -229,7 +220,6 @@ interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
-  def factory() -> address: view
   def userPositions(_account: address, _pool_addr: address) -> DynArray[uint256, MAX_POSITIONS]: view # leaf only
 
 interface IReward:
@@ -454,7 +444,6 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
 @internal
 @view
 def _token(_address: address, _account: address) -> Token:
-  token: IERC20 = IERC20(_address)
   bal: uint256 = empty(uint256)
 
   if _account != empty(address):
@@ -539,8 +528,6 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   is_stable: bool = pool.stable()
   pool_fee: uint256 = IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = pool.poolFees()
-  token0: IERC20 = IERC20(_token0)
-  token1: IERC20 = IERC20(_token1)
   token0_fees: uint256 = self._safe_balance_of(_token0, pool_fees)
   token1_fees: uint256 = self._safe_balance_of(_token1, pool_fees)
   gauge_alive: bool = self.voter.isAlive(gauge.address)
@@ -579,11 +566,11 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     tick: 0,
     sqrt_ratio: 0,
 
-    token0: token0.address,
+    token0: _token0,
     reserve0: reserve0,
     staked0: staked0,
 
-    token1: token1.address,
+    token1: _token1,
     reserve1: reserve1,
     staked1: staked1,
 
@@ -1005,8 +992,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
-  token0: IERC20 = IERC20(_token0)
-  token1: IERC20 = IERC20(_token1)
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = pool.tickSpacing()
@@ -1053,11 +1038,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     tick: slot.tick,
     sqrt_ratio: slot.sqrtPriceX96,
 
-    token0: token0.address,
+    token0: _token0,
     reserve0: self._safe_balance_of(_token0, pool.address),
     staked0: staked0,
 
-    token1: token1.address,
+    token1: _token1,
     reserve1: self._safe_balance_of(_token1, pool.address),
     staked1: staked1,
 
