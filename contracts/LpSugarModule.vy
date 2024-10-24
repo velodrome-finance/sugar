@@ -748,6 +748,12 @@ def _cl_position(
 
   return pos
 
+@external
+@view
+def v2Position(_account: address, _pool: address) -> Position:
+  return self._v2_position(_account, _pool)
+
+@internal
 @view
 def _v2_position(_account: address, _pool: address) -> Position:
   """
@@ -1188,10 +1194,16 @@ def _safe_symbol(_token: address) -> String[100]:
   )
 
   if success:
-    return abi_decode(response, String[100])
+    return _abi_decode(response, String[100])
 
   return "-NA-"
 
+@external
+@view
+def isRootFactory(_factory: address) -> bool:
+  return self._is_root_factory(_factory)
+
+@internal
 @view
 def _is_root_factory(_factory: address) -> bool:
   """

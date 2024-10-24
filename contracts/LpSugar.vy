@@ -271,14 +271,10 @@ interface ISugarHelper:
   def epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch: view
   def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
       -> DynArray[LpEpoch, MAX_EPOCHS]: view
-  def epochRewards(_ts: uint256, _reward: address) \
-      -> DynArray[LpEpochReward, MAX_REWARDS]: view
   def poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
       -> DynArray[Reward, MAX_POOLS]: view
   def fetchNfpm(_factory: address) -> address: view
   def safeBalanceOf(_token: address, _address: address) -> uint256: view
-  def safeDecimals(_token: address) -> uint8: view
-  def safeSymbol(_token: address) -> String[100]: view
   def isRootFactory(_factory: address) -> bool: view
 
 
