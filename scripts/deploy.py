@@ -2,6 +2,7 @@
 import os
 
 from brownie import accounts, VeSugar, LpSugar, RelaySugar, FactoryRegistry
+from brownie import LpSugarModule
 
 
 def main():
@@ -14,12 +15,21 @@ def main():
         account = accounts[0]
 
     if 'lp' in contract_name:
+        lp_module: LpSugarModule = LpSugarModule.deploy(
+            os.getenv(f'VOTER_{chain_id}'),
+            os.getenv(f'REGISTRY_{chain_id}'),
+            os.getenv(f'CONVERTOR_{chain_id}'),
+            os.getenv(f'SLIPSTREAM_HELPER_{chain_id}'),
+            os.getenv(f'ALM_FACTORY_{chain_id}'),
+            {'from': account}
+        )
         LpSugar.deploy(
             os.getenv(f'VOTER_{chain_id}'),
             os.getenv(f'REGISTRY_{chain_id}'),
             os.getenv(f'CONVERTOR_{chain_id}'),
             os.getenv(f'SLIPSTREAM_HELPER_{chain_id}'),
             os.getenv(f'ALM_FACTORY_{chain_id}'),
+            lp_module.address,
             {'from': account}
         )
 
