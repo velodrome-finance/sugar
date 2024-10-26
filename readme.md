@@ -104,6 +104,26 @@ The returned data is a struct of type `Position` with the following values:
 
 ---
 
+The pools token list (compiled from all the pools `token0`/`token1`) uses the type
+`Token` with the following values:
+
+ * `token_address` - the token address
+ * `symbol` - the token symbol
+ * `decimals` - the token decimals
+ * `account_balance` - the provided account/wallet balance
+ * `listed` - indicates if the token was listed for gauge voting rewards
+
+To fetch the token list this method is available:
+
+ * `tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
+
+### veNFT and Pool Rewards Data
+
+> [!NOTE]
+> `RewardsSugar.vy` is deployed on:
+> Optimism - ``
+> Base - ``
+
 For the pool epoch data we return, starting with most recent epoch, a struct of
 type `LpEpoch` with the following values:
 
@@ -125,21 +145,6 @@ To fetch a list of epochs for a specific pool, this method is available:
 To fetch a list of latest epochs data for a every pool, this method is available:
 
  * `epochsLatest(_limit: uint256, _offset: uint256) -> LpEpoch[]`
-
----
-
-The pools token list (compiled from all the pools `token0`/`token1`) uses the type
-`Token` with the following values:
-
- * `token_address` - the token address
- * `symbol` - the token symbol
- * `decimals` - the token decimals
- * `account_balance` - the provided account/wallet balance
- * `listed` - indicates if the token was listed for gauge voting rewards
-
-To fetch the token list this method is available:
-
- * `tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
 
 ---
 
