@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BUSL-1.1
-# @version ^0.3.6
+# @version ^0.4.0
 
 # @title Velodrome Finance veNFT Sugar v2
 # @author stas
@@ -70,14 +70,14 @@ gov: public(IGovernor)
 
 # Methods
 
-@external
+@deploy
 def __init__(_voter: address, _rewards_distributor: address, _gov: address):
   """
   @dev Sets up our external contract addresses
   """
   self.voter = IVoter(_voter)
-  self.ve = IVotingEscrow(self.voter.ve())
-  self.token = self.ve.token()
+  self.ve = IVotingEscrow(staticcall self.voter.ve())
+  self.token = staticcall self.ve.token()
   self.dist = IRewardsDistributor(_rewards_distributor)
   self.gov = IGovernor(_gov)
 
@@ -92,11 +92,11 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[VeNFT, MAX_RESULTS]:
   """
   col: DynArray[VeNFT, MAX_RESULTS] = empty(DynArray[VeNFT, MAX_RESULTS])
 
-  for index in range(_offset, _offset + MAX_RESULTS):
+  for index: uint256 in range(_offset, _offset + MAX_RESULTS, bound = MAX_RESULTS):
     if len(col) == _limit:
       break
 
-    if self.ve.ownerOf(index) == empty(address):
+    if staticcall self.ve.ownerOf(index) == empty(address):
       continue
 
     col.append(self._byId(index))
@@ -116,8 +116,8 @@ def byAccount(_account: address) -> DynArray[VeNFT, MAX_RESULTS]:
   if _account == empty(address):
     return col
 
-  for index in range(MAX_RESULTS):
-    venft_id: uint256 = self.ve.ownerToNFTokenIdList(_account, index)
+  for index: uint256 in range(MAX_RESULTS):
+    venft_id: uint256 = staticcall self.ve.ownerToNFTokenIdList(_account, index)
 
     if venft_id == 0:
       break
@@ -144,7 +144,7 @@ def _byId(_id: uint256) -> VeNFT:
   @param _id The index/ID to lookup
   @return VeNFT struct
   """
-  account: address = self.ve.ownerOf(_id)
+  account: address = staticcall self.ve.ownerOf(_id)
 
   if account == empty(address):
     return empty(VeNFT)
@@ -153,31 +153,31 @@ def _byId(_id: uint256) -> VeNFT:
   amount: uint128 = 0
   expires_at: uint256 = 0
   perma: bool = False
-  amount, expires_at, perma = self.ve.locked(_id)
+  amount, expires_at, perma = staticcall self.ve.locked(_id)
   last_voted: uint256 = 0
 
-  governance_amount: uint256 = self.gov.getVotes(_id, block.timestamp)
+  governance_amount: uint256 = staticcall self.gov.getVotes(_id, block.timestamp)
 
-  delegate_id: uint256 = self.ve.delegates(_id)
-  managed_id: uint256 = self.ve.idToManaged(_id)
+  delegate_id: uint256 = staticcall self.ve.delegates(_id)
+  managed_id: uint256 = staticcall self.ve.idToManaged(_id)
 
-  if managed_id != 0 or self.ve.voted(_id):
-    last_voted = self.voter.lastVoted(_id)
+  if managed_id != 0 or staticcall self.ve.voted(_id):
+    last_voted = staticcall self.voter.lastVoted(_id)
 
-  vote_weight: uint256 = self.voter.usedWeights(_id)
+  vote_weight: uint256 = staticcall self.voter.usedWeights(_id)
   # Since we don't have a way to see how many pools we voted...
   left_weight: uint256 = vote_weight
 
-  for index in range(MAX_PAIRS):
+  for index: uint256 in range(MAX_PAIRS):
     if left_weight == 0:
       break
 
-    lp: address = self.voter.poolVote(_id, index)
+    lp: address = staticcall self.voter.poolVote(_id, index)
 
     if lp == empty(address):
       break
 
-    weight: uint256 = self.voter.votes(_id, lp)
+    weight: uint256 = staticcall self.voter.votes(_id, lp)
 
     votes.append(LpVotes({
       lp: lp,
@@ -190,12 +190,12 @@ def _byId(_id: uint256) -> VeNFT:
   return VeNFT({
     id: _id,
     account: account,
-    decimals: self.ve.decimals(),
+    decimals: staticcall self.ve.decimals(),
 
     amount: amount,
-    voting_amount: self.ve.balanceOfNFT(_id),
+    voting_amount: staticcall self.ve.balanceOfNFT(_id),
     governance_amount: governance_amount,
-    rebase_amount: self.dist.claimable(_id),
+    rebase_amount: staticcall self.dist.claimable(_id),
     expires_at: expires_at,
     voted_at: last_voted,
     votes: votes,
