@@ -5,17 +5,15 @@
 # @author stas, ethzoomer
 # @notice Makes it nicer to work with the liquidity pools.
 
+from modules import lp_shared
+
+initializes: lp_shared
+
 # Structs
 
-MAX_FACTORIES: public(constant(uint256)) = 10
-MAX_POOLS: public(constant(uint256)) = 2000
-MAX_ITERATIONS: public(constant(uint256)) = 8000
 MAX_TOKENS: public(constant(uint256)) = 2000
 MAX_LPS: public(constant(uint256)) = 500
-MAX_EPOCHS: public(constant(uint256)) = 200
-MAX_REWARDS: public(constant(uint256)) = 50
 MAX_POSITIONS: public(constant(uint256)) = 200
-WEEK: public(constant(uint256)) = 7 * 24 * 60 * 60
 
 # Slot0 from CLPool.sol
 struct Slot:
@@ -120,26 +118,6 @@ struct Lp:
   nfpm: address
   alm: address
 
-struct LpEpochReward:
-  token: address
-  amount: uint256
-
-struct LpEpoch:
-  ts: uint256
-  lp: address
-  votes: uint256
-  emissions: uint256
-  bribes: DynArray[LpEpochReward, MAX_REWARDS]
-  fees: DynArray[LpEpochReward, MAX_REWARDS]
-
-struct Reward:
-  venft_id: uint256
-  lp: address
-  amount: uint256
-  token: address
-  fee: address
-  bribe: address
-
 # See:
 #   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L12-L60
 struct AlmManagedPositionInfo:
@@ -156,18 +134,6 @@ interface IERC20:
   def decimals() -> uint8: view
   def symbol() -> String[100]: view
   def balanceOf(_account: address) -> uint256: view
-
-interface IFactoryRegistry:
-  def fallbackPoolFactory() -> address: view
-  def poolFactories() -> DynArray[address, MAX_FACTORIES]: view
-  def poolFactoriesLength() -> uint256: view
-  def factoriesToPoolFactory(_factory: address) -> address[2]: view
-
-interface IPoolFactory:
-  def allPoolsLength() -> uint256: view
-  def allPools(_index: uint256) -> address: view
-  def getFee(_pool_addr: address, _stable: bool) -> uint256: view
-  def getPool(_token0: address, _token1: address, _fee: int24) -> address: view
 
 interface IPool:
   def token0() -> address: view
@@ -195,13 +161,6 @@ interface IPool:
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
   def factory() -> address: view # CL factory address
-
-interface IVoter:
-  def gauges(_pool_addr: address) -> address: view
-  def gaugeToBribe(_gauge_addr: address) -> address: view
-  def gaugeToFees(_gauge_addr: address) -> address: view
-  def isAlive(_gauge_addr: address) -> bool: view
-  def isWhitelistedToken(_token_addr: address) -> bool: view
 
 interface IGauge:
   def fees0() -> uint256: view
@@ -231,14 +190,6 @@ interface INFPositionManager:
   def balanceOf(_account: address) -> uint256: view
   def factory() -> address: view
 
-interface IReward:
-  def getPriorSupplyIndex(_ts: uint256) -> uint256: view
-  def supplyCheckpoints(_index: uint256) -> uint256[2]: view
-  def tokenRewardsPerEpoch(_token: address, _epstart: uint256) -> uint256: view
-  def rewardsListLength() -> uint256: view
-  def rewards(_index: uint256) -> address: view
-  def earned(_token: address, _venft_id: uint256) -> uint256: view
-
 interface ISlipstreamHelper:
   def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> Amounts: view
   def getSqrtRatioAtTick(_tick: int24) -> uint160: view
@@ -258,9 +209,6 @@ interface IAlmLpWrapper:
   def totalSupply() -> uint256: view
 
 # Vars
-voter: public(IVoter) # Voter on root , LeafVoter on leaf chain
-registry: public(IFactoryRegistry)
-convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
 
@@ -272,93 +220,41 @@ def __init__(_voter: address, _registry: address,\
   """
   @dev Sets up our external contract addresses
   """
-  self.voter = IVoter(_voter)
-  self.registry = IFactoryRegistry(_registry)
-  self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
 
-@internal
-@view
-def _pools(_limit: uint256, _offset: uint256)\
-    -> DynArray[address[4], MAX_POOLS]:
-  """
-  @param _limit The max amount of pools to return
-  @param _offset The amount of pools to skip (for optimization)
-  @notice Returns a compiled list of pool and its factory and gauge
-  @return Array of four addresses (factory, pool, gauge, nfpm)
-  """
-  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
-  factories_count: uint256 = len(factories)
-
-  to_skip: uint256 = _offset
-  visited: uint256 = 0
-
-  pools: DynArray[address[4], MAX_POOLS] = \
-    empty(DynArray[address[4], MAX_POOLS])
-
-  for index: uint256 in range(0, MAX_FACTORIES):
-    if index >= factories_count:
-      break
-
-    factory: IPoolFactory = IPoolFactory(factories[index])
-    if self._is_root_factory(factory.address):
-      continue
-
-    pools_count: uint256 = staticcall factory.allPoolsLength()
-    nfpm: address = self._fetch_nfpm(factory.address)
-
-    for pindex: uint256 in range(0, MAX_ITERATIONS):
-      if pindex >= pools_count or visited >= _limit + _offset or len(pools) >= MAX_POOLS:
-        break
-
-      # Since the convertor pool, first pool on one of the factories...
-      if pindex == 0 and staticcall factory.allPools(0) == self.convertor:
-        continue
-
-      visited += 1
-
-      # Basically skip calls for offset records...
-      if to_skip > 0:
-        to_skip -= 1
-        continue
-
-      pool_addr: address = staticcall factory.allPools(pindex)
-      gauge_addr: address = staticcall self.voter.gauges(pool_addr)
-
-      pools.append([factory.address, pool_addr, gauge_addr, nfpm])
-
-  return pools
+  # Modules...
+  lp_shared.__init__(_voter, _registry, _convertor)
 
 @external
 @view
-def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
+def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MAX_POOLS]:
   """
   @notice Returns a compiled list of pools for swaps from pool factories (sans v1)
   @param _limit The max amount of pools to process
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
+  factories: DynArray[address, lp_shared.MAX_FACTORIES] = staticcall lp_shared.registry.poolFactories()
   factories_count: uint256 = len(factories)
 
-  pools: DynArray[SwapLp, MAX_POOLS] = empty(DynArray[SwapLp, MAX_POOLS])
+  pools: DynArray[SwapLp, lp_shared.MAX_POOLS] = empty(DynArray[SwapLp, lp_shared.MAX_POOLS])
   to_skip: uint256 = _offset
   left: uint256 = _limit
 
-  for index: uint256 in range(0, MAX_FACTORIES):
+  for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
     if index >= factories_count:
       break
 
-    factory: IPoolFactory = IPoolFactory(factories[index])
-    if self._is_root_factory(factory.address):
+    factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(factories[index])
+    if lp_shared._is_root_factory(factory.address):
       continue
 
-    nfpm: address = self._fetch_nfpm(factory.address)
+    nfpm: address = lp_shared._fetch_nfpm(factory.address)
     pools_count: uint256 = staticcall factory.allPoolsLength()
 
-    for pindex: uint256 in range(0, MAX_ITERATIONS):
-      if pindex >= pools_count or len(pools) >= MAX_POOLS:
+    for pindex: uint256 in range(0, lp_shared.MAX_ITERATIONS):
+      if pindex >= pools_count or len(pools) >= lp_shared.MAX_POOLS:
         break
 
       # If no pools to process are left...
@@ -390,7 +286,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         reserve0 = staticcall pool.reserve0()
         pool_fee = staticcall factory.getFee(pool_addr, (type == 0))
 
-      if reserve0 > 0 or pool_addr == self.convertor:
+      if reserve0 > 0 or pool_addr == lp_shared.convertor:
         pools.append(SwapLp({
           lp: pool_addr,
           type: type,
@@ -413,7 +309,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
+  pools: DynArray[address[4], lp_shared.MAX_POOLS] = lp_shared._pools(_limit, _offset)
 
   pools_count: uint256 = len(pools)
   addresses_count: uint256 = len(_addresses)
@@ -427,7 +323,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     col.append(self._token(_addresses[index], _account))
     seen.append(_addresses[index])
 
-  for index: uint256 in range(0, MAX_POOLS):
+  for index: uint256 in range(0, lp_shared.MAX_POOLS):
     if len(col) >= _limit or index >= pools_count:
       break
 
@@ -461,7 +357,7 @@ def _token(_address: address, _account: address) -> Token:
     symbol: self._safe_symbol(_address),
     decimals: self._safe_decimals(_address),
     account_balance: bal,
-    listed: staticcall self.voter.isWhitelistedToken(_address)
+    listed: staticcall lp_shared.voter.isWhitelistedToken(_address)
   })
 
 @external
@@ -474,10 +370,10 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
-  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
+  pools: DynArray[address[4], lp_shared.MAX_POOLS] = lp_shared._pools(_limit, _offset)
   pools_count: uint256 = len(pools)
 
-  for index: uint256 in range(0, MAX_POOLS):
+  for index: uint256 in range(0, lp_shared.MAX_POOLS):
     if len(col) == _limit or index >= pools_count:
       break
 
@@ -504,7 +400,7 @@ def byIndex(_index: uint256) -> Lp:
   """
   # Basically index is the limit and the offset is always one...
   # This will fire if _index is out of bounds
-  pool_data: address[4] = self._pools(1, _index)[0]
+  pool_data: address[4] = lp_shared._pools(1, _index)[0]
   pool: IPool = IPool(pool_data[1])
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
@@ -533,13 +429,13 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   emissions: uint256 = 0
   emissions_token: address = empty(address)
   is_stable: bool = staticcall pool.stable()
-  pool_fee: uint256 = staticcall IPoolFactory(_data[0]).getFee(pool.address, is_stable)
+  pool_fee: uint256 = staticcall lp_shared.IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = staticcall pool.poolFees()
   token0: IERC20 = IERC20(_token0)
   token1: IERC20 = IERC20(_token1)
   token0_fees: uint256 = self._safe_balance_of(_token0, pool_fees)
   token1_fees: uint256 = self._safe_balance_of(_token1, pool_fees)
-  gauge_alive: bool = staticcall self.voter.isAlive(gauge.address)
+  gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   decimals: uint8 = staticcall pool.decimals()
   claimable0: uint256 = 0
   claimable1: uint256 = 0
@@ -587,8 +483,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_liquidity: gauge_liquidity,
     gauge_alive: gauge_alive,
 
-    fee: staticcall self.voter.gaugeToFees(gauge.address),
-    bribe: staticcall self.voter.gaugeToBribe(gauge.address),
+    fee: staticcall lp_shared.voter.gaugeToFees(gauge.address),
+    bribe: staticcall lp_shared.voter.gaugeToBribe(gauge.address),
     factory: _data[0],
 
     emissions: emissions,
@@ -614,7 +510,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   @param _offset The amount of pools to skip (for optimization)
   @return Array for Lp structs
   """
-  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
+  factories: DynArray[address, lp_shared.MAX_FACTORIES] = staticcall lp_shared.registry.poolFactories()
 
   return self._positions(_limit, _offset, _account, factories)
 
@@ -642,7 +538,7 @@ def _positions(
   _limit: uint256,
   _offset: uint256,
   _account: address,
-  _factories: DynArray[address, MAX_FACTORIES]
+  _factories: DynArray[address, lp_shared.MAX_FACTORIES]
 ) -> DynArray[Position, MAX_POSITIONS]:
   """
   @notice Returns a collection of positions for a set of factories
@@ -667,23 +563,23 @@ def _positions(
   if self.alm_factory != empty(IAlmFactory):
     alm_core = IAlmCore((staticcall self.alm_factory.getImmutableParams())[0])
 
-  for index: uint256 in range(0, MAX_FACTORIES):
+  for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
     if index >= factories_count:
       break
 
-    factory: IPoolFactory = IPoolFactory(_factories[index])
+    factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(_factories[index])
 
-    if self._is_root_factory(factory.address):
+    if lp_shared._is_root_factory(factory.address):
       continue
 
     pools_count: uint256 = staticcall factory.allPoolsLength()
 
     nfpm: INFPositionManager = \
-      INFPositionManager(self._fetch_nfpm(factory.address))
+      INFPositionManager(lp_shared._fetch_nfpm(factory.address))
 
     # V2/Basic pool
     if nfpm.address == empty(address):
-      for pindex: uint256 in range(0, MAX_ITERATIONS):
+      for pindex: uint256 in range(0, lp_shared.MAX_ITERATIONS):
         if pindex >= pools_count or pools_done >= _limit:
           break
 
@@ -696,7 +592,7 @@ def _positions(
 
         pool_addr: address = staticcall factory.allPools(pindex)
 
-        if pool_addr == self.convertor:
+        if pool_addr == lp_shared.convertor:
           continue
 
         pos: Position = self._v2_position(_account, pool_addr)
@@ -734,7 +630,7 @@ def _positions(
             break
 
       # Fetch CL positions (staked + ALM)
-      for pindex: uint256 in range(0, MAX_POOLS):
+      for pindex: uint256 in range(0, lp_shared.MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
           break
 
@@ -749,7 +645,7 @@ def _positions(
         alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
         alm_staking: IGauge = IGauge(alm_addresses[0])
         alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
-        gauge: ICLGauge = ICLGauge(staticcall self.voter.gauges(pool_addr))
+        gauge: ICLGauge = ICLGauge(staticcall lp_shared.voter.gauges(pool_addr))
         staked: bool = False
 
         # Fetch staked CL positions first!
@@ -857,7 +753,7 @@ def _cl_position(
 
   # Try to find the pool if we're fetching an unstaked position
   if pos.lp == empty(address):
-    pos.lp = staticcall IPoolFactory(_factory).getPool(
+    pos.lp = staticcall lp_shared.IPoolFactory(_factory).getPool(
       data.token0,
       data.token1,
       convert(data.tickSpacing, int24)
@@ -874,7 +770,7 @@ def _cl_position(
 
   # Try to find the gauge if we're fetching an unstaked position
   if _gauge == empty(address):
-    gauge = ICLGauge(staticcall self.voter.gauges(pos.lp))
+    gauge = ICLGauge(staticcall lp_shared.voter.gauges(pos.lp))
 
   amounts: Amounts = staticcall self.cl_helper.principal(
     nfpm.address, pos.id, slot.sqrtPriceX96
@@ -921,7 +817,7 @@ def _v2_position(_account: address, _pool: address) -> Position:
   @return A Position struct
   """
   pool: IPool = IPool(_pool)
-  gauge: IGauge = IGauge(staticcall self.voter.gauges(_pool))
+  gauge: IGauge = IGauge(staticcall lp_shared.voter.gauges(_pool))
   decimals: uint8 = staticcall pool.decimals()
 
   pos: Position = empty(Position)
@@ -969,7 +865,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
 
-  gauge_alive: bool = staticcall self.voter.isAlive(gauge.address)
+  gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
@@ -1034,7 +930,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
-    bribe: staticcall self.voter.gaugeToBribe(gauge.address),
+    bribe: staticcall lp_shared.voter.gaugeToBribe(gauge.address),
     factory: _data[0],
 
     emissions: emissions,
@@ -1048,321 +944,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm: _data[3],
     alm: alm_addresses[1],
   })
-
-@external
-@view
-def epochsLatest(_limit: uint256, _offset: uint256) \
-    -> DynArray[LpEpoch, MAX_POOLS]:
-  """
-  @notice Returns all pools latest epoch data (up to 200 items)
-  @param _limit The max amount of pools to check for epochs
-  @param _offset The amount of pools to skip
-  @return Array for LpEpoch structs
-  """
-  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
-  pools_count: uint256 = len(pools)
-  counted: uint256 = 0
-
-  col: DynArray[LpEpoch, MAX_POOLS] = empty(DynArray[LpEpoch, MAX_POOLS])
-
-  for index: uint256 in range(0, MAX_ITERATIONS):
-    if counted == _limit or index >= pools_count:
-      break
-
-    pool_data: address[4] = pools[index]
-
-    if staticcall self.voter.isAlive(pool_data[2]) == False:
-      continue
-
-    col.append(self._epochLatestByAddress(pool_data[1], pool_data[2]))
-
-    counted += 1
-
-  return col
-
-@external
-@view
-def epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
-    -> DynArray[LpEpoch, MAX_EPOCHS]:
-  """
-  @notice Returns all pool epoch data based on the address
-  @param _limit The max amount of epochs to return
-  @param _offset The number of epochs to skip
-  @param _address The address to lookup
-  @return Array for LpEpoch structs
-  """
-  return self._epochsByAddress(_limit, _offset, _address)
-
-@internal
-@view
-def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
-  """
-  @notice Returns latest pool epoch data based on the address
-  @param _address The pool address
-  @param _gauge The pool gauge
-  @return A LpEpoch struct
-  """
-  gauge: IGauge = IGauge(_gauge)
-  bribe: IReward = IReward(staticcall self.voter.gaugeToBribe(gauge.address))
-
-  epoch_start_ts: uint256 = block.timestamp // WEEK * WEEK
-  epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
-
-  bribe_supply_cp: uint256[2] = staticcall bribe.supplyCheckpoints(
-    staticcall bribe.getPriorSupplyIndex(epoch_end_ts)
-  )
-
-  return LpEpoch({
-    ts: epoch_start_ts,
-    lp: _address,
-    votes: bribe_supply_cp[1],
-    emissions: staticcall gauge.rewardRateByEpoch(epoch_start_ts),
-    bribes: self._epochRewards(epoch_start_ts, bribe.address),
-    fees: self._epochRewards(
-      epoch_start_ts, staticcall self.voter.gaugeToFees(gauge.address)
-    )
-  })
-
-@internal
-@view
-def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
-    -> DynArray[LpEpoch, MAX_EPOCHS]:
-  """
-  @notice Returns all pool epoch data based on the address
-  @param _limit The max amount of epochs to return
-  @param _offset The number of epochs to skip
-  @param _address The address to lookup
-  @return Array for LpEpoch structs
-  """
-  assert _address != empty(address), 'Invalid address!'
-
-  epochs: DynArray[LpEpoch, MAX_EPOCHS] = \
-    empty(DynArray[LpEpoch, MAX_EPOCHS])
-
-  gauge: IGauge = IGauge(staticcall self.voter.gauges(_address))
-
-  if staticcall self.voter.isAlive(gauge.address) == False:
-    return epochs
-
-  bribe: IReward = IReward(staticcall self.voter.gaugeToBribe(gauge.address))
-
-  curr_epoch_start_ts: uint256 = block.timestamp // WEEK * WEEK
-
-  for weeks: uint256 in range(_offset, _offset + MAX_EPOCHS, bound = MAX_EPOCHS):
-    epoch_start_ts: uint256 = curr_epoch_start_ts - (weeks * WEEK)
-    epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
-
-    if len(epochs) == _limit or weeks >= MAX_EPOCHS:
-      break
-
-    bribe_supply_index: uint256 = staticcall bribe.getPriorSupplyIndex(epoch_end_ts)
-    bribe_supply_cp: uint256[2] = staticcall bribe.supplyCheckpoints(bribe_supply_index)
-
-    epochs.append(LpEpoch({
-      ts: epoch_start_ts,
-      lp: _address,
-      votes: bribe_supply_cp[1],
-      emissions: staticcall gauge.rewardRateByEpoch(epoch_start_ts),
-      bribes: self._epochRewards(epoch_start_ts, bribe.address),
-      fees: self._epochRewards(
-        epoch_start_ts, staticcall self.voter.gaugeToFees(gauge.address)
-      )
-    }))
-
-    # If we reach the last supply index...
-    if bribe_supply_index == 0:
-      break
-
-  return epochs
-
-@internal
-@view
-def _epochRewards(_ts: uint256, _reward: address) \
-    -> DynArray[LpEpochReward, MAX_REWARDS]:
-  """
-  @notice Returns pool rewards
-  @param _ts The pool epoch start timestamp
-  @param _bribe The reward address
-  @return An array of `LpEpochReward` structs
-  """
-  rewards: DynArray[LpEpochReward, MAX_REWARDS] = \
-    empty(DynArray[LpEpochReward, MAX_REWARDS])
-
-  if _reward == empty(address):
-    return rewards
-
-  reward: IReward = IReward(_reward)
-  rewards_len: uint256 = staticcall reward.rewardsListLength()
-
-  for rindex: uint256 in range(MAX_REWARDS):
-    if rindex >= rewards_len:
-      break
-
-    reward_token: address = staticcall reward.rewards(rindex)
-    reward_amount: uint256 = staticcall reward.tokenRewardsPerEpoch(reward_token, _ts)
-
-    if reward_amount == 0:
-      continue
-
-    rewards.append(LpEpochReward({
-      token: reward_token,
-      amount: reward_amount
-    }))
-
-  return rewards
-
-@external
-@view
-def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
-    -> DynArray[Reward, MAX_POOLS]:
-  """
-  @notice Returns a collection of veNFT rewards data
-  @param _limit The max amount of pools to check for rewards
-  @param _offset The amount of pools to skip checking for rewards
-  @param _venft_id The veNFT ID to get rewards for
-  @return Array for VeNFT Reward structs
-  """
-  pools: DynArray[address[4], MAX_POOLS] = self._pools(_limit, _offset)
-  pools_count: uint256 = len(pools)
-  counted: uint256 = 0
-
-  col: DynArray[Reward, MAX_POOLS] = empty(DynArray[Reward, MAX_POOLS])
-
-  for pindex: uint256 in range(0, MAX_POOLS):
-    if counted == _limit or pindex >= pools_count:
-      break
-
-    pool_data: address[4] = pools[pindex]
-    pcol: DynArray[Reward, MAX_POOLS] = \
-      self._poolRewards(_venft_id, pool_data[1], pool_data[2])
-
-    # Basically merge pool rewards to the rest of the rewards...
-    for cindex: uint256 in range(MAX_POOLS):
-      if cindex >= len(pcol):
-        break
-
-      col.append(pcol[cindex])
-
-    counted += 1
-
-  return col
-
-@external
-@view
-def rewardsByAddress(_venft_id: uint256, _pool: address) \
-    -> DynArray[Reward, MAX_POOLS]:
-  """
-  @notice Returns a collection of veNFT rewards data for a specific pool
-  @param _venft_id The veNFT ID to get rewards for
-  @param _pool The pool address to get rewards for
-  @return Array for VeNFT Reward structs
-  """
-  gauge_addr: address = staticcall self.voter.gauges(_pool)
-
-  return self._poolRewards(_venft_id, _pool, gauge_addr)
-
-@internal
-@view
-def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
-    -> DynArray[Reward, MAX_POOLS]:
-  """
-  @notice Returns a collection with veNFT pool rewards
-  @param _venft_id The veNFT ID to get rewards for
-  @param _pool The pool address
-  @param _gauge The pool gauge address
-  @param _col The array of `Reward` sturcts to update
-  """
-  pool: IPool = IPool(_pool)
-
-  col: DynArray[Reward, MAX_POOLS] = empty(DynArray[Reward, MAX_POOLS])
-
-  if _pool == empty(address) or _gauge == empty(address):
-    return col
-
-  fee: IReward = IReward(staticcall self.voter.gaugeToFees(_gauge))
-  bribe: IReward = IReward(staticcall self.voter.gaugeToBribe(_gauge))
-
-  token0: address = staticcall pool.token0()
-  token1: address = staticcall pool.token1()
-
-  fee0_amount: uint256 = staticcall fee.earned(token0, _venft_id)
-  fee1_amount: uint256 = staticcall fee.earned(token1, _venft_id)
-
-  if fee0_amount > 0:
-    col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: fee0_amount,
-        token: token0,
-        fee: fee.address,
-        bribe: empty(address)
-      })
-    )
-
-  if fee1_amount > 0:
-    col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: fee1_amount,
-        token: token1,
-        fee: fee.address,
-        bribe: empty(address)
-      })
-    )
-
-  if bribe.address == empty(address):
-    return col
-
-  bribes_len: uint256 = staticcall bribe.rewardsListLength()
-
-  for bindex: uint256 in range(MAX_REWARDS):
-    if bindex >= bribes_len:
-      break
-
-    bribe_token: address = staticcall bribe.rewards(bindex)
-    bribe_amount: uint256 = staticcall bribe.earned(bribe_token, _venft_id)
-
-    if bribe_amount == 0:
-      continue
-
-    col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: bribe_amount,
-        token: bribe_token,
-        fee: empty(address),
-        bribe: bribe.address
-      })
-    )
-
-  return col
-
-@internal
-@view
-def _fetch_nfpm(_factory: address) -> address:
-  """
-  @notice Returns the factory NFPM if available. CL pools should have one!
-  @param _factory The factory address
-  """
-  # Returns the votingRewardsFactory and the gaugeFactory
-  factory_data: address[2] = staticcall self.registry.factoriesToPoolFactory(_factory)
-
-  response: Bytes[32] = raw_call(
-      factory_data[1],
-      method_id("nft()"),
-      max_outsize=32,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  if len(response) > 0:
-    return convert(response, address)
-
-  return empty(address)
 
 @internal
 @view
@@ -1436,21 +1017,3 @@ def _safe_symbol(_token: address) -> String[100]:
     return _abi_decode(response, String[100])
 
   return "-NA-"
-
-@internal
-@view
-def _is_root_factory(_factory: address) -> bool:
-  """
-  @notice Returns true if the factory is a root pool factory and false if it is a leaf pool factory.
-  @param _factory The factory address
-  """
-  success: bool = raw_call(
-      _factory,
-      method_id("bridge()"),
-      max_outsize=32,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[0]
-
-  return success
