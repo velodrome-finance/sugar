@@ -7,3 +7,6 @@ networks:
       mnemonic: brownie
       fork: https://optimism-mainnet.wallet.coinbase.com
       evm_version: shanghai
+compiler:
+  vyper:
+    version: 0.4.0
