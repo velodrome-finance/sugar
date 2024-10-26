@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BUSL-1.1
-# @version ^0.3.6
+# @version ^0.4.0
 
 # @title Velodrome Finance Relay Sugar v2
 # @author stas, ZoomerAnon
@@ -87,15 +87,15 @@ voter: public(IVoter)
 ve: public(IVotingEscrow)
 token: public(address)
 
-@external
+@deploy
 def __init__(_registries: DynArray[address, MAX_REGISTRIES], _voter: address):
   """
   @dev Set up our external registry and voter contracts
   """
   self.registries = _registries
   self.voter = IVoter(_voter)
-  self.ve = IVotingEscrow(self.voter.ve())
-  self.token = self.ve.token()
+  self.ve = IVotingEscrow(staticcall self.voter.ve())
+  self.token = staticcall self.ve.token()
 
 @external
 @view
@@ -115,21 +115,21 @@ def _relays(_account: address) -> DynArray[Relay, MAX_RELAYS]:
   """
   relays: DynArray[Relay, MAX_RELAYS] = empty(DynArray[Relay, MAX_RELAYS])
   relay_count: uint256 = 0
-  for registry_index in range(0, MAX_REGISTRIES):
+  for registry_index: uint256 in range(0, MAX_REGISTRIES):
     if registry_index == len(self.registries):
       break
 
     relay_registry: IRelayRegistry = IRelayRegistry(self.registries[registry_index])
-    factories: DynArray[address, MAX_RELAYS] = relay_registry.getAll()
+    factories: DynArray[address, MAX_RELAYS] = staticcall relay_registry.getAll()
 
-    for factory_index in range(0, MAX_RELAYS):
+    for factory_index: uint256 in range(0, MAX_RELAYS):
       if factory_index == len(factories):
         break
 
       relay_factory: IRelayFactory = IRelayFactory(factories[factory_index])
-      addresses: DynArray[address, MAX_RELAYS] = relay_factory.relays()
+      addresses: DynArray[address, MAX_RELAYS] = staticcall relay_factory.relays()
 
-      for index in range(0, MAX_RELAYS):
+      for index: uint256 in range(0, MAX_RELAYS):
         if index == len(addresses):
           break
 
@@ -153,21 +153,21 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   """
 
   relay: IRelay = IRelay(_relay)
-  managed_id: uint256 = relay.mTokenId()
+  managed_id: uint256 = staticcall relay.mTokenId()
 
   account_venfts: DynArray[ManagedVenft, MAX_RESULTS] = empty(DynArray[ManagedVenft, MAX_RESULTS])
 
-  for venft_index in range(MAX_RESULTS):
-    account_venft_id: uint256 = self.ve.ownerToNFTokenIdList(_account, venft_index)
+  for venft_index: uint256 in range(MAX_RESULTS):
+    account_venft_id: uint256 = staticcall self.ve.ownerToNFTokenIdList(_account, venft_index)
 
     if account_venft_id == 0:
       break
 
-    account_venft_manager_id: uint256 = self.ve.idToManaged(account_venft_id)
+    account_venft_manager_id: uint256 = staticcall self.ve.idToManaged(account_venft_id)
     if account_venft_manager_id == managed_id:
-      locked_reward: IReward = IReward(self.ve.managedToLocked(account_venft_manager_id))
-      venft_weight: uint256 = self.ve.weights(account_venft_id, account_venft_manager_id)
-      earned: uint256 = locked_reward.earned(self.token, account_venft_id)
+      locked_reward: IReward = IReward(staticcall self.ve.managedToLocked(account_venft_manager_id))
+      venft_weight: uint256 = staticcall self.ve.weights(account_venft_id, account_venft_manager_id)
+      earned: uint256 = staticcall locked_reward.earned(self.token, account_venft_id)
 
       account_venfts.append(ManagedVenft({
         id: account_venft_id,
@@ -176,41 +176,42 @@ def _byAddress(_relay: address, _account: address) -> Relay:
       }))
 
   votes: DynArray[LpVotes, MAX_PAIRS] = []
-  amount: uint128 = self.ve.locked(managed_id)[0]
+  amount: uint128 = (staticcall self.ve.locked(managed_id))[0]
   last_voted: uint256 = 0
   withdrawable: uint256 = 0
-  inactive: bool = self.ve.deactivated(managed_id)
+  inactive: bool = staticcall self.ve.deactivated(managed_id)
 
-  admin_role: bytes32 = relay.DEFAULT_ADMIN_ROLE()
-  manager: address = relay.getRoleMember(admin_role, 0)
+  admin_role: bytes32 = staticcall relay.DEFAULT_ADMIN_ROLE()
+  manager: address = staticcall relay.getRoleMember(admin_role, 0)
 
   # If the Relay is an AutoConverter, fetch withdrawable amount
-  if self.token != relay.token():
-    token: IERC20 = IERC20(relay.token())
-    withdrawable = token.balanceOf(_relay)
+  relay_token: address = staticcall relay.token()
+  if self.token != relay_token:
+    token: IERC20 = IERC20(relay_token)
+    withdrawable = staticcall token.balanceOf(_relay)
 
-  epoch_start_ts: uint256 = block.timestamp / WEEK * WEEK
+  epoch_start_ts: uint256 = block.timestamp // WEEK * WEEK
 
   # Rewards claimed this epoch
-  rewards_compounded: uint256 = relay.amountTokenEarned(epoch_start_ts)
+  rewards_compounded: uint256 = staticcall relay.amountTokenEarned(epoch_start_ts)
 
-  if self.ve.voted(managed_id):
-    last_voted = self.voter.lastVoted(managed_id)
+  if staticcall self.ve.voted(managed_id):
+    last_voted = staticcall self.voter.lastVoted(managed_id)
 
-  vote_weight: uint256 = self.voter.usedWeights(managed_id)
+  vote_weight: uint256 = staticcall self.voter.usedWeights(managed_id)
   # Since we don't have a way to see how many pools the veNFT voted...
   left_weight: uint256 = vote_weight
 
-  for index in range(MAX_PAIRS):
+  for index: uint256 in range(MAX_PAIRS):
     if left_weight == 0:
       break
 
-    lp: address = self.voter.poolVote(managed_id, index)
+    lp: address = staticcall self.voter.poolVote(managed_id, index)
 
     if lp == empty(address):
       break
 
-    weight: uint256 = self.voter.votes(managed_id, lp)
+    weight: uint256 = staticcall self.voter.votes(managed_id, lp)
 
     votes.append(LpVotes({
       lp: lp,
@@ -222,19 +223,19 @@ def _byAddress(_relay: address, _account: address) -> Relay:
 
   return Relay({
     venft_id: managed_id,
-    decimals: self.ve.decimals(),
+    decimals: staticcall self.ve.decimals(),
     amount: amount,
-    voting_amount: self.ve.balanceOfNFT(managed_id),
+    voting_amount: staticcall self.ve.balanceOfNFT(managed_id),
     used_voting_amount: vote_weight,
     voted_at: last_voted,
     votes: votes,
-    token: relay.token(),
+    token: relay_token,
     compounded: rewards_compounded,
     withdrawable: withdrawable,
-    run_at: relay.keeperLastRun(),
+    run_at: staticcall relay.keeperLastRun(),
     manager: manager,
     relay: _relay,
     inactive: inactive,
-    name: relay.name(),
+    name: staticcall relay.name(),
     account_venfts: account_venfts
   })
