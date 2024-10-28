@@ -179,6 +179,25 @@ def test_positionsByFactory(sugar_contract, PositionStruct):
     assert pos.lp is not None
 
 
+def test_positionsUnstakedConcentrated(sugar_contract, PositionStruct):
+    limit = 100
+    offset = 0
+    account = os.getenv('TEST_ADDRESS_8453')
+
+    positions = list(map(
+        lambda _p: PositionStruct(*_p),
+        sugar_contract.positionsUnstakedConcentrated(limit, offset, account)
+    ))
+
+    assert positions is not None
+    assert len(positions) > 0
+
+    pos = positions[0]
+
+    assert pos.id is not None
+    assert pos.lp is not None
+
+
 def test_positions_ALM(sugar_contract, PositionStruct):
     account = os.getenv('TEST_ALM_ADDRESS_8453')
 
