@@ -8,5 +8,6 @@ networks:
       fork: https://optimism-mainnet.wallet.coinbase.com
       evm_version: shanghai
 compiler:
+  evm_version: cancun
   vyper:
     version: 0.4.0

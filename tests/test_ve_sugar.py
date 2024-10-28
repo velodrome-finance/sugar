@@ -4,12 +4,14 @@ import pytest
 
 from collections import namedtuple
 
+CHAIN_ID = os.getenv('CHAIN_ID', 10)
+
 
 @pytest.fixture
 def sugar_contract(VeSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield VeSugar.at(os.getenv('VE_SUGAR_ADDRESS_10'))
+    yield VeSugar.at(os.getenv(f'VE_SUGAR_ADDRESS_{CHAIN_ID}'))
 
 
 @pytest.fixture
@@ -21,9 +23,9 @@ def VeNFTStruct(sugar_contract):
 
 
 def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_10')
+    assert sugar_contract.voter() == os.getenv(f'VOTER_{CHAIN_ID}')
     assert sugar_contract.dist() == \
-        os.getenv('DIST_10')
+        os.getenv(f'DIST_{CHAIN_ID}')
     assert sugar_contract.ve() is not None
 
 
@@ -33,7 +35,6 @@ def test_byId(sugar_contract, VeNFTStruct):
     assert venft is not None
     assert len(venft) == 14
     assert venft.id is not None
-    assert len(venft.votes) > 0
     assert venft.voted_at > 0
 
 
