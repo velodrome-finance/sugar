@@ -69,7 +69,7 @@ def _pools(_limit: uint256, _offset: uint256)\
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
-    if self._is_root_factory(factory.address):
+    if self._is_root_placeholder_factory(factory.address):
       continue
 
     pools_count: uint256 = staticcall factory.allPoolsLength()
@@ -99,21 +99,22 @@ def _pools(_limit: uint256, _offset: uint256)\
 
 @internal
 @view
-def _is_root_factory(_factory: address) -> bool:
+def _is_root_placeholder_factory(_factory: address) -> bool:
   """
-  @notice Returns true if the factory is a root pool factory and false if it is a leaf pool factory.
+  @notice Checks if the factory is for root placeholder pools
   @param _factory The factory address
+  @return bool
   """
-  success: bool = raw_call(
+  response: Bytes[32] = raw_call(
       _factory,
       method_id("bridge()"),
       max_outsize=32,
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
-  )[0]
+  )[1]
 
-  return success
+  return len(response) > 0
 
 @internal
 @view
@@ -135,6 +136,6 @@ def _fetch_nfpm(_factory: address) -> address:
   )[1]
 
   if len(response) > 0:
-    return convert(response, address)
+    return abi_decode(response, address)
 
   return empty(address)

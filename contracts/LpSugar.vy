@@ -248,7 +248,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MA
       break
 
     factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(factories[index])
-    if lp_shared._is_root_factory(factory.address):
+    if lp_shared._is_root_placeholder_factory(factory.address):
       continue
 
     nfpm: address = lp_shared._fetch_nfpm(factory.address)
@@ -570,8 +570,7 @@ def _positions(
 
     factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(_factories[index])
 
-    # Skip root placeholder pools...
-    if lp_shared._is_root_factory(factory.address):
+    if lp_shared._is_root_placeholder_factory(factory.address):
       continue
 
     pools_count: uint256 = staticcall factory.allPoolsLength()
@@ -766,7 +765,7 @@ def positionsUnstakedConcentrated(
     if nfpm.address == empty(address):
       continue
 
-    if lp_shared._is_root_factory(factory.address):
+    if lp_shared._is_root_placeholder_factory(factory.address):
       continue
 
     # Handled in `positions()`
@@ -1038,7 +1037,7 @@ def _safe_balance_of(_token: address, _address: address) -> uint256:
   """
   response: Bytes[32] = raw_call(
       _token,
-      concat(method_id("balanceOf(address)"), convert(_address, bytes32)),
+      abi_encode(_address, method_id=method_id("balanceOf(address)")),
       max_outsize=32,
       gas=100000,
       is_delegate_call=False,
@@ -1047,7 +1046,7 @@ def _safe_balance_of(_token: address, _address: address) -> uint256:
   )[1]
 
   if len(response) > 0:
-    return (convert(response, uint256))
+    return (abi_decode(response, uint256))
 
   return 0
 
@@ -1059,9 +1058,8 @@ def _safe_decimals(_token: address) -> uint8:
   @param _token The token to call
   @param _address The address to get the balanceOf
   """
-  success: bool = False
   response: Bytes[32] = b""
-  success, response = raw_call(
+  response = raw_call(
       _token,
       method_id("decimals()"),
       max_outsize=32,
@@ -1069,10 +1067,11 @@ def _safe_decimals(_token: address) -> uint8:
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
-  )
+  )[1]
 
-  if success:
-    return (convert(response, uint8))
+  # Check response as revert_on_failure is set to False
+  if len(response) > 0:
+    return (abi_decode(response, uint8))
 
   return 18
 
@@ -1083,10 +1082,9 @@ def _safe_symbol(_token: address) -> String[100]:
   @notice Returns the `ERC20.symbol()` result safely
   @param _token The token to call
   """
-  success: bool = False
   # >=192 input size is required by Vyper's _abi_decode()
   response: Bytes[192] = b""
-  success, response = raw_call(
+  response = raw_call(
       _token,
       method_id("symbol()"),
       max_outsize=192,
@@ -1094,10 +1092,11 @@ def _safe_symbol(_token: address) -> String[100]:
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
-  )
+  )[1]
 
-  if success:
-    return _abi_decode(response, String[100])
+  # Check response as revert_on_failure is set to False
+  if len(response) > 0:
+    return abi_decode(response, String[100])
 
   return "-NA-"
 
@@ -1114,7 +1113,7 @@ def _has_userPositions(_nfpm: address) -> bool:
       _nfpm,
       abi_encode(
         # We just need valid addresses, please ignore the values
-        _nfpm, _nfpm, method_id("userPositions(address,address)"),
+        _nfpm, _nfpm, method_id=method_id("userPositions(address,address)"),
       ),
       max_outsize=32,
       is_delegate_call=False,
