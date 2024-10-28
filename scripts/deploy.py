@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: BUSL-1.1
 import os
 
-from brownie import accounts, VeSugar, LpSugar, RelaySugar, FactoryRegistry, RewardsSugar
+from brownie import (
+    accounts, VeSugar, LpSugar, RelaySugar, FactoryRegistry, RewardsSugar
+)
 
 
 def main():

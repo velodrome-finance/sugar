@@ -13,8 +13,8 @@ jobs:
       run: docker build ./ -t velodrome/sugar
 
     - name: Runs code QA and tests for optimism
-      run: docker run --rm --env-file=env.example -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test tests/optimism/**.py --network=optimism-main'
+      run: docker run --rm --env-file=env.example -e CHAIN_ID=10 -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test --network=optimism-main'
     - name: Runs code QA and tests for base
-      run: docker run --rm --env-file=env.example -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test tests/base/**.py --network=base-main'
+      run: docker run --rm --env-file=env.example -e CHAIN_ID=8453 -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test --network=base-main'
     - name: Runs code QA and sugar factory registry tests
-      run: docker run --rm --env-file=env.example -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test tests/test_factory_registry.py --network=mode-main'
+      run: docker run --rm --env-file=env.example -e CHAIN_ID=34443 -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test --network=mode-main'
