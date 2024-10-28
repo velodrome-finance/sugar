@@ -82,7 +82,10 @@ The available methods are:
 ---
 
 To get the positions of an account, use this function:
- * `positions(_account: address) -> Position[]`
+ * `positions(_limit, _offset, _account) -> Position[]`
+ * `positionsUnstakedConcentrated(_limit, _offset, _account) -> Position[]`
+
+The later call is required for deployments prior to Superchain release.
 
 The returned data is a struct of type `Position` with the following values:
   * `id` - NFT ID on CL pools, 0 on v2 pools

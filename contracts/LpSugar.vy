@@ -189,6 +189,7 @@ interface INFPositionManager:
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def factory() -> address: view
+  def userPositions(_account: address, _pool: address) -> DynArray[uint256, MAX_POSITIONS]: view
 
 interface ISlipstreamHelper:
   def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> Amounts: view
@@ -569,6 +570,7 @@ def _positions(
 
     factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(_factories[index])
 
+    # Skip root placeholder pools...
     if lp_shared._is_root_factory(factory.address):
       continue
 
@@ -604,32 +606,7 @@ def _positions(
             break
 
     else:
-      # Fetch unstaked CL positions.
-      # Since we can't iterate over pools, offset and limit don't apply here.
-      # TODO: figure out a better way to paginate over unstaked positions.
-      positions_count: uint256 = staticcall nfpm.balanceOf(_account)
-
-      for pindex: uint256 in range(0, MAX_POSITIONS):
-        if pindex >= positions_count:
-          break
-
-        pos_id: uint256 = staticcall nfpm.tokenOfOwnerByIndex(_account, pindex)
-        pos: Position = self._cl_position(
-          pos_id,
-          _account,
-          empty(address),
-          empty(address),
-          factory.address,
-          nfpm.address
-        )
-
-        if pos.lp != empty(address):
-          if len(positions) < MAX_POSITIONS:
-            positions.append(pos)
-          else:
-            break
-
-      # Fetch CL positions (staked + ALM)
+      # Fetch CL positions
       for pindex: uint256 in range(0, lp_shared.MAX_POOLS):
         if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
           break
@@ -648,7 +625,33 @@ def _positions(
         gauge: ICLGauge = ICLGauge(staticcall lp_shared.voter.gauges(pool_addr))
         staked: bool = False
 
-        # Fetch staked CL positions first!
+        # Fetch unstaked CL positions if supported,
+        # else see `positionsUnstakedConcentrated()`
+        user_pos_ids: DynArray[uint256, MAX_POSITIONS] = \
+          empty(DynArray[uint256, MAX_POSITIONS])
+
+        if self._has_userPositions(nfpm.address):
+          user_pos_ids = staticcall nfpm.userPositions(_account, pool_addr)
+
+        for upindex: uint256 in range(0, MAX_POSITIONS):
+          if upindex >= len(user_pos_ids):
+            break
+
+          pos: Position = self._cl_position(
+            user_pos_ids[upindex],
+            _account,
+            pool_addr,
+            gauge.address,
+            factory.address,
+            nfpm.address
+          )
+
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
+
+        # Fetch staked CL positions
         if gauge.address != empty(address):
           staked_position_ids: DynArray[uint256, MAX_POSITIONS] = \
             staticcall gauge.stakedValues(_account)
@@ -717,6 +720,86 @@ def _positions(
 
         pos.alm = alm_vault.address
 
+        if len(positions) < MAX_POSITIONS:
+          positions.append(pos)
+        else:
+          break
+
+  return positions
+
+@external
+@view
+def positionsUnstakedConcentrated(
+  _limit: uint256,
+  _offset: uint256,
+  _account: address
+) -> DynArray[Position, MAX_POSITIONS]:
+  """
+  @notice Returns a collection of unstaked CL positions (legacy)
+  @param _account The account to fetch positions for
+  @param _limit The max amount of positions to process
+  @param _offset The amount of positions to skip
+  @return Array for Position structs
+  """
+  positions: DynArray[Position, MAX_POSITIONS] = \
+    empty(DynArray[Position, MAX_POSITIONS])
+
+  if _account == empty(address):
+    return positions
+
+  factories: DynArray[address, lp_shared.MAX_FACTORIES] = \
+    staticcall lp_shared.registry.poolFactories()
+
+  to_skip: uint256 = _offset
+  positions_done: uint256 = 0
+  factories_count: uint256 = len(factories)
+
+  for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
+    if index >= factories_count:
+      break
+
+    factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(factories[index])
+
+    nfpm: INFPositionManager = \
+      INFPositionManager(lp_shared._fetch_nfpm(factory.address))
+
+    if nfpm.address == empty(address):
+      continue
+
+    if lp_shared._is_root_factory(factory.address):
+      continue
+
+    # Handled in `positions()`
+    if self._has_userPositions(nfpm.address):
+      continue
+
+    positions_count: uint256 = staticcall nfpm.balanceOf(_account)
+
+    for pindex: uint256 in range(0, MAX_POSITIONS):
+      if pindex >= positions_count:
+        break
+
+      if pindex >= positions_count or positions_done >= _limit:
+        break
+
+      # Basically skip calls for offset records...
+      if to_skip > 0:
+        to_skip -= 1
+        continue
+      else:
+        positions_done += 1
+
+      pos_id: uint256 = staticcall nfpm.tokenOfOwnerByIndex(_account, pindex)
+      pos: Position = self._cl_position(
+        pos_id,
+        _account,
+        empty(address),
+        empty(address),
+        factory.address,
+        nfpm.address
+      )
+
+      if pos.lp != empty(address):
         if len(positions) < MAX_POSITIONS:
           positions.append(pos)
         else:
@@ -1017,3 +1100,26 @@ def _safe_symbol(_token: address) -> String[100]:
     return _abi_decode(response, String[100])
 
   return "-NA-"
+
+@internal
+@view
+def _has_userPositions(_nfpm: address) -> bool:
+  """
+  @notice Checks for `userPositions()` support, missing for pre-Superchain NFPM
+  @param _nfpm The NFPM address
+  @return Returns True if supported
+  """
+  response: Bytes[32] = b""
+  response = raw_call(
+      _nfpm,
+      abi_encode(
+        # We just need valid addresses, please ignore the values
+        _nfpm, _nfpm, method_id("userPositions(address,address)"),
+      ),
+      max_outsize=32,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  return len(response) > 0
