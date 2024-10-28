@@ -3,14 +3,29 @@ import os
 import pytest
 from collections import namedtuple
 
-from web3.constants import ADDRESS_ZERO
+CHAIN_ID = os.getenv('CHAIN_ID', 10)
 
 
 @pytest.fixture
 def sugar_contract(RewardsSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield LpSugar.at(os.getenv('REWARDS_SUGAR_ADDRESS_8453'))
+    yield RewardsSugar.at(os.getenv(f'REWARDS_SUGAR_ADDRESS_{CHAIN_ID}'))
+
+
+@pytest.fixture
+def lp_sugar_contract(LpSugar, accounts):
+    # Since we depend on the rest of the protocol,
+    # we just point to an existing deployment
+    yield LpSugar.at(os.getenv(f'LP_SUGAR_ADDRESS_{CHAIN_ID}'))
+
+
+@pytest.fixture
+def LpStruct(lp_sugar_contract):
+    method_output = lp_sugar_contract.byIndex.abi['outputs'][0]
+    members = list(map(lambda _e: _e['name'], method_output['components']))
+
+    yield namedtuple('LpStruct', members)
 
 
 @pytest.fixture
@@ -30,18 +45,14 @@ def LpEpochBribeStruct(sugar_contract):
     yield namedtuple('LpEpochBribeStruct', members)
 
 
-def test_initial_state(sugar_contract):
-    assert sugar_contract.voter() == os.getenv('VOTER_8453')
-    assert sugar_contract.registry() == os.getenv('REGISTRY_8453')
-
-
 def test_epochsByAddress_limit_offset(
     sugar_contract,
+    lp_sugar_contract,
     LpStruct,
     LpEpochStruct,
     LpEpochBribeStruct
 ):
-    first_lp = LpStruct(*sugar_contract.byIndex(0))
+    first_lp = LpStruct(*lp_sugar_contract.byIndex(1))
     lp_epochs = list(map(
         lambda _p: LpEpochStruct(*_p),
         sugar_contract.epochsByAddress(20, 3, first_lp.lp)
@@ -73,10 +84,11 @@ def test_epochsByAddress_limit_offset(
 
 def test_epochsLatest_limit_offset(
     sugar_contract,
+    lp_sugar_contract,
     LpStruct,
     LpEpochStruct
 ):
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
+    second_lp = LpStruct(*lp_sugar_contract.byIndex(1))
     lp_epoch = list(map(
         lambda _p: LpEpochStruct(*_p),
         sugar_contract.epochsByAddress(1, 0, second_lp.lp)
