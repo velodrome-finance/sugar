@@ -251,13 +251,13 @@ docker build ./ -t velodrome/sugar
 
 Next start the container with existing environment variables:
 ```sh
-docker run --env-file=env.example --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
+docker run --env-file=env.{{chain}} --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
 ```
 The environment has Brownie and Vyper already installed.
 
 To run the tests inside the container, use:
 ```sh
-brownie test --network=optimism-test
+brownie test --network={{chain}}-test
 ```
 
 ## Why the contracts are not verified?
