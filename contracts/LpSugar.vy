@@ -117,6 +117,7 @@ struct Lp:
 
   nfpm: address
   alm: address
+  root: address
 
 # See:
 #   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L12-L60
@@ -498,6 +499,10 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     nfpm: empty(address),
     alm: empty(address),
+
+    root: lp_shared._root_lp_address(
+      _data[0], token0.address, token1.address, type
+    )
   })
 
 @external
@@ -1025,6 +1030,10 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     nfpm: _data[3],
     alm: alm_addresses[1],
+
+    root: lp_shared._root_lp_address(
+      _data[0], token0.address, token1.address, tick_spacing
+    ),
   })
 
 @internal

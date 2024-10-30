@@ -4,9 +4,11 @@
 # @title Velodrome Finance LP Module
 # @author Velodrome Finance
 
-MAX_FACTORIES: public(constant(uint256)) = 10
-MAX_POOLS: public(constant(uint256)) = 2000
-MAX_ITERATIONS: public(constant(uint256)) = 8000
+MAX_FACTORIES: constant(uint256) = 10
+MAX_POOLS: constant(uint256) = 2000
+MAX_ITERATIONS: constant(uint256) = 8000
+
+FACTORY_TO_INIT_HASH: HashMap[address, bytes32]
 
 # Interfaces
 
@@ -44,6 +46,10 @@ def __init__(_voter: address, _registry: address, _convertor: address):
   self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
+
+  # Root (placeholder) pool factory
+  self.FACTORY_TO_INIT_HASH[0xd02D36A5e826731c0cF6Be97922DAfa516B9E4B4] = \
+    0xb6ce19baf736d6d711871f9c2a3b71e32332f2230ba65b57060620d5d33997c9
 
 @internal
 @view
@@ -139,3 +145,60 @@ def _fetch_nfpm(_factory: address) -> address:
     return abi_decode(response, address)
 
   return empty(address)
+
+@internal
+@view
+def _root_lp_address(
+  _factory: address,
+  _token0: address,
+  _token1: address,
+  _type: int24
+) -> address:
+  """
+  @notice Calculates the corresponding root (placeholder) pool address
+  @param _factory The factory address
+  @param _token0 The pool token0
+  @param _token1 The pool token1
+  @param _type The pool type
+  @return address
+  """
+  init_hash: bytes32 = self.FACTORY_TO_INIT_HASH[_factory]
+
+  if init_hash == empty(bytes32):
+    return empty(address)
+
+
+  salt: bytes32 = empty(bytes32)
+
+  if _type < 1:
+    salt = keccak256(
+      concat(
+        convert(chain.id, bytes32),
+        convert(_token0, bytes20),
+        convert(_token1, bytes20),
+        convert(_type == 1, bytes1))
+    )
+  else:
+    salt = keccak256(
+      concat(
+        convert(chain.id, bytes32),
+        convert(_token0, bytes20),
+        convert(_token1, bytes20),
+        convert(_type, bytes3)
+      )
+    )
+
+
+  data: bytes32 = keccak256(
+    concat(
+      0xFF,
+      convert(_factory, bytes20),
+      salt,
+      init_hash
+    )
+  )
+
+  return convert(
+    convert(data, uint256) & convert(max_value(uint160), uint256),
+    address
+  )
