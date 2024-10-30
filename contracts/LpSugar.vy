@@ -391,14 +391,14 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_POOLS]:
         pool_fee = staticcall factory.getFee(pool_addr, (type == 0))
 
       if reserve0 > 0 or pool_addr == self.convertor:
-        pools.append(SwapLp({
-          lp: pool_addr,
-          type: type,
-          token0: token0,
-          token1: token1,
-          factory: factory.address,
-          pool_fee: pool_fee
-        }))
+        pools.append(SwapLp(
+          lp = pool_addr,
+          type = type,
+          token0 = token0,
+          token1 = token1,
+          factory = factory.address,
+          pool_fee = pool_fee
+        ))
 
   return pools
 
@@ -456,13 +456,13 @@ def _token(_address: address, _account: address) -> Token:
   if _account != empty(address):
     bal = self._safe_balance_of(_address, _account)
 
-  return Token({
-    token_address: _address,
-    symbol: self._safe_symbol(_address),
-    decimals: self._safe_decimals(_address),
-    account_balance: bal,
-    listed: staticcall self.voter.isWhitelistedToken(_address)
-  })
+  return Token(
+    token_address = _address,
+    symbol = self._safe_symbol(_address),
+    decimals = self._safe_decimals(_address),
+    account_balance = bal,
+    listed = staticcall self.voter.isWhitelistedToken(_address)
+  )
 
 @external
 @view
@@ -565,43 +565,43 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
       staked0 = (reserve0 * gauge_liquidity) // pool_liquidity
       staked1 = (reserve1 * gauge_liquidity) // pool_liquidity
 
-  return Lp({
-    lp: _data[1],
-    symbol: staticcall pool.symbol(),
-    decimals: decimals,
-    liquidity: pool_liquidity,
+  return Lp(
+    lp = _data[1],
+    symbol = staticcall pool.symbol(),
+    decimals = decimals,
+    liquidity = pool_liquidity,
 
-    type: type,
-    tick: 0,
-    sqrt_ratio: 0,
+    type = type,
+    tick = 0,
+    sqrt_ratio = 0,
 
-    token0: token0.address,
-    reserve0: reserve0,
-    staked0: staked0,
+    token0 = token0.address,
+    reserve0 = reserve0,
+    staked0 = staked0,
 
-    token1: token1.address,
-    reserve1: reserve1,
-    staked1: staked1,
+    token1 = token1.address,
+    reserve1 = reserve1,
+    staked1 = staked1,
 
-    gauge: gauge.address,
-    gauge_liquidity: gauge_liquidity,
-    gauge_alive: gauge_alive,
+    gauge = gauge.address,
+    gauge_liquidity = gauge_liquidity,
+    gauge_alive = gauge_alive,
 
-    fee: staticcall self.voter.gaugeToFees(gauge.address),
-    bribe: staticcall self.voter.gaugeToBribe(gauge.address),
-    factory: _data[0],
+    fee = staticcall self.voter.gaugeToFees(gauge.address),
+    bribe = staticcall self.voter.gaugeToBribe(gauge.address),
+    factory = _data[0],
 
-    emissions: emissions,
-    emissions_token: emissions_token,
+    emissions = emissions,
+    emissions_token = emissions_token,
 
-    pool_fee: pool_fee,
-    unstaked_fee: 0,
-    token0_fees: token0_fees,
-    token1_fees: token1_fees,
+    pool_fee = pool_fee,
+    unstaked_fee = 0,
+    token0_fees = token0_fees,
+    token1_fees = token1_fees,
 
-    nfpm: empty(address),
-    alm: empty(address),
-  })
+    nfpm = empty(address),
+    alm = empty(address),
+  )
 
 @external
 @view
@@ -1011,43 +1011,43 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if self.alm_factory != empty(IAlmFactory):
     alm_addresses = staticcall self.alm_factory.poolToAddresses(pool.address)
 
-  return Lp({
-    lp: pool.address,
-    symbol: "",
-    decimals: 18,
-    liquidity: convert(pool_liquidity, uint256),
+  return Lp(
+    lp = pool.address,
+    symbol = "",
+    decimals = 18,
+    liquidity = convert(pool_liquidity, uint256),
 
-    type: tick_spacing,
-    tick: slot.tick,
-    sqrt_ratio: slot.sqrtPriceX96,
+    type = tick_spacing,
+    tick = slot.tick,
+    sqrt_ratio = slot.sqrtPriceX96,
 
-    token0: token0.address,
-    reserve0: self._safe_balance_of(_token0, pool.address),
-    staked0: staked0,
+    token0 = token0.address,
+    reserve0 = self._safe_balance_of(_token0, pool.address),
+    staked0 = staked0,
 
-    token1: token1.address,
-    reserve1: self._safe_balance_of(_token1, pool.address),
-    staked1: staked1,
+    token1 = token1.address,
+    reserve1 = self._safe_balance_of(_token1, pool.address),
+    staked1 = staked1,
 
-    gauge: gauge.address,
-    gauge_liquidity: convert(gauge_liquidity, uint256),
-    gauge_alive: gauge_alive,
+    gauge = gauge.address,
+    gauge_liquidity = convert(gauge_liquidity, uint256),
+    gauge_alive = gauge_alive,
 
-    fee: fee_voting_reward,
-    bribe: staticcall self.voter.gaugeToBribe(gauge.address),
-    factory: _data[0],
+    fee = fee_voting_reward,
+    bribe = staticcall self.voter.gaugeToBribe(gauge.address),
+    factory = _data[0],
 
-    emissions: emissions,
-    emissions_token: emissions_token,
+    emissions = emissions,
+    emissions_token = emissions_token,
 
-    pool_fee: convert(staticcall pool.fee(), uint256),
-    unstaked_fee: convert(staticcall pool.unstakedFee(), uint256),
-    token0_fees: token0_fees,
-    token1_fees: token1_fees,
+    pool_fee = convert(staticcall pool.fee(), uint256),
+    unstaked_fee = convert(staticcall pool.unstakedFee(), uint256),
+    token0_fees = token0_fees,
+    token1_fees = token1_fees,
 
-    nfpm: _data[3],
-    alm: alm_addresses[1],
-  })
+    nfpm = _data[3],
+    alm = alm_addresses[1],
+  )
 
 @external
 @view
@@ -1112,16 +1112,16 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
     staticcall bribe.getPriorSupplyIndex(epoch_end_ts)
   )
 
-  return LpEpoch({
-    ts: epoch_start_ts,
-    lp: _address,
-    votes: bribe_supply_cp[1],
-    emissions: staticcall gauge.rewardRateByEpoch(epoch_start_ts),
-    bribes: self._epochRewards(epoch_start_ts, bribe.address),
-    fees: self._epochRewards(
+  return LpEpoch(
+    ts = epoch_start_ts,
+    lp = _address,
+    votes = bribe_supply_cp[1],
+    emissions = staticcall gauge.rewardRateByEpoch(epoch_start_ts),
+    bribes = self._epochRewards(epoch_start_ts, bribe.address),
+    fees = self._epochRewards(
       epoch_start_ts, staticcall self.voter.gaugeToFees(gauge.address)
     )
-  })
+  )
 
 @internal
 @view
@@ -1158,16 +1158,16 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     bribe_supply_index: uint256 = staticcall bribe.getPriorSupplyIndex(epoch_end_ts)
     bribe_supply_cp: uint256[2] = staticcall bribe.supplyCheckpoints(bribe_supply_index)
 
-    epochs.append(LpEpoch({
-      ts: epoch_start_ts,
-      lp: _address,
-      votes: bribe_supply_cp[1],
-      emissions: staticcall gauge.rewardRateByEpoch(epoch_start_ts),
-      bribes: self._epochRewards(epoch_start_ts, bribe.address),
-      fees: self._epochRewards(
+    epochs.append(LpEpoch(
+      ts = epoch_start_ts,
+      lp = _address,
+      votes = bribe_supply_cp[1],
+      emissions = staticcall gauge.rewardRateByEpoch(epoch_start_ts),
+      bribes = self._epochRewards(epoch_start_ts, bribe.address),
+      fees = self._epochRewards(
         epoch_start_ts, staticcall self.voter.gaugeToFees(gauge.address)
       )
-    }))
+    ))
 
     # If we reach the last supply index...
     if bribe_supply_index == 0:
@@ -1204,10 +1204,10 @@ def _epochRewards(_ts: uint256, _reward: address) \
     if reward_amount == 0:
       continue
 
-    rewards.append(LpEpochReward({
-      token: reward_token,
-      amount: reward_amount
-    }))
+    rewards.append(LpEpochReward(
+      token = reward_token,
+      amount = reward_amount
+    ))
 
   return rewards
 
@@ -1290,26 +1290,26 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
 
   if fee0_amount > 0:
     col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: fee0_amount,
-        token: token0,
-        fee: fee.address,
-        bribe: empty(address)
-      })
+      Reward(
+        venft_id = _venft_id,
+        lp = pool.address,
+        amount = fee0_amount,
+        token = token0,
+        fee = fee.address,
+        bribe = empty(address)
+      )
     )
 
   if fee1_amount > 0:
     col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: fee1_amount,
-        token: token1,
-        fee: fee.address,
-        bribe: empty(address)
-      })
+      Reward(
+        venft_id = _venft_id,
+        lp = pool.address,
+        amount = fee1_amount,
+        token = token1,
+        fee = fee.address,
+        bribe = empty(address)
+      )
     )
 
   if bribe.address == empty(address):
@@ -1328,14 +1328,14 @@ def _poolRewards(_venft_id: uint256, _pool: address, _gauge: address) \
       continue
 
     col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: bribe_amount,
-        token: bribe_token,
-        fee: empty(address),
-        bribe: bribe.address
-      })
+      Reward(
+        venft_id = _venft_id,
+        lp = pool.address,
+        amount = bribe_amount,
+        token = bribe_token,
+        fee = empty(address),
+        bribe = bribe.address
+      )
     )
 
   return col
@@ -1420,7 +1420,7 @@ def _safe_symbol(_token: address) -> String[100]:
   @param _token The token to call
   """
   success: bool = False
-  # >=192 input size is required by Vyper's _abi_decode()
+  # >=192 input size is required by Vyper's abi_decode()
   response: Bytes[192] = b""
   success, response = raw_call(
       _token,
@@ -1433,7 +1433,7 @@ def _safe_symbol(_token: address) -> String[100]:
   )
 
   if success:
-    return _abi_decode(response, String[100])
+    return abi_decode(response, String[100])
 
   return "-NA-"
 
