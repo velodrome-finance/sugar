@@ -70,6 +70,7 @@ The returned data/struct of type `Lp` values represent:
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
  * `nfpm` - pool non-fungible position manager contract address
  * `alm` - pool ALM vault contract address
+ * `root` - root (placeholder) pool, for (non-canonical) leaf chain pools
 
 ---
 
