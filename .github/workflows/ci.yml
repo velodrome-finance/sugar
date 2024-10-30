@@ -13,6 +13,8 @@ jobs:
         include:
           - chain: mode
             experimental: true
+          - chain: lisk
+            experimental: true
 
     steps:
     - uses: actions/checkout@master
