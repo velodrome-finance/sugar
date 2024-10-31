@@ -60,9 +60,9 @@ def __init__(_voter: address, _registry: address, _convertor: address):
 @external
 @view
 def epochsLatest(_limit: uint256, _offset: uint256) \
-    -> DynArray[LpEpoch, lp_shared.MAX_POOLS]:
+    -> DynArray[LpEpoch, MAX_EPOCHS]:
   """
-  @notice Returns all pools latest epoch data (up to 200 items)
+  @notice Returns all pools latest epoch data
   @param _limit The max amount of pools to check for epochs
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
@@ -71,7 +71,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
-  col: DynArray[LpEpoch, lp_shared.MAX_POOLS] = empty(DynArray[LpEpoch, lp_shared.MAX_POOLS])
+  col: DynArray[LpEpoch, MAX_EPOCHS] = empty(DynArray[LpEpoch, MAX_EPOCHS])
 
   for index: uint256 in range(0, lp_shared.MAX_ITERATIONS):
     if counted == _limit or index >= pools_count:
@@ -111,7 +111,7 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
   @return A LpEpoch struct
   """
   gauge: IGauge = IGauge(_gauge)
-  bribe: IReward = IReward(staticcall lp_shared.voter.gaugeToBribe(gauge.address))
+  bribe: IReward = IReward(lp_shared._voter_gauge_to_incentive(gauge.address))
 
   epoch_start_ts: uint256 = block.timestamp // WEEK * WEEK
   epoch_end_ts: uint256 = epoch_start_ts + WEEK - 1
@@ -152,7 +152,7 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
   if staticcall lp_shared.voter.isAlive(gauge.address) == False:
     return epochs
 
-  bribe: IReward = IReward(staticcall lp_shared.voter.gaugeToBribe(gauge.address))
+  bribe: IReward = IReward(lp_shared._voter_gauge_to_incentive(gauge.address))
 
   curr_epoch_start_ts: uint256 = block.timestamp // WEEK * WEEK
 
@@ -288,7 +288,7 @@ def _pool_rewards(_venft_id: uint256, _pool: address, _gauge: address) \
     return col
 
   fee: IReward = IReward(staticcall lp_shared.voter.gaugeToFees(_gauge))
-  bribe: IReward = IReward(staticcall lp_shared.voter.gaugeToBribe(_gauge))
+  bribe: IReward = IReward(lp_shared._voter_gauge_to_incentive(_gauge))
 
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
