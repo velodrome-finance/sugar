@@ -8,6 +8,7 @@ CHAIN_ID = os.getenv('CHAIN_ID', 10)
 
 
 @pytest.fixture
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def sugar_contract(VeSugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
@@ -15,6 +16,7 @@ def sugar_contract(VeSugar, accounts):
 
 
 @pytest.fixture
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def VeNFTStruct(sugar_contract):
     method_output = sugar_contract.byId.abi['outputs'][0]
     members = list(map(lambda _e: _e['name'], method_output['components']))
@@ -22,6 +24,7 @@ def VeNFTStruct(sugar_contract):
     yield namedtuple('VeNFTStruct', members)
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_initial_state(sugar_contract):
     assert sugar_contract.voter() == os.getenv(f'VOTER_{CHAIN_ID}')
     assert sugar_contract.dist() == \
@@ -29,6 +32,7 @@ def test_initial_state(sugar_contract):
     assert sugar_contract.ve() is not None
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_byId(sugar_contract, VeNFTStruct):
     venft = VeNFTStruct(*sugar_contract.byId(1))
 
@@ -38,6 +42,7 @@ def test_byId(sugar_contract, VeNFTStruct):
     assert venft.voted_at > 0
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_byAccount(sugar_contract, VeNFTStruct):
     venft = VeNFTStruct(*sugar_contract.byId(1))
     acc_venft = list(map(
@@ -50,6 +55,7 @@ def test_byAccount(sugar_contract, VeNFTStruct):
     assert venft.account == acc_venft[0].account
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_all(sugar_contract, VeNFTStruct):
     first_venft = VeNFTStruct(*sugar_contract.byId(1))
     second_venft = VeNFTStruct(*sugar_contract.byId(2))
@@ -70,6 +76,7 @@ def test_all(sugar_contract, VeNFTStruct):
     assert venft2.account == second_venft.account
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_all_limit_offset(sugar_contract, VeNFTStruct):
     second_venft = VeNFTStruct(*sugar_contract.byId(1))
     venfts = list(map(

@@ -51,7 +51,7 @@ def test_byIndex(sugar_contract, LpStruct):
     lp = LpStruct(*sugar_contract.byIndex(0))
 
     assert lp is not None
-    assert len(lp) == 27
+    assert len(lp) == 28
     assert lp.lp is not None
     assert lp.gauge != ADDRESS_ZERO
 
@@ -112,6 +112,7 @@ def test_all(sugar_contract, LpStruct):
     assert lp2.gauge == second_lp.gauge
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_all_pagination(sugar_contract, LpStruct):
     max_lps = sugar_contract.MAX_LPS()
 
@@ -157,6 +158,7 @@ def test_positions(sugar_contract, PositionStruct):
     assert pos.lp is not None
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_positionsUnstakedConcentrated(sugar_contract, PositionStruct):
     limit = 100
     offset = 0
@@ -176,6 +178,7 @@ def test_positionsUnstakedConcentrated(sugar_contract, PositionStruct):
     assert pos.lp is not None
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_positions_ALM(sugar_contract, PositionStruct):
     account = os.getenv(f'TEST_ALM_ADDRESS_{CHAIN_ID}')
 
