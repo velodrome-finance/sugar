@@ -9,6 +9,7 @@ CHAIN_ID = os.getenv('CHAIN_ID', 10)
 
 
 @pytest.fixture
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def sugar_contract(RelaySugar, accounts):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
@@ -16,6 +17,7 @@ def sugar_contract(RelaySugar, accounts):
 
 
 @pytest.fixture
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def RelayStruct(sugar_contract):
     method_output = sugar_contract.all.abi['outputs'][0]
     members = list(map(lambda _e: _e['name'], method_output['components']))
@@ -23,6 +25,7 @@ def RelayStruct(sugar_contract):
     yield namedtuple('RelayStruct', members)
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_initial_state(sugar_contract):
     assert sugar_contract.voter() == os.getenv(f'VOTER_{CHAIN_ID}')
     assert sugar_contract.registries(0) == \
@@ -31,6 +34,7 @@ def test_initial_state(sugar_contract):
     assert sugar_contract.token() is not None
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_all(sugar_contract, RelayStruct):
     relays = list(map(
         lambda _r: RelayStruct(*_r),
