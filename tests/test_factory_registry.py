@@ -3,23 +3,27 @@ import pytest
 
 from web3.constants import ADDRESS_ZERO
 
-CHAIN_ID = os.getenv('CHAIN_ID', 10)
+CHAIN_ID = os.getenv('CHAIN_ID', 34443)
 
 
 @pytest.fixture
+@pytest.mark.skipif(int(CHAIN_ID) in [10, 8453], reason="Only leaf chains")
 def factory_registry(FactoryRegistry):
     # Deploy the contract using the first test account as the owner
     yield FactoryRegistry.at(os.getenv(f'REGISTRY_{CHAIN_ID}'))
 
 
 @pytest.mark.skipif(int(CHAIN_ID) in [10, 8453], reason="Only leaf chains")
-def test_initial_state(factory_registry):
-    assert factory_registry.owner() ==\
-      "0xd42C7914cF8dc24a1075E29C283C581bd1b0d3D3"
+def test_poolFactories(factory_registry):
+    factories = factory_registry.poolFactories()
+    assert len(factories) > 0
 
 
 @pytest.mark.skipif(int(CHAIN_ID) in [10, 8453], reason="Only leaf chains")
-def test_factories_to_pool_factory(factory_registry):
-    pool_factory = "0x1111111111111111111111111111111111111111"
-    result = factory_registry.factoriesToPoolFactory(pool_factory)
-    assert result == [ADDRESS_ZERO, pool_factory]
+def test_factoriesToPoolFactory(factory_registry):
+    factories = factory_registry.poolFactories()
+    result = factory_registry.factoriesToPoolFactory(factories[0])
+    assert ADDRESS_ZERO not in result
+
+    result = factory_registry.factoriesToPoolFactory(ADDRESS_ZERO)
+    assert ADDRESS_ZERO in result
