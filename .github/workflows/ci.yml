@@ -13,8 +13,6 @@ jobs:
         include:
           - chain: mode
             experimental: true
-          - chain: bob
-            experimental: true
 
     steps:
     - uses: actions/checkout@master
