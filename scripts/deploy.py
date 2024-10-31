@@ -52,6 +52,8 @@ def main():
     elif 'registry' in contract_name:
         FactoryRegistry.deploy(
             str(os.getenv(f'FACTORIES_{chain_id}')).split(','),
+            str(os.getenv(f'REWARDS_FACTORIES_{chain_id}')).split(','),
+            str(os.getenv(f'GAUGE_FACTORIES_{chain_id}')).split(','),
             {'from': account}
         )
 
