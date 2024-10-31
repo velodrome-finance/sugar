@@ -486,7 +486,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive: gauge_alive,
 
     fee: staticcall lp_shared.voter.gaugeToFees(gauge.address),
-    bribe: staticcall lp_shared.voter.gaugeToBribe(gauge.address),
+    bribe: lp_shared._voter_gauge_to_incentive(gauge.address),
     factory: _data[0],
 
     emissions: emissions,
@@ -1017,7 +1017,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive: gauge_alive,
 
     fee: fee_voting_reward,
-    bribe: staticcall lp_shared.voter.gaugeToBribe(gauge.address),
+    bribe: lp_shared._voter_gauge_to_incentive(gauge.address),
     factory: _data[0],
 
     emissions: emissions,
