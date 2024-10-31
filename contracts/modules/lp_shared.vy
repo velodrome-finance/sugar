@@ -8,6 +8,7 @@ MAX_FACTORIES: constant(uint256) = 10
 MAX_POOLS: constant(uint256) = 2000
 MAX_ITERATIONS: constant(uint256) = 8000
 
+ROOT_CHAIN_IDS: constant(uint256[2]) = [10, 8453]
 FACTORY_TO_INIT_HASH: HashMap[address, bytes32]
 
 # Interfaces
@@ -21,6 +22,8 @@ interface IFactoryRegistry:
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
   def gaugeToBribe(_gauge_addr: address) -> address: view
+  # Superchain version of `gaugeToBribe()`
+  def gaugeToIncentive(_gauge_addr: address) -> address: view
   def gaugeToFees(_gauge_addr: address) -> address: view
   def isAlive(_gauge_addr: address) -> bool: view
   def isWhitelistedToken(_token_addr: address) -> bool: view
@@ -145,6 +148,18 @@ def _fetch_nfpm(_factory: address) -> address:
     return abi_decode(response, address)
 
   return empty(address)
+
+@internal
+@view
+def _voter_gauge_to_incentive(_gauge: address) -> address:
+  """
+  @notice Handles root/leaf voter call to gaugeToBribe/gaugeToIncentive
+  @return Incentive contract address
+  """
+  if chain.id in ROOT_CHAIN_IDS:
+    return staticcall self.voter.gaugeToBribe(_gauge)
+
+  return staticcall self.voter.gaugeToIncentive(_gauge)
 
 @internal
 @view
