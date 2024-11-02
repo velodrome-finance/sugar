@@ -60,9 +60,9 @@ def __init__(_voter: address, _registry: address, _convertor: address):
 @external
 @view
 def epochsLatest(_limit: uint256, _offset: uint256) \
-    -> DynArray[LpEpoch, lp_shared.MAX_POOLS]:
+    -> DynArray[LpEpoch, MAX_EPOCHS]:
   """
-  @notice Returns all pools latest epoch data (up to 200 items)
+  @notice Returns all pools latest epoch data
   @param _limit The max amount of pools to check for epochs
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
@@ -71,7 +71,7 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
-  col: DynArray[LpEpoch, lp_shared.MAX_POOLS] = empty(DynArray[LpEpoch, lp_shared.MAX_POOLS])
+  col: DynArray[LpEpoch, MAX_EPOCHS] = empty(DynArray[LpEpoch, MAX_EPOCHS])
 
   for index: uint256 in range(0, lp_shared.MAX_ITERATIONS):
     if counted == _limit or index >= pools_count:
