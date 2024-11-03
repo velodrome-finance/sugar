@@ -155,8 +155,10 @@ def _byId(_id: uint256) -> VeNFT:
   perma: bool = False
   amount, expires_at, perma = staticcall self.ve.locked(_id)
   last_voted: uint256 = 0
+  governance_amount: uint256 = 0
 
-  governance_amount: uint256 = staticcall self.gov.getVotes(_id, block.timestamp)
+  if self.gov.address != empty(address):
+    governance_amount = staticcall self.gov.getVotes(_id, block.timestamp)
 
   delegate_id: uint256 = staticcall self.ve.delegates(_id)
   managed_id: uint256 = staticcall self.ve.idToManaged(_id)
