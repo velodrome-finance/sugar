@@ -612,7 +612,7 @@ def _positions(
     else:
       # Fetch CL positions
       for pindex: uint256 in range(0, lp_shared.MAX_POOLS):
-        if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
+        if pindex >= pools_count or pools_done >= _limit:
           break
 
         # Basically skip calls for offset records...
@@ -623,9 +623,6 @@ def _positions(
           pools_done += 1
 
         pool_addr: address = staticcall factory.allPools(pindex)
-        alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
-        alm_staking: IGauge = IGauge(alm_addresses[0])
-        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
         gauge: ICLGauge = ICLGauge(staticcall lp_shared.voter.gauges(pool_addr))
         staked: bool = False
 
@@ -679,6 +676,12 @@ def _positions(
               break
 
         # Next, continue with fetching the ALM positions!
+        if self.alm_factory == empty(IAlmFactory):
+          continue
+
+        alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
+        alm_staking: IGauge = IGauge(alm_addresses[0])
+        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
 
         if alm_vault.address == empty(address):
           continue
@@ -852,8 +855,7 @@ def _cl_position(
   pool: IPool = IPool(pos.lp)
   gauge: ICLGauge = ICLGauge(_gauge)
   slot: Slot = staticcall pool.slot0()
-  # If the _gauge is present, it's because we're fetching a staked position
-  staked: bool = _gauge != empty(address)
+  staked: bool = False
 
   # Try to find the gauge if we're fetching an unstaked position
   if _gauge == empty(address):
@@ -876,7 +878,7 @@ def _cl_position(
   pos.unstaked_earned0 = amounts_fees.amount0
   pos.unstaked_earned1 = amounts_fees.amount1
 
-  if staked == False and gauge.address != empty(address):
+  if gauge.address != empty(address):
     staked = staticcall gauge.stakedContains(_account, pos.id)
 
   if staked:
