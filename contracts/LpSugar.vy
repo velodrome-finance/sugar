@@ -612,7 +612,7 @@ def _positions(
     else:
       # Fetch CL positions
       for pindex: uint256 in range(0, lp_shared.MAX_POOLS):
-        if pindex >= pools_count or pools_done >= _limit or self.alm_factory == empty(IAlmFactory):
+        if pindex >= pools_count or pools_done >= _limit:
           break
 
         # Basically skip calls for offset records...
@@ -623,9 +623,6 @@ def _positions(
           pools_done += 1
 
         pool_addr: address = staticcall factory.allPools(pindex)
-        alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
-        alm_staking: IGauge = IGauge(alm_addresses[0])
-        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
         gauge: ICLGauge = ICLGauge(staticcall lp_shared.voter.gauges(pool_addr))
         staked: bool = False
 
@@ -679,6 +676,12 @@ def _positions(
               break
 
         # Next, continue with fetching the ALM positions!
+        if self.alm_factory == empty(IAlmFactory):
+          continue
+
+        alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
+        alm_staking: IGauge = IGauge(alm_addresses[0])
+        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
 
         if alm_vault.address == empty(address):
           continue
