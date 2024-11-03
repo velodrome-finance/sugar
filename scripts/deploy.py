@@ -54,6 +54,7 @@ def main():
             str(os.getenv(f'FACTORIES_{chain_id}')).split(','),
             str(os.getenv(f'REWARDS_FACTORIES_{chain_id}')).split(','),
             str(os.getenv(f'GAUGE_FACTORIES_{chain_id}')).split(','),
+            str(os.getenv(f'INIT_HASHES_{chain_id}')).split(','),
             {'from': account}
         )
 

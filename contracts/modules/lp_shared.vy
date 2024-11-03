@@ -9,7 +9,6 @@ MAX_POOLS: constant(uint256) = 2000
 MAX_ITERATIONS: constant(uint256) = 8000
 
 ROOT_CHAIN_IDS: constant(uint256[2]) = [10, 8453]
-FACTORY_TO_INIT_HASH: HashMap[address, bytes32]
 
 # Interfaces
 
@@ -18,6 +17,7 @@ interface IFactoryRegistry:
   def poolFactories() -> DynArray[address, MAX_FACTORIES]: view
   def poolFactoriesLength() -> uint256: view
   def factoriesToPoolFactory(_factory: address) -> address[2]: view
+  def initHashToPoolFactory(_factory: address) -> bytes32: view
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
@@ -49,10 +49,6 @@ def __init__(_voter: address, _registry: address, _convertor: address):
   self.voter = IVoter(_voter)
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
-
-  # Root (placeholder) pool factory
-  self.FACTORY_TO_INIT_HASH[0xd02D36A5e826731c0cF6Be97922DAfa516B9E4B4] = \
-    0xb6ce19baf736d6d711871f9c2a3b71e32332f2230ba65b57060620d5d33997c9
 
 @internal
 @view
@@ -177,7 +173,10 @@ def _root_lp_address(
   @param _type The pool type
   @return address
   """
-  init_hash: bytes32 = self.FACTORY_TO_INIT_HASH[_factory]
+  if chain.id in ROOT_CHAIN_IDS:
+    return empty(address)
+
+  init_hash: bytes32 = staticcall self.registry.initHashToPoolFactory(_factory)
 
   if init_hash == empty(bytes32):
     return empty(address)
