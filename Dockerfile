@@ -16,5 +16,6 @@ RUN brownie networks modify optimism-main host=https://optimism-mainnet.wallet.c
 
 RUN brownie networks modify base-main host=https://mainnet.base.org
 
-RUN brownie networks add Bob bob-main host=https://rpc.gobob.xyz/ chainid=60808  
+RUN brownie networks add Bob bob-main host=https://rpc.gobob.xyz chainid=60808
 RUN brownie networks add Mode mode-main host=https://mainnet.mode.network chainid=34443
+RUN brownie networks add Lisk lisk-main host=https://lisk.drpc.org chainid=1135
