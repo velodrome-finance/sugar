@@ -110,3 +110,18 @@ def test_epochsLatest_limit_offset(
 
     assert lepoch.lp == pepoch.lp
     assert lepoch.ts == pepoch.ts
+
+
+@pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only Optimism")
+def test_forRoot(sugar_contract, lp_sugar_contract, LpStruct):
+    first_lp = LpStruct(*lp_sugar_contract.byIndex(1))
+
+    # Use `lp` instead of `root` for testing
+    addresses = sugar_contract.forRoot(first_lp.lp)
+
+    assert addresses is not None
+
+    assert len(addresses) == 3
+    assert addresses[0] == first_lp.gauge
+    assert addresses[1] == first_lp.fee
+    assert addresses[2] == first_lp.bribe

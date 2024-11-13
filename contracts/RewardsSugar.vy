@@ -347,3 +347,23 @@ def _pool_rewards(_venft_id: uint256, _pool: address, _gauge: address) \
     )
 
   return col
+
+
+@external
+@view
+def forRoot(_root_pool: address) -> address[3]:
+  """
+  @notice Returns rewards addresses for the root pool
+  @param _root_pool the root pool address to map to
+  @return Array with the root gauge, fee and incentive addresses
+  """
+  if chain.id not in lp_shared.ROOT_CHAIN_IDS:
+    return empty(address[3])
+
+  gauge: address = staticcall lp_shared.voter.gauges(_root_pool)
+
+  return [
+    gauge,
+    staticcall lp_shared.voter.gaugeToFees(gauge),
+    staticcall lp_shared.voter.gaugeToBribe(gauge)
+  ]
