@@ -68,7 +68,7 @@ struct Position:
 
 struct Token:
   token_address: address
-  symbol: String[100]
+  symbol: String[128]
   decimals: uint8
   account_balance: uint256
   listed: bool
@@ -83,7 +83,7 @@ struct SwapLp:
 
 struct Lp:
   lp: address
-  symbol: String[100]
+  symbol: String[128]
   decimals: uint8
   liquidity: uint256
 
@@ -133,7 +133,7 @@ struct AlmManagedPositionInfo:
 
 interface IERC20:
   def decimals() -> uint8: view
-  def symbol() -> String[100]: view
+  def symbol() -> String[128]: view
   def balanceOf(_account: address) -> uint256: view
 
 interface IPool:
@@ -148,7 +148,7 @@ interface IPool:
   def index0() -> uint256: view
   def index1() -> uint256: view
   def totalSupply() -> uint256: view
-  def symbol() -> String[100]: view
+  def symbol() -> String[128]: view
   def decimals() -> uint8: view
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
@@ -465,7 +465,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp({
     lp: _data[1],
-    symbol: staticcall pool.symbol(),
+    symbol: self._safe_symbol(_data[1]),
     decimals: decimals,
     liquidity: pool_liquidity,
 
@@ -1088,7 +1088,7 @@ def _safe_decimals(_token: address) -> uint8:
 
 @internal
 @view
-def _safe_symbol(_token: address) -> String[100]:
+def _safe_symbol(_token: address) -> String[128]:
   """
   @notice Returns the `ERC20.symbol()` result safely
   @param _token The token to call
@@ -1106,8 +1106,9 @@ def _safe_symbol(_token: address) -> String[100]:
   )[1]
 
   # Check response as revert_on_failure is set to False
-  if len(response) > 0:
-    return abi_decode(response, String[100])
+  # String size cannot be larger than max_outsize - 64 bytes
+  if len(response) > 0 and len(response) <= 128:
+    return abi_decode(response, String[128])
 
   return "-NA-"
 
