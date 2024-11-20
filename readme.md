@@ -37,7 +37,7 @@ Below is the list of datasets we support.
 
 > [!NOTE]
 > `LpSugar.vy` is deployed on:
-> Optimism - `0x065CA8CD19367A7c9773BC563940a4c0016de0DE`
+> Optimism - `0x54F8968CC76ECB17018E44049FdcC14ff833fa67`
 > Base - `0x63a73829C74e936C1D2EEbE64164694f16700138`
 
 It allows fetching on-chain pools data.

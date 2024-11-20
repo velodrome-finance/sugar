@@ -68,7 +68,7 @@ struct Position:
 
 struct Token:
   token_address: address
-  symbol: String[128]
+  symbol: String[100]
   decimals: uint8
   account_balance: uint256
   listed: bool
@@ -83,7 +83,7 @@ struct SwapLp:
 
 struct Lp:
   lp: address
-  symbol: String[128]
+  symbol: String[100]
   decimals: uint8
   liquidity: uint256
 
@@ -133,7 +133,7 @@ struct AlmManagedPositionInfo:
 
 interface IERC20:
   def decimals() -> uint8: view
-  def symbol() -> String[128]: view
+  def symbol() -> String[100]: view
   def balanceOf(_account: address) -> uint256: view
 
 interface IPool:
@@ -148,7 +148,7 @@ interface IPool:
   def index0() -> uint256: view
   def index1() -> uint256: view
   def totalSupply() -> uint256: view
-  def symbol() -> String[128]: view
+  def symbol() -> String[100]: view
   def decimals() -> uint8: view
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
@@ -1088,17 +1088,17 @@ def _safe_decimals(_token: address) -> uint8:
 
 @internal
 @view
-def _safe_symbol(_token: address) -> String[128]:
+def _safe_symbol(_token: address) -> String[100]:
   """
   @notice Returns the `ERC20.symbol()` result safely
   @param _token The token to call
   """
-  # >=192 input size is required by Vyper's _abi_decode()
-  response: Bytes[192] = b""
+  # Large input size is required by Vyper's _abi_decode()
+  response: Bytes[2048] = b""
   response = raw_call(
       _token,
       method_id("symbol()"),
-      max_outsize=192,
+      max_outsize=2048,
       gas=50000,
       is_delegate_call=False,
       is_static_call=True,
@@ -1106,9 +1106,12 @@ def _safe_symbol(_token: address) -> String[128]:
   )[1]
 
   # Check response as revert_on_failure is set to False
-  # String size cannot be larger than max_outsize - 64 bytes
-  if len(response) > 0 and len(response) <= 128:
-    return abi_decode(response, String[128])
+  # ABI decoded string size cannot be larger than Bytes size - 64 bytes
+  if len(response) > 0:
+    decoded_symbol: String[1984] = abi_decode(response, String[1984])
+    end: uint256 = min(100, len(decoded_symbol))
+    truncated_symbol: String[100] = convert(slice(decoded_symbol, 0, end), String[100])
+    return truncated_symbol
 
   return "-NA-"
 
