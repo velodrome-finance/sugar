@@ -1090,15 +1090,14 @@ def _safe_decimals(_token: address) -> uint8:
 @view
 def _safe_symbol(_token: address) -> String[100]:
   """
-  @notice Returns the `ERC20.symbol()` result safely
+  @notice Returns the `ERC20.symbol()` result safely, truncates to max 100 chars
   @param _token The token to call
   """
-  # Large input size is required by Vyper's _abi_decode()
-  response: Bytes[2048] = b""
-  response = raw_call(
+  response: Bytes[192] = raw_call(
       _token,
       method_id("symbol()"),
-      max_outsize=2048,
+      # 192, is min necessary
+      max_outsize=192,
       gas=50000,
       is_delegate_call=False,
       is_static_call=True,
@@ -1106,14 +1105,17 @@ def _safe_symbol(_token: address) -> String[100]:
   )[1]
 
   # Check response as revert_on_failure is set to False
-  # ABI decoded string size cannot be larger than Bytes size - 64 bytes
   if len(response) > 0:
-    decoded_symbol: String[1984] = abi_decode(response, String[1984])
-    end: uint256 = min(100, len(decoded_symbol))
-    truncated_symbol: String[100] = convert(slice(decoded_symbol, 0, end), String[100])
-    return truncated_symbol
+    # Cache the len first, see:
+    #   https://github.com/vyperlang/vyper/commit/3d9c537142fb99b2672f21e2057f5f202cde194f
+    end: uint256 = min(100, len(response))
 
-  return "-NA-"
+    return abi_decode(
+      slice(response, 0, end),
+      String[100]
+    )
+
+  return "-???-"
 
 @internal
 @view
