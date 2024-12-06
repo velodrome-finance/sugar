@@ -131,11 +131,6 @@ struct AlmManagedPositionInfo:
 
 # Our contracts / Interfaces
 
-interface IERC20:
-  def decimals() -> uint8: view
-  def symbol() -> String[100]: view
-  def balanceOf(_account: address) -> uint256: view
-
 interface IPool:
   def token0() -> address: view
   def token1() -> address: view
@@ -148,7 +143,6 @@ interface IPool:
   def index0() -> uint256: view
   def index1() -> uint256: view
   def totalSupply() -> uint256: view
-  def symbol() -> String[100]: view
   def decimals() -> uint8: view
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
@@ -348,7 +342,6 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
 @internal
 @view
 def _token(_address: address, _account: address) -> Token:
-  token: IERC20 = IERC20(_address)
   bal: uint256 = empty(uint256)
 
   if _account != empty(address):
@@ -433,8 +426,6 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   is_stable: bool = staticcall pool.stable()
   pool_fee: uint256 = staticcall lp_shared.IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = staticcall pool.poolFees()
-  token0: IERC20 = IERC20(_token0)
-  token1: IERC20 = IERC20(_token1)
   token0_fees: uint256 = self._safe_balance_of(_token0, pool_fees)
   token1_fees: uint256 = self._safe_balance_of(_token1, pool_fees)
   gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
@@ -473,11 +464,11 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     tick: 0,
     sqrt_ratio: 0,
 
-    token0: token0.address,
+    token0: _token0,
     reserve0: reserve0,
     staked0: staked0,
 
-    token1: token1.address,
+    token1: _token1,
     reserve1: reserve1,
     staked1: staked1,
 
@@ -500,9 +491,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm: empty(address),
     alm: empty(address),
 
-    root: lp_shared._root_lp_address(
-      _data[0], token0.address, token1.address, type
-    )
+    root: lp_shared._root_lp_address(_data[0], _token0, _token1, type)
   })
 
 @external
@@ -958,8 +947,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
-  token0: IERC20 = IERC20(_token0)
-  token1: IERC20 = IERC20(_token1)
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = staticcall pool.tickSpacing()
@@ -1006,11 +993,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     tick: slot.tick,
     sqrt_ratio: slot.sqrtPriceX96,
 
-    token0: token0.address,
+    token0: _token0,
     reserve0: self._safe_balance_of(_token0, pool.address),
     staked0: staked0,
 
-    token1: token1.address,
+    token1: _token1,
     reserve1: self._safe_balance_of(_token1, pool.address),
     staked1: staked1,
 
@@ -1033,9 +1020,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm: _data[3],
     alm: alm_addresses[1],
 
-    root: lp_shared._root_lp_address(
-      _data[0], token0.address, token1.address, tick_spacing
-    ),
+    root: lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
   })
 
 @internal
