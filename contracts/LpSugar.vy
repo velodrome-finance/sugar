@@ -68,7 +68,7 @@ struct Position:
 
 struct Token:
   token_address: address
-  symbol: String[100]
+  symbol: String[30]
   decimals: uint8
   account_balance: uint256
   listed: bool
@@ -83,7 +83,7 @@ struct SwapLp:
 
 struct Lp:
   lp: address
-  symbol: String[100]
+  symbol: String[30]
   decimals: uint8
   liquidity: uint256
 
@@ -465,7 +465,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp({
     lp: _data[1],
-    symbol: self._safe_symbol(_data[1]),
+    symbol: self._safe_symbol(pool.address),
     decimals: decimals,
     liquidity: pool_liquidity,
 
@@ -1088,32 +1088,28 @@ def _safe_decimals(_token: address) -> uint8:
 
 @internal
 @view
-def _safe_symbol(_token: address) -> String[100]:
+def _safe_symbol(_token: address) -> String[30]:
   """
-  @notice Returns the `ERC20.symbol()` result safely, truncates to max 100 chars
+  @notice Returns the `ERC20.symbol()` safely (max 30 chars)
   @param _token The token to call
   """
-  response: Bytes[192] = raw_call(
+  response: Bytes[100] = raw_call(
       _token,
       method_id("symbol()"),
-      # 192, is min necessary
-      max_outsize=192,
+      # Min bytes to use abi_decode()
+      max_outsize=100,
       gas=50000,
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
   )[1]
 
-  # Check response as revert_on_failure is set to False
-  if len(response) > 0:
-    # Cache the len first, see:
-    #   https://github.com/vyperlang/vyper/commit/3d9c537142fb99b2672f21e2057f5f202cde194f
-    end: uint256 = min(100, len(response))
+  resp_len: uint256 = len(response)
 
-    return abi_decode(
-      slice(response, 0, end),
-      String[100]
-    )
+  # Check response as revert_on_failure is set to False
+  # And that the symbol size is not more than 10 chars (96 bytes)
+  if resp_len > 0 and resp_len <= 96:
+    return abi_decode(response, String[30])
 
   return "-???-"
 
