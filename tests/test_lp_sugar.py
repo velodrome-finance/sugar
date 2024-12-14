@@ -92,6 +92,38 @@ def test_tokens(sugar_contract, TokenStruct, LpStruct):
     assert token1.token_address == first_lp.token1
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
+def test_tokens_long_symbol(sugar_contract, TokenStruct):
+    tokens = list(map(
+        lambda _p: TokenStruct(*_p),
+        sugar_contract.tokens(1, 995, ADDRESS_ZERO, [])
+    ))
+
+    assert tokens is not None
+    assert len(tokens) > 1
+
+    token = tokens[0]
+
+    assert token.symbol is not None
+    assert token.symbol == '-???-'
+
+
+@pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
+def test_all_long_symbol(sugar_contract, LpStruct):
+    pools = list(map(
+        lambda _p: LpStruct(*_p),
+        sugar_contract.all(1, 995)
+    ))
+
+    assert pools is not None
+    assert len(pools) == 1
+
+    pool = pools[0]
+
+    assert pool.symbol is not None
+    assert pool.symbol == '-???-'
+
+
 def test_all(sugar_contract, LpStruct):
     first_lp = LpStruct(*sugar_contract.byIndex(0))
     second_lp = LpStruct(*sugar_contract.byIndex(1))
