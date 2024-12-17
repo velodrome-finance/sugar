@@ -1,6 +1,8 @@
-# Velodrome Sugar 🍭
+![Sugar](https://github.com/user-attachments/assets/f670631c-6d22-4434-865e-20f1ba93b9cd)
 
-Sugar comes with contracts to help working with Velodrome Finance data!
+# Sugar
+
+Onchain API for Velodrome and Aerodrome developers!
 
 ## How come?!
 
