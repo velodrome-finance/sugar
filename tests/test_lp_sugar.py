@@ -108,6 +108,22 @@ def test_tokens_long_symbol(sugar_contract, TokenStruct):
     assert token.symbol == '-???-'
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [8453], reason="Only BASE")
+def test_tokens_max_long_symbol(sugar_contract, TokenStruct):
+    tokens = list(map(
+        lambda _p: TokenStruct(*_p),
+        sugar_contract.tokens(1, 2508, ADDRESS_ZERO, [])
+    ))
+
+    assert tokens is not None
+    assert len(tokens) > 1
+
+    token = tokens[0]
+
+    assert token.symbol is not None
+    assert token.symbol != '-???-'
+
+
 @pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
 def test_all_long_symbol(sugar_contract, LpStruct):
     pools = list(map(

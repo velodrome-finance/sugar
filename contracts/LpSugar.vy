@@ -14,6 +14,7 @@ initializes: lp_shared
 MAX_TOKENS: public(constant(uint256)) = 2000
 MAX_LPS: public(constant(uint256)) = 500
 MAX_POSITIONS: public(constant(uint256)) = 200
+MAX_TOKEN_SYMBOL_LEN: public(constant(uint256)) = 32
 
 # Slot0 from CLPool.sol
 struct Slot:
@@ -68,7 +69,7 @@ struct Position:
 
 struct Token:
   token_address: address
-  symbol: String[30]
+  symbol: String[MAX_TOKEN_SYMBOL_LEN]
   decimals: uint8
   account_balance: uint256
   listed: bool
@@ -83,7 +84,7 @@ struct SwapLp:
 
 struct Lp:
   lp: address
-  symbol: String[30]
+  symbol: String[MAX_TOKEN_SYMBOL_LEN]
   decimals: uint8
   liquidity: uint256
 
@@ -1073,7 +1074,7 @@ def _safe_decimals(_token: address) -> uint8:
 
 @internal
 @view
-def _safe_symbol(_token: address) -> String[30]:
+def _safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]:
   """
   @notice Returns the `ERC20.symbol()` safely (max 30 chars)
   @param _token The token to call
@@ -1092,9 +1093,9 @@ def _safe_symbol(_token: address) -> String[30]:
   resp_len: uint256 = len(response)
 
   # Check response as revert_on_failure is set to False
-  # And that the symbol size is not more than 10 chars (96 bytes)
+  # And that the symbol size is not some large value (probably spam)
   if resp_len > 0 and resp_len <= 96:
-    return abi_decode(response, String[30])
+    return abi_decode(response, String[MAX_TOKEN_SYMBOL_LEN])
 
   return "-???-"
 
