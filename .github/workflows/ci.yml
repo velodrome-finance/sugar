@@ -17,6 +17,8 @@ jobs:
             experimental: true
           - chain: fraxtal
             experimental: true
+          - chain: metall2
+            experimental: true
 
     steps:
     - uses: actions/checkout@master

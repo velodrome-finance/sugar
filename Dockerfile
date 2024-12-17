@@ -20,3 +20,4 @@ RUN brownie networks add Bob bob-main host=https://rpc.gobob.xyz chainid=60808
 RUN brownie networks add Mode mode-main host=https://mainnet.mode.network chainid=34443
 RUN brownie networks add Lisk lisk-main host=https://lisk.drpc.org chainid=1135
 RUN brownie networks add Fraxtal fraxtal-main host=https://rpc.frax.com chainid=252
+RUN brownie networks add MetalL2 metall2-main host=https://rpc.metall2.com chainid=1750
