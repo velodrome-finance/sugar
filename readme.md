@@ -35,11 +35,6 @@ Below is the list of datasets we support.
 
 ### Liquidity Pools Data
 
-> [!NOTE]
-> `LpSugar.vy` is deployed on:
-> Optimism - `0x54F8968CC76ECB17018E44049FdcC14ff833fa67`
-> Base - `0x63a73829C74e936C1D2EEbE64164694f16700138`
-
 It allows fetching on-chain pools data.
 The returned data/struct of type `Lp` values represent:
 
@@ -75,16 +70,16 @@ The returned data/struct of type `Lp` values represent:
 ---
 
 The available methods are:
- * `all(_limit: uint256, _offset: uint256) -> Lp[]` -
+ * `LpSugar.all(_limit: uint256, _offset: uint256) -> Lp[]` -
    returns a paginated list of `Lp` structs.
- * `byIndex(_index: uint256) -> Lp` - returns the
+ * `LpSugar.byIndex(_index: uint256) -> Lp` - returns the
    `Lp` data for a specific index of a pool.
 
 ---
 
 To get the positions of an account, use this function:
- * `positions(_limit, _offset, _account) -> Position[]`
- * `positionsUnstakedConcentrated(_limit, _offset, _account) -> Position[]`
+ * `LpSugar.positions(_limit, _offset, _account) -> Position[]`
+ * `LpSugar.positionsUnstakedConcentrated(_limit, _offset, _account) -> Position[]`
 
 The later call is required for deployments prior to Superchain release.
 
@@ -95,7 +90,7 @@ The returned data is a struct of type `Position` with the following values:
   * `staked` -  staked/unstaked liquidity amount on CL, amount of staked tokens on v2
   * `amount0` - amount of unstaked token0 in the position
   * `amount1` - amount of unstaked token1 in the position
-  * `staked1` - amount of staked token0 in the position
+  * `staked0` - amount of staked token0 in the position
   * `staked1` - amount of staked token1 in the position
   * `unstaked_earned0` - unstaked token0 fees earned
   * `unstaked_earned1` - unstaked token1 fees earned
@@ -119,14 +114,9 @@ The pools token list (compiled from all the pools `token0`/`token1`) uses the ty
 
 To fetch the token list this method is available:
 
- * `tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
+ * `LpSugar.tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
 
 ### veNFT and Pool Rewards Data
-
-> [!NOTE]
-> `RewardsSugar.vy` is deployed on:
-> Optimism - ``
-> Base - ``
 
 For the pool epoch data we return, starting with most recent epoch, a struct of
 type `LpEpoch` with the following values:
@@ -144,11 +134,11 @@ type `LpEpoch` with the following values:
 
 To fetch a list of epochs for a specific pool, this method is available:
 
- * `epochsByAddress(_limit: uint256, _offset: uint256, _address: address) -> LpEpoch[]`
+ * `RewardsSugar.epochsByAddress(_limit: uint256, _offset: uint256, _address: address) -> LpEpoch[]`
 
 To fetch a list of latest epochs data for a every pool, this method is available:
 
- * `epochsLatest(_limit: uint256, _offset: uint256) -> LpEpoch[]`
+ * `RewardsSugar.epochsLatest(_limit: uint256, _offset: uint256) -> LpEpoch[]`
 
 ---
 
@@ -164,14 +154,10 @@ values:
 
 To fetch a list of rewards for a specific veNFT, this method is available:
 
- * `rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) -> Reward[]`
- * `rewardsByAddress(_venft_id: uint256, _pool: address) -> Reward[]`
+ * `RewardsSugar.rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) -> Reward[]`
+ * `RewardsSugar.rewardsByAddress(_venft_id: uint256, _pool: address) -> Reward[]`
 
 ### Vote-Escrow Locked NFT (veNFT) Data
-
-> [!NOTE]
-> `VeSugar.vy` is deployed on:
-> Optimism - `0x94f913362b232e31daB49a1aFB775cfd25DaA6a1`
 
 It allows fetching on-chain veNFT data (including the rewards accrued).
 The returned data/struct of type `VeNFT` values represent:
@@ -199,18 +185,14 @@ The pool votes struct values represent:
 
 The available methods are:
 
- * `all(_limit: uint256, _offset: uint256) -> VeNFT[]` - returns a paginated
+ * `VeSugar.all(_limit: uint256, _offset: uint256) -> VeNFT[]` - returns a paginated
    list of `veNFT` structs.
- * `byAccount(_account: address) -> VeNFT[]` - returns a list of `VeNFT` structs
+ * `VeSugar.byAccount(_account: address) -> VeNFT[]` - returns a list of `VeNFT` structs
    for a specific account.
- * `byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
+ * `VeSugar.byId(_id: uint256) -> VeNFT` - returns the `VeNFT` struct for a specific
    NFT id.
 
 ### Relay Data
-
-> [!NOTE]
-> `RelaySugar.vy` is deployed on:
-> Optimism - `0xb8307e5842B9aeE75C704183F0355076aa74b4e2`
 
 It allows fetching Relay autocompounder/autoconverter data.
 The returned data/struct of type `Relay` values represent:
@@ -241,7 +223,7 @@ The managed veNFT deposit struct values represent:
 
 The available methods are:
 
- * `all(_account: address) -> Relay[]` - returns a list of all `Relay` structs.
+ * `RelaySugar.all(_account: address) -> Relay[]` - returns a list of all `Relay` structs.
 
 ## Development
 
@@ -260,6 +242,13 @@ To run the tests inside the container, use:
 ```sh
 brownie test --network={{chain}}-test
 ```
+
+## Releases
+
+This repository is used to manage the releases for multiple chains.
+
+The latest deployed contracts can be found in the `env.{{chain}}` files in the
+root of the repository.
 
 ## Why the contracts are not verified?
 
