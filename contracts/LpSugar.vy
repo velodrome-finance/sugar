@@ -125,7 +125,7 @@ struct Lp:
   root: address
 
 # See:
-#   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L12-L60
+#   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L71-L120
 struct AlmManagedPositionInfo:
   slippageD9: uint32
   property: uint24
@@ -199,15 +199,14 @@ interface ISlipstreamHelper:
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
 
 interface IAlmFactory:
-  def poolToAddresses(pool: address) -> address[2]: view
-  def getImmutableParams() -> address[5]: view
+  def poolToWrapper(pool: address) -> address: view
+  def core() -> address: view
 
 interface IAlmCore:
   def managedPositionAt(_id: uint256) -> AlmManagedPositionInfo: view
 
 interface IAlmLpWrapper:
   def positionId() -> uint256: view
-  def totalSupply() -> uint256: view
   def previewMint(scale: uint256) -> uint256[2]: view
 
 # Vars
@@ -562,7 +561,7 @@ def _positions(
 
   alm_core: IAlmCore = empty(IAlmCore)
   if self.alm_factory != empty(IAlmFactory):
-    alm_core = IAlmCore((staticcall self.alm_factory.getImmutableParams())[0])
+    alm_core = IAlmCore(staticcall self.alm_factory.core())
 
   for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
     if index >= factories_count:
@@ -674,11 +673,11 @@ def _positions(
         if self.alm_factory == empty(IAlmFactory):
           continue
 
-        alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
-        alm_staking: IGauge = IGauge(alm_addresses[0])
-        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
+        alm_staking: IGauge = IGauge(
+          staticcall self.alm_factory.poolToWrapper(pool_addr)
+        )
 
-        if alm_vault.address == empty(address):
+        if alm_staking.address == empty(address):
           continue
 
         alm_user_liq: uint256 = staticcall alm_staking.balanceOf(_account)
@@ -687,7 +686,7 @@ def _positions(
           continue
 
         alm_pos: AlmManagedPositionInfo = staticcall alm_core.managedPositionAt(
-          staticcall alm_vault.positionId()
+          staticcall IAlmLpWrapper(alm_staking.address).positionId()
         )
 
         if gauge.address != empty(address) and len(alm_pos.ammPositionIds) > 0:
@@ -705,7 +704,7 @@ def _positions(
           nfpm.address
         )
 
-        alm_liq: uint256 = staticcall alm_vault.totalSupply()
+        alm_liq: uint256 = staticcall alm_staking.totalSupply()
         # adjust user share of the vault...
         pos.amount0 = (alm_user_liq * pos.amount0) // alm_liq
         pos.amount1 = (alm_user_liq * pos.amount1) // alm_liq
@@ -720,7 +719,7 @@ def _positions(
         pos.liquidity = (alm_user_liq * pos.liquidity) // alm_liq
         pos.staked = (alm_user_liq * pos.staked) // alm_liq
 
-        pos.alm = alm_vault.address
+        pos.alm = alm_staking.address
 
         if len(positions) < MAX_POSITIONS:
           positions.append(pos)
@@ -985,9 +984,9 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge_alive and staticcall gauge.periodFinish() > block.timestamp:
     emissions = staticcall gauge.rewardRate()
 
-  alm_addresses: address[2] = [empty(address), empty(address)]
+  alm_wrapper: address = empty(address)
   if self.alm_factory != empty(IAlmFactory):
-    alm_addresses = staticcall self.alm_factory.poolToAddresses(pool.address)
+    alm_wrapper = staticcall self.alm_factory.poolToWrapper(pool.address)
 
   return Lp({
     lp: pool.address,
@@ -1024,7 +1023,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token1_fees: token1_fees,
 
     nfpm: _data[3],
-    alm: alm_addresses[1],
+    alm: alm_wrapper,
 
     root: lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
   })
