@@ -699,6 +699,22 @@ def _positions(
           nfpm.address
         )
 
+        # For the Temper strategy we might have a second position to add up
+        if len(alm_pos.ammPositionIds) > 1:
+          pos2: Position = self._cl_position(
+            alm_pos.ammPositionIds[1],
+            # Account is the ALM Core contract here...
+            alm_core.address,
+            pool_addr,
+            gauge.address if staked else empty(address),
+            factory.address,
+            nfpm.address
+          )
+          pos.amount0 += pos2.amount0
+          pos.amount1 += pos2.amount1
+          pos.staked0 += pos2.staked0
+          pos.staked1 += pos2.staked1
+
         alm_liq: uint256 = staticcall alm_staking.totalSupply()
         # adjust user share of the vault...
         pos.amount0 = (alm_user_liq * pos.amount0) // alm_liq
@@ -706,14 +722,13 @@ def _positions(
         pos.staked0 = (alm_user_liq * pos.staked0) // alm_liq
         pos.staked1 = (alm_user_liq * pos.staked1) // alm_liq
 
-        pos.emissions_earned = staticcall alm_staking.earned(_account)
         # ignore dust as the rebalancing might report "fees"
         pos.unstaked_earned0 = 0
         pos.unstaked_earned1 = 0
 
-        pos.liquidity = (alm_user_liq * pos.liquidity) // alm_liq
-        pos.staked = (alm_user_liq * pos.staked) // alm_liq
-
+        pos.emissions_earned = staticcall alm_staking.earned(_account)
+        pos.liquidity = alm_user_liq
+        pos.staked = alm_user_liq
         pos.alm = alm_staking.address
 
         if len(positions) < MAX_POSITIONS:
