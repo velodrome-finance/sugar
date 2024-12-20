@@ -1,0 +1,35 @@
+name: Sugar
+
+vyper:
+  evm_version: cancun
+
+dependencies:
+  - name: snekmate
+    github: pcaversaccio/snekmate
+    version: 0.1.0
+
+networks:
+  custom:
+    - name: mainnet
+      ecosystem: mode
+      chain_id: 34443
+    - name: mainnet
+      ecosystem: lisk
+      chain_id: 1135
+    - name: mainnet
+      ecosystem: metall2
+      chain_id: 1750
+
+node:
+  mode:
+    mainnet:
+      uri: https://mode.drpc.org
+  lisk:
+    mainnet:
+      uri: https://lisk.drpc.org
+  metall2:
+    mainnet:
+      uri: https://metall2.drpc.org
+  optimism:
+    mainnet:
+      uri: https://optimism-mainnet.wallet.coinbase.com
