@@ -1,3 +1,5 @@
-eth-brownie @ git+https://github.com/velodrome-finance/brownie@vyper-v0.4
-vyper==0.4.0
-flake8
+eth-ape
+ape-vyper
+ape-etherscan
+
+black

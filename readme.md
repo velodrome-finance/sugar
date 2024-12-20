@@ -236,21 +236,21 @@ docker build ./ -t velodrome/sugar
 
 Next start the container with existing environment variables:
 ```sh
-docker run --env-file=env.{{chain}} --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
+docker run --env-file=deployments/{{chain}}.env --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
 ```
 The environment has Brownie and Vyper already installed.
 
 To run the tests inside the container, use:
 ```sh
-brownie test --network={{chain}}-test
+ape test --network={{chain}}:mainnet:node
 ```
 
 ## Releases
 
 This repository is used to manage the releases for multiple chains.
 
-The latest deployed contracts can be found in the `env.{{chain}}` files in the
-root of the repository.
+The latest deployed contracts can be found in the `deployments/{{chain}}.env`
+files in the root of the repository.
 
 ## Why the contracts are not verified?
 

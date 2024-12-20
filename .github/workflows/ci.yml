@@ -27,4 +27,4 @@ jobs:
       run: docker build ./ -t velodrome/sugar
 
     - name: Runs code QA and tests
-      run: docker run --rm --env-file=env.${{ matrix.chain }} -v $(pwd):/app -w /app -t velodrome/sugar sh -c 'flake8 && brownie test --network=${{ matrix.chain }}-main'
+      run: docker run --rm --env-file=deployments/${{ matrix.chain }}.env -w /app -t velodrome/sugar sh -c 'python -m black . && ape test --network ${{ matrix.chain }}:mainnet:node --disable-isolation'

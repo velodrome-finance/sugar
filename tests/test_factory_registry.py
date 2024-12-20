@@ -3,14 +3,14 @@ import pytest
 
 from web3.constants import ADDRESS_ZERO
 
-CHAIN_ID = os.getenv('CHAIN_ID', 34443)
+CHAIN_ID = os.getenv("CHAIN_ID", 34443)
 
 
 @pytest.fixture
 @pytest.mark.skipif(int(CHAIN_ID) in [10, 8453], reason="Only leaf chains")
-def factory_registry(FactoryRegistry):
+def factory_registry(project):
     # Deploy the contract using the first test account as the owner
-    yield FactoryRegistry.at(os.getenv(f'REGISTRY_{CHAIN_ID}'))
+    yield project.FactoryRegistry.at(os.getenv(f"REGISTRY_{CHAIN_ID}"))
 
 
 @pytest.mark.skipif(int(CHAIN_ID) in [10, 8453], reason="Only leaf chains")
@@ -34,4 +34,4 @@ def test_initHashToPoolFactory(factory_registry):
     factories = factory_registry.poolFactories()
     result = factory_registry.initHashToPoolFactory(factories[0])
 
-    assert str(result) in os.getenv(f'INIT_HASHES_{CHAIN_ID}')
+    assert result.hex() in os.getenv(f"INIT_HASHES_{CHAIN_ID}")

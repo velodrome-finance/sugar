@@ -1,54 +1,21 @@
 # SPDX-License-Identifier: BUSL-1.1
 import os
 import pytest
-from collections import namedtuple
 
 from web3.constants import ADDRESS_ZERO
 
-CHAIN_ID = os.getenv('CHAIN_ID', 10)
+CHAIN_ID = os.getenv("CHAIN_ID", 10)
 
 
 @pytest.fixture
-def sugar_contract(LpSugar, accounts):
+def sugar_contract(project):
     # Since we depend on the rest of the protocol,
     # we just point to an existing deployment
-    yield LpSugar.at(os.getenv(f'LP_SUGAR_ADDRESS_{CHAIN_ID}'))
+    yield project.LpSugar.at(os.getenv(f"LP_SUGAR_ADDRESS_{CHAIN_ID}"))
 
 
-@pytest.fixture
-def TokenStruct(sugar_contract):
-    method_output = sugar_contract.tokens.abi['outputs'][0]
-    members = list(map(lambda _e: _e['name'], method_output['components']))
-
-    yield namedtuple('TokenStruct', members)
-
-
-@pytest.fixture
-def LpStruct(sugar_contract):
-    method_output = sugar_contract.byIndex.abi['outputs'][0]
-    members = list(map(lambda _e: _e['name'], method_output['components']))
-
-    yield namedtuple('LpStruct', members)
-
-
-@pytest.fixture
-def SwapLpStruct(sugar_contract):
-    method_output = sugar_contract.forSwaps.abi['outputs'][0]
-    members = list(map(lambda _e: _e['name'], method_output['components']))
-
-    yield namedtuple('SwapLpStruct', members)
-
-
-@pytest.fixture
-def PositionStruct(sugar_contract):
-    method_output = sugar_contract.positionsByFactory.abi['outputs'][0]
-    members = list(map(lambda _e: _e['name'], method_output['components']))
-
-    yield namedtuple('PositionStruct', members)
-
-
-def test_byIndex(sugar_contract, LpStruct):
-    lp = LpStruct(*sugar_contract.byIndex(0))
+def test_byIndex(sugar_contract):
+    lp = sugar_contract.byIndex(0)
 
     assert lp is not None
     assert len(lp) == 28
@@ -56,13 +23,10 @@ def test_byIndex(sugar_contract, LpStruct):
     assert lp.gauge != ADDRESS_ZERO
 
 
-def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
-    first_lp = LpStruct(*sugar_contract.byIndex(0))
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
-    swap_lps = list(map(
-        lambda _p: SwapLpStruct(*_p),
-        sugar_contract.forSwaps(10, 0)
-    ))
+def test_forSwaps(sugar_contract):
+    first_lp = sugar_contract.byIndex(0)
+    second_lp = sugar_contract.byIndex(1)
+    swap_lps = sugar_contract.forSwaps(10, 0)
 
     assert swap_lps is not None
     assert len(swap_lps) > 1
@@ -73,17 +37,14 @@ def test_forSwaps(sugar_contract, SwapLpStruct, LpStruct):
     assert second_lp.lp in lps
 
 
-def test_tokens(sugar_contract, TokenStruct, LpStruct):
-    first_lp = LpStruct(*sugar_contract.byIndex(0))
-    tokens = list(map(
-        lambda _p: TokenStruct(*_p),
-        sugar_contract.tokens(10, 0, ADDRESS_ZERO, [])
-    ))
+def test_tokens(sugar_contract):
+    first_lp = sugar_contract.byIndex(0)
+    tokens = sugar_contract.tokens(10, 0, ADDRESS_ZERO, [])
 
     assert tokens is not None
     assert len(tokens) > 1
 
-    token0, token1 = tokens[0: 2]
+    token0, token1 = tokens[0:2]
 
     assert token0.token_address == first_lp.token0
     assert token0.symbol is not None
@@ -93,11 +54,8 @@ def test_tokens(sugar_contract, TokenStruct, LpStruct):
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
-def test_tokens_long_symbol(sugar_contract, TokenStruct):
-    tokens = list(map(
-        lambda _p: TokenStruct(*_p),
-        sugar_contract.tokens(1, 995, ADDRESS_ZERO, [])
-    ))
+def test_tokens_long_symbol(sugar_contract):
+    tokens = sugar_contract.tokens(1, 995, ADDRESS_ZERO, [])
 
     assert tokens is not None
     assert len(tokens) > 1
@@ -105,15 +63,12 @@ def test_tokens_long_symbol(sugar_contract, TokenStruct):
     token = tokens[0]
 
     assert token.symbol is not None
-    assert token.symbol == '-???-'
+    assert token.symbol == "-???-"
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [8453], reason="Only BASE")
-def test_tokens_max_long_symbol(sugar_contract, TokenStruct):
-    tokens = list(map(
-        lambda _p: TokenStruct(*_p),
-        sugar_contract.tokens(1, 2508, ADDRESS_ZERO, [])
-    ))
+def test_tokens_max_long_symbol(sugar_contract):
+    tokens = sugar_contract.tokens(1, 2508, ADDRESS_ZERO, [])
 
     assert tokens is not None
     assert len(tokens) > 1
@@ -121,15 +76,12 @@ def test_tokens_max_long_symbol(sugar_contract, TokenStruct):
     token = tokens[0]
 
     assert token.symbol is not None
-    assert token.symbol != '-???-'
+    assert token.symbol != "-???-"
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
-def test_all_long_symbol(sugar_contract, LpStruct):
-    pools = list(map(
-        lambda _p: LpStruct(*_p),
-        sugar_contract.all(1, 995)
-    ))
+def test_all_long_symbol(sugar_contract):
+    pools = sugar_contract.all(1, 995)
 
     assert pools is not None
     assert len(pools) == 1
@@ -137,16 +89,13 @@ def test_all_long_symbol(sugar_contract, LpStruct):
     pool = pools[0]
 
     assert pool.symbol is not None
-    assert pool.symbol == '-???-'
+    assert pool.symbol == "-???-"
 
 
-def test_all(sugar_contract, LpStruct):
-    first_lp = LpStruct(*sugar_contract.byIndex(0))
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
-    lps = list(map(
-        lambda _p: LpStruct(*_p),
-        sugar_contract.all(10, 0)
-    ))
+def test_all(sugar_contract):
+    first_lp = sugar_contract.byIndex(0)
+    second_lp = sugar_contract.byIndex(1)
+    lps = sugar_contract.all(10, 0)
 
     assert lps is not None
     assert len(lps) > 1
@@ -161,7 +110,7 @@ def test_all(sugar_contract, LpStruct):
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
-def test_all_pagination(sugar_contract, LpStruct):
+def test_all_pagination(sugar_contract):
     max_lps = sugar_contract.MAX_LPS()
 
     for i in range(0, max_lps, max_lps):
@@ -171,12 +120,9 @@ def test_all_pagination(sugar_contract, LpStruct):
         assert len(lps) > max_lps - 1
 
 
-def test_all_limit_offset(sugar_contract, LpStruct):
-    second_lp = LpStruct(*sugar_contract.byIndex(1))
-    lps = list(map(
-        lambda _p: LpStruct(*_p),
-        sugar_contract.all(1, 1)
-    ))
+def test_all_limit_offset(sugar_contract):
+    second_lp = sugar_contract.byIndex(1)
+    lps = sugar_contract.all(1, 1)
 
     assert lps is not None
     assert len(lps) == 1
@@ -187,15 +133,12 @@ def test_all_limit_offset(sugar_contract, LpStruct):
     assert lp1.lp == second_lp.lp
 
 
-def test_positions(sugar_contract, PositionStruct):
+def test_positions(sugar_contract):
     limit = 100
     offset = 0
-    account = os.getenv(f'TEST_ADDRESS_{CHAIN_ID}')
+    account = os.getenv(f"TEST_ADDRESS_{CHAIN_ID}")
 
-    positions = list(map(
-        lambda _p: PositionStruct(*_p),
-        sugar_contract.positions(limit, offset, account)
-    ))
+    positions = sugar_contract.positions(limit, offset, account)
 
     assert positions is not None
     assert len(positions) > 0
@@ -207,15 +150,12 @@ def test_positions(sugar_contract, PositionStruct):
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
-def test_positionsUnstakedConcentrated(sugar_contract, PositionStruct):
+def test_positionsUnstakedConcentrated(sugar_contract):
     limit = 100
     offset = 0
-    account = os.getenv(f'TEST_ADDRESS_{CHAIN_ID}')
+    account = os.getenv(f"TEST_ADDRESS_{CHAIN_ID}")
 
-    positions = list(map(
-        lambda _p: PositionStruct(*_p),
-        sugar_contract.positionsUnstakedConcentrated(limit, offset, account)
-    ))
+    positions = sugar_contract.positionsUnstakedConcentrated(limit, offset, account)
 
     assert positions is not None
     assert len(positions) > 0
@@ -227,13 +167,10 @@ def test_positionsUnstakedConcentrated(sugar_contract, PositionStruct):
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
-def test_positions_ALM(sugar_contract, PositionStruct):
-    account = os.getenv(f'TEST_ALM_ADDRESS_{CHAIN_ID}')
+def test_positions_ALM(sugar_contract):
+    account = os.getenv(f"TEST_ALM_ADDRESS_{CHAIN_ID}")
 
-    positions = list(map(
-        lambda _p: PositionStruct(*_p),
-        sugar_contract.positions(1000, 0, account)
-    ))
+    positions = sugar_contract.positions(1000, 0, account)
 
     assert positions is not None
     assert len(positions) > 0
