@@ -4,6 +4,8 @@
 # @title Velodrome Finance LP Module
 # @author Velodrome Finance
 
+from snekmate.utils import create2_address
+
 MAX_FACTORIES: constant(uint256) = 10
 MAX_POOLS: constant(uint256) = 2000
 MAX_ITERATIONS: constant(uint256) = 8000
@@ -202,17 +204,4 @@ def _root_lp_address(
       )
     )
 
-
-  data: bytes32 = keccak256(
-    concat(
-      0xFF,
-      convert(_factory, bytes20),
-      salt,
-      init_hash
-    )
-  )
-
-  return convert(
-    convert(data, uint256) & convert(max_value(uint160), uint256),
-    address
-  )
+  return create2_address._compute_address(salt, init_hash, _factory)
