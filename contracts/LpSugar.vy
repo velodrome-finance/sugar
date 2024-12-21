@@ -6,6 +6,7 @@
 # @notice Makes it nicer to work with the liquidity pools.
 
 from modules import lp_shared
+from snekmate.utils import math
 
 initializes: lp_shared
 
@@ -15,6 +16,9 @@ MAX_TOKENS: public(constant(uint256)) = 2000
 MAX_LPS: public(constant(uint256)) = 500
 MAX_POSITIONS: public(constant(uint256)) = 200
 MAX_TOKEN_SYMBOL_LEN: public(constant(uint256)) = 32
+
+ALM_SCALE: constant(uint256) = as_wei_value(1000, "ether")
+MAX_UINT: constant(uint256) = max_value(uint256)
 
 # Slot0 from CLPool.sol
 struct Slot:
@@ -204,6 +208,7 @@ interface IAlmCore:
 interface IAlmLpWrapper:
   def positionId() -> uint256: view
   def totalSupply() -> uint256: view
+  def previewMint(scale: uint256) -> uint256[2]: view
 
 # Vars
 cl_helper: public(ISlipstreamHelper)
@@ -1121,3 +1126,31 @@ def _has_userPositions(_nfpm: address) -> bool:
   )[1]
 
   return len(response) > 0
+
+
+def almEstimateAmounts(
+  _wrapper: address,
+  _amount0: uint256,
+  _amount1: uint256
+) -> uint256[3]:
+  """
+  @notice Estimates the ALM amounts and LP tokens for a deposit
+  @param _wrapper The LP Wrapper contract
+  @param _amount0 First token amount
+  @param _amount1 Second token amount
+  @return Returns an array of tokens and LP amounts
+  """
+  if _amount0 == 0 and _amount1 == 0:
+    return [_amount0, _amount1, 0]
+
+  targets: uint256[2] = staticcall IAlmLpWrapper(_wrapper).previewMint(ALM_SCALE)
+
+  lp_amount: uint256 = min(
+      MAX_UINT if (targets[0] == 0) else math._mul_div(_amount0, ALM_SCALE, targets[0], False),
+      MAX_UINT if (targets[1] == 0) else math._mul_div(_amount1, ALM_SCALE, targets[1], False)
+  )
+
+  max0: uint256 = 0 if (targets[0] == 0) else math._mul_div(targets[0], lp_amount, ALM_SCALE, True)
+  max1: uint256 = 0 if (targets[1] == 0) else math._mul_div(targets[1], lp_amount, ALM_SCALE, True)
+
+  return [max0, max1, lp_amount]
