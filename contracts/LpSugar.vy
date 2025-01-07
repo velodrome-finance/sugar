@@ -6,6 +6,7 @@
 # @notice Makes it nicer to work with the liquidity pools.
 
 from modules import lp_shared
+from snekmate.utils import math
 
 initializes: lp_shared
 
@@ -15,6 +16,9 @@ MAX_TOKENS: public(constant(uint256)) = 2000
 MAX_LPS: public(constant(uint256)) = 500
 MAX_POSITIONS: public(constant(uint256)) = 200
 MAX_TOKEN_SYMBOL_LEN: public(constant(uint256)) = 32
+
+ALM_SCALE: constant(uint256) = as_wei_value(1000, "ether")
+MAX_UINT: constant(uint256) = max_value(uint256)
 
 # Slot0 from CLPool.sol
 struct Slot:
@@ -121,7 +125,7 @@ struct Lp:
   root: address
 
 # See:
-#   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L12-L60
+#   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L71-L120
 struct AlmManagedPositionInfo:
   slippageD9: uint32
   property: uint24
@@ -195,15 +199,15 @@ interface ISlipstreamHelper:
   def poolFees(_pool: address, _liquidity: uint128, _current_tick: int24, _lower_tick: int24, _upper_tick: int24) -> Amounts: view
 
 interface IAlmFactory:
-  def poolToAddresses(pool: address) -> address[2]: view
-  def getImmutableParams() -> address[5]: view
+  def poolToWrapper(pool: address) -> address: view
+  def core() -> address: view
 
 interface IAlmCore:
   def managedPositionAt(_id: uint256) -> AlmManagedPositionInfo: view
 
 interface IAlmLpWrapper:
   def positionId() -> uint256: view
-  def totalSupply() -> uint256: view
+  def previewMint(scale: uint256) -> uint256[2]: view
 
 # Vars
 cl_helper: public(ISlipstreamHelper)
@@ -557,7 +561,7 @@ def _positions(
 
   alm_core: IAlmCore = empty(IAlmCore)
   if self.alm_factory != empty(IAlmFactory):
-    alm_core = IAlmCore((staticcall self.alm_factory.getImmutableParams())[0])
+    alm_core = IAlmCore(staticcall self.alm_factory.core())
 
   for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
     if index >= factories_count:
@@ -669,11 +673,11 @@ def _positions(
         if self.alm_factory == empty(IAlmFactory):
           continue
 
-        alm_addresses: address[2] = staticcall self.alm_factory.poolToAddresses(pool_addr)
-        alm_staking: IGauge = IGauge(alm_addresses[0])
-        alm_vault: IAlmLpWrapper = IAlmLpWrapper(alm_addresses[1])
+        alm_staking: IGauge = IGauge(
+          staticcall self.alm_factory.poolToWrapper(pool_addr)
+        )
 
-        if alm_vault.address == empty(address):
+        if alm_staking.address == empty(address):
           continue
 
         alm_user_liq: uint256 = staticcall alm_staking.balanceOf(_account)
@@ -682,7 +686,7 @@ def _positions(
           continue
 
         alm_pos: AlmManagedPositionInfo = staticcall alm_core.managedPositionAt(
-          staticcall alm_vault.positionId()
+          staticcall IAlmLpWrapper(alm_staking.address).positionId()
         )
 
         if gauge.address != empty(address) and len(alm_pos.ammPositionIds) > 0:
@@ -700,22 +704,38 @@ def _positions(
           nfpm.address
         )
 
-        alm_liq: uint256 = staticcall alm_vault.totalSupply()
+        # For the Temper strategy we might have a second position to add up
+        if len(alm_pos.ammPositionIds) > 1:
+          pos2: Position = self._cl_position(
+            alm_pos.ammPositionIds[1],
+            # Account is the ALM Core contract here...
+            alm_core.address,
+            pool_addr,
+            gauge.address if staked else empty(address),
+            factory.address,
+            nfpm.address
+          )
+          pos.amount0 += pos2.amount0
+          pos.amount1 += pos2.amount1
+          pos.staked0 += pos2.staked0
+          pos.staked1 += pos2.staked1
+
+        alm_liq: uint256 = staticcall alm_staking.totalSupply()
         # adjust user share of the vault...
         pos.amount0 = (alm_user_liq * pos.amount0) // alm_liq
         pos.amount1 = (alm_user_liq * pos.amount1) // alm_liq
         pos.staked0 = (alm_user_liq * pos.staked0) // alm_liq
         pos.staked1 = (alm_user_liq * pos.staked1) // alm_liq
 
-        pos.emissions_earned = staticcall alm_staking.earned(_account)
         # ignore dust as the rebalancing might report "fees"
         pos.unstaked_earned0 = 0
         pos.unstaked_earned1 = 0
 
-        pos.liquidity = (alm_user_liq * pos.liquidity) // alm_liq
-        pos.staked = (alm_user_liq * pos.staked) // alm_liq
-
-        pos.alm = alm_vault.address
+        pos.emissions_earned = staticcall alm_staking.earned(_account)
+        # ALM liquidity is fully staked
+        pos.liquidity = 0
+        pos.staked = alm_user_liq
+        pos.alm = alm_staking.address
 
         if len(positions) < MAX_POSITIONS:
           positions.append(pos)
@@ -980,9 +1000,9 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge_alive and staticcall gauge.periodFinish() > block.timestamp:
     emissions = staticcall gauge.rewardRate()
 
-  alm_addresses: address[2] = [empty(address), empty(address)]
+  alm_wrapper: address = empty(address)
   if self.alm_factory != empty(IAlmFactory):
-    alm_addresses = staticcall self.alm_factory.poolToAddresses(pool.address)
+    alm_wrapper = staticcall self.alm_factory.poolToWrapper(pool.address)
 
   return Lp({
     lp: pool.address,
@@ -1019,7 +1039,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token1_fees: token1_fees,
 
     nfpm: _data[3],
-    alm: alm_addresses[1],
+    alm: alm_wrapper,
 
     root: lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
   })
@@ -1121,3 +1141,30 @@ def _has_userPositions(_nfpm: address) -> bool:
   )[1]
 
   return len(response) > 0
+
+
+@external
+@view
+def almEstimateAmounts(
+  _wrapper: address,
+  _amount0: uint256,
+  _amount1: uint256
+) -> uint256[3]:
+  """
+  @notice Estimates the ALM amounts and LP tokens for a deposit
+  @param _wrapper The LP Wrapper contract
+  @param _amount0 First token amount
+  @param _amount1 Second token amount
+  @return Returns an array of tokens and LP amounts
+  """
+  targets: uint256[2] = staticcall IAlmLpWrapper(_wrapper).previewMint(ALM_SCALE)
+
+  lp_amount: uint256 = min(
+      MAX_UINT if (targets[0] == 0) else math._mul_div(_amount0, ALM_SCALE, targets[0], False),
+      MAX_UINT if (targets[1] == 0) else math._mul_div(_amount1, ALM_SCALE, targets[1], False)
+  )
+
+  max0: uint256 = 0 if (targets[0] == 0) else math._mul_div(targets[0], lp_amount, ALM_SCALE, True)
+  max1: uint256 = 0 if (targets[1] == 0) else math._mul_div(targets[1], lp_amount, ALM_SCALE, True)
+
+  return [max0, max1, lp_amount]

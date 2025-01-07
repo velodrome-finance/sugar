@@ -108,6 +108,11 @@ def test_all(sugar_contract):
     assert lp2.lp == second_lp.lp
     assert lp2.gauge == second_lp.gauge
 
+    # check we calculate the root pool address
+    if int(CHAIN_ID) == 34443:
+        assert lp1.root == "0x2bb4CFF1FE3F56599b4D409B2498B96D3E3f6665"
+        assert lp2.root == "0x48a3Ed8552483ed31Fd87ECa1a7b2F94aa1Cc394"
+
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_all_pagination(sugar_contract):
