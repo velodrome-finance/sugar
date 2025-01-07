@@ -238,7 +238,7 @@ Next start the container with existing environment variables:
 ```sh
 docker run --env-file=deployments/{{chain}}.env --rm -v $(pwd):/app -w /app -it velodrome/sugar sh
 ```
-The environment has Brownie and Vyper already installed.
+The environment has Ape and Vyper already installed.
 
 To run the tests inside the container, use:
 ```sh
