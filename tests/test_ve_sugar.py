@@ -31,6 +31,20 @@ def test_byId(sugar_contract):
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
+def test_byId_managed(sugar_contract):
+    if int(CHAIN_ID) == 10:
+        venft = sugar_contract.byId(20264)
+    else:
+        venft = sugar_contract.byId(10298)
+
+    assert venft is not None
+    assert len(venft) == 14
+    assert venft.id is not None
+    assert venft.voted_at > 0
+    assert venft.governance_amount == 0
+
+
+@pytest.mark.skipif(int(CHAIN_ID) not in [10, 8453], reason="Only root chains")
 def test_byAccount(sugar_contract):
     venft = sugar_contract.byId(1)
     acc_venft = sugar_contract.byAccount(venft.account)
