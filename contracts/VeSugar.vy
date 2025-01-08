@@ -43,7 +43,6 @@ interface IVoter:
   def usedWeights(_venft_id: uint256) -> uint256: view
 
 interface IRewardsDistributor:
-  def ve() -> address: view
   def claimable(_venft_id: uint256) -> uint256: view
 
 interface IVotingEscrow:
@@ -56,6 +55,7 @@ interface IVotingEscrow:
   def voted(_venft_id: uint256) -> bool: view
   def delegates(_venft_id: uint256) -> uint256: view
   def idToManaged(_venft_id: uint256) -> uint256: view
+  def escrowType(_venft_id: uint256) -> uint8: view
 
 interface IGovernor:
   def getVotes(_venft_id: uint256, _timepoint: uint256) -> uint256: view
@@ -156,8 +156,10 @@ def _byId(_id: uint256) -> VeNFT:
   amount, expires_at, perma = staticcall self.ve.locked(_id)
   last_voted: uint256 = 0
   governance_amount: uint256 = 0
+  type: uint8 = staticcall self.ve.escrowType(_id)
 
-  if self.gov.address != empty(address):
+  # Skip gov amount fetching for (m)veNFTs
+  if self.gov.address != empty(address) and type < 2:
     governance_amount = staticcall self.gov.getVotes(_id, block.timestamp)
 
   delegate_id: uint256 = staticcall self.ve.delegates(_id)
