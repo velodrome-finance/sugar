@@ -120,16 +120,16 @@ def _epochLatestByAddress(_address: address, _gauge: address) -> LpEpoch:
     staticcall bribe.getPriorSupplyIndex(epoch_end_ts)
   )
 
-  return LpEpoch({
-    ts: epoch_start_ts,
-    lp: _address,
-    votes: bribe_supply_cp[1],
-    emissions: staticcall gauge.rewardRateByEpoch(epoch_start_ts),
-    bribes: self._epochRewards(epoch_start_ts, bribe.address),
-    fees: self._epochRewards(
+  return LpEpoch(
+    ts=epoch_start_ts,
+    lp=_address,
+    votes=bribe_supply_cp[1],
+    emissions=staticcall gauge.rewardRateByEpoch(epoch_start_ts),
+    bribes=self._epochRewards(epoch_start_ts, bribe.address),
+    fees=self._epochRewards(
       epoch_start_ts, staticcall lp_shared.voter.gaugeToFees(gauge.address)
     )
-  })
+  )
 
 @internal
 @view
@@ -166,16 +166,18 @@ def _epochsByAddress(_limit: uint256, _offset: uint256, _address: address) \
     bribe_supply_index: uint256 = staticcall bribe.getPriorSupplyIndex(epoch_end_ts)
     bribe_supply_cp: uint256[2] = staticcall bribe.supplyCheckpoints(bribe_supply_index)
 
-    epochs.append(LpEpoch({
-      ts: epoch_start_ts,
-      lp: _address,
-      votes: bribe_supply_cp[1],
-      emissions: staticcall gauge.rewardRateByEpoch(epoch_start_ts),
-      bribes: self._epochRewards(epoch_start_ts, bribe.address),
-      fees: self._epochRewards(
-        epoch_start_ts, staticcall lp_shared.voter.gaugeToFees(gauge.address)
+    epochs.append(
+      LpEpoch(
+        ts=epoch_start_ts,
+        lp=_address,
+        votes=bribe_supply_cp[1],
+        emissions=staticcall gauge.rewardRateByEpoch(epoch_start_ts),
+        bribes=self._epochRewards(epoch_start_ts, bribe.address),
+        fees=self._epochRewards(
+          epoch_start_ts, staticcall lp_shared.voter.gaugeToFees(gauge.address)
+        )
       )
-    }))
+    )
 
     # If we reach the last supply index...
     if bribe_supply_index == 0:
@@ -212,10 +214,9 @@ def _epochRewards(_ts: uint256, _reward: address) \
     if reward_amount == 0:
       continue
 
-    rewards.append(LpEpochReward({
-      token: reward_token,
-      amount: reward_amount
-    }))
+    rewards.append(
+      LpEpochReward(token=reward_token, amount=reward_amount)
+    )
 
   return rewards
 
@@ -298,26 +299,26 @@ def _pool_rewards(_venft_id: uint256, _pool: address, _gauge: address) \
 
   if fee0_amount > 0:
     col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: fee0_amount,
-        token: token0,
-        fee: fee.address,
-        bribe: empty(address)
-      })
+      Reward(
+        venft_id=_venft_id,
+        lp=pool.address,
+        amount=fee0_amount,
+        token=token0,
+        fee=fee.address,
+        bribe=empty(address)
+      )
     )
 
   if fee1_amount > 0:
     col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: fee1_amount,
-        token: token1,
-        fee: fee.address,
-        bribe: empty(address)
-      })
+      Reward(
+        venft_id=_venft_id,
+        lp=pool.address,
+        amount=fee1_amount,
+        token=token1,
+        fee=fee.address,
+        bribe=empty(address)
+      )
     )
 
   if bribe.address == empty(address):
@@ -336,14 +337,14 @@ def _pool_rewards(_venft_id: uint256, _pool: address, _gauge: address) \
       continue
 
     col.append(
-      Reward({
-        venft_id: _venft_id,
-        lp: pool.address,
-        amount: bribe_amount,
-        token: bribe_token,
-        fee: empty(address),
-        bribe: bribe.address
-      })
+      Reward(
+        venft_id=_venft_id,
+        lp=pool.address,
+        amount=bribe_amount,
+        token=bribe_token,
+        fee=empty(address),
+        bribe=bribe.address
+      )
     )
 
   return col
