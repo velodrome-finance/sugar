@@ -169,11 +169,9 @@ def _byAddress(_relay: address, _account: address) -> Relay:
       venft_weight: uint256 = staticcall self.ve.weights(account_venft_id, account_venft_manager_id)
       earned: uint256 = staticcall locked_reward.earned(self.token, account_venft_id)
 
-      account_venfts.append(ManagedVenft({
-        id: account_venft_id,
-        amount: venft_weight,
-        earned: earned
-      }))
+      account_venfts.append(
+        ManagedVenft(id=account_venft_id, amount=venft_weight, earned=earned)
+      )
 
   votes: DynArray[LpVotes, MAX_PAIRS] = []
   amount: uint128 = (staticcall self.ve.locked(managed_id))[0]
@@ -213,29 +211,28 @@ def _byAddress(_relay: address, _account: address) -> Relay:
 
     weight: uint256 = staticcall self.voter.votes(managed_id, lp)
 
-    votes.append(LpVotes({
-      lp: lp,
-      weight: weight
-    }))
+    votes.append(
+      LpVotes(lp=lp, weight=weight)
+    )
 
     # Remove _counted_ weight to see if there are other pool votes left...
     left_weight -= weight
 
-  return Relay({
-    venft_id: managed_id,
-    decimals: staticcall self.ve.decimals(),
-    amount: amount,
-    voting_amount: staticcall self.ve.balanceOfNFT(managed_id),
-    used_voting_amount: vote_weight,
-    voted_at: last_voted,
-    votes: votes,
-    token: relay_token,
-    compounded: rewards_compounded,
-    withdrawable: withdrawable,
-    run_at: staticcall relay.keeperLastRun(),
-    manager: manager,
-    relay: _relay,
-    inactive: inactive,
-    name: staticcall relay.name(),
-    account_venfts: account_venfts
-  })
+  return Relay(
+    venft_id=managed_id,
+    decimals=staticcall self.ve.decimals(),
+    amount=amount,
+    voting_amount=staticcall self.ve.balanceOfNFT(managed_id),
+    used_voting_amount=vote_weight,
+    voted_at=last_voted,
+    votes=votes,
+    token=relay_token,
+    compounded=rewards_compounded,
+    withdrawable=withdrawable,
+    run_at=staticcall relay.keeperLastRun(),
+    manager=manager,
+    relay=_relay,
+    inactive=inactive,
+    name=staticcall relay.name(),
+    account_venfts=account_venfts
+  )

@@ -183,28 +183,27 @@ def _byId(_id: uint256) -> VeNFT:
 
     weight: uint256 = staticcall self.voter.votes(_id, lp)
 
-    votes.append(LpVotes({
-      lp: lp,
-      weight: weight
-    }))
+    votes.append(
+      LpVotes(lp=lp, weight=weight)
+    )
 
     # Remove _counted_ weight to see if there are other pool votes left...
     left_weight -= weight
 
-  return VeNFT({
-    id: _id,
-    account: account,
-    decimals: staticcall self.ve.decimals(),
+  return VeNFT(
+    id=_id,
+    account=account,
+    decimals=staticcall self.ve.decimals(),
 
-    amount: amount,
-    voting_amount: staticcall self.ve.balanceOfNFT(_id),
-    governance_amount: governance_amount,
-    rebase_amount: staticcall self.dist.claimable(_id),
-    expires_at: expires_at,
-    voted_at: last_voted,
-    votes: votes,
-    token: self.token,
-    permanent: perma,
-    delegate_id: delegate_id,
-    managed_id: managed_id
-  })
+    amount=amount,
+    voting_amount=staticcall self.ve.balanceOfNFT(_id),
+    governance_amount=governance_amount,
+    rebase_amount=staticcall self.dist.claimable(_id),
+    expires_at=expires_at,
+    voted_at=last_voted,
+    votes=votes,
+    token=self.token,
+    permanent=perma,
+    delegate_id=delegate_id,
+    managed_id=managed_id
+  )

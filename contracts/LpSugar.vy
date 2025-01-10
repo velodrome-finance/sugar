@@ -288,14 +288,16 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MA
         pool_fee = staticcall factory.getFee(pool_addr, (type == 0))
 
       if reserve0 > 0 or pool_addr == lp_shared.convertor:
-        pools.append(SwapLp({
-          lp: pool_addr,
-          type: type,
-          token0: token0,
-          token1: token1,
-          factory: factory.address,
-          pool_fee: pool_fee
-        }))
+        pools.append(
+          SwapLp(
+            lp=pool_addr,
+            type=type,
+            token0=token0,
+            token1=token1,
+            factory=factory.address,
+            pool_fee=pool_fee
+          )
+        )
 
   return pools
 
@@ -352,13 +354,13 @@ def _token(_address: address, _account: address) -> Token:
   if _account != empty(address):
     bal = self._safe_balance_of(_address, _account)
 
-  return Token({
-    token_address: _address,
-    symbol: self._safe_symbol(_address),
-    decimals: self._safe_decimals(_address),
-    account_balance: bal,
-    listed: staticcall lp_shared.voter.isWhitelistedToken(_address)
-  })
+  return Token(
+    token_address=_address,
+    symbol=self._safe_symbol(_address),
+    decimals=self._safe_decimals(_address),
+    account_balance=bal,
+    listed=staticcall lp_shared.voter.isWhitelistedToken(_address)
+  )
 
 @external
 @view
@@ -459,45 +461,45 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
       staked0 = (reserve0 * gauge_liquidity) // pool_liquidity
       staked1 = (reserve1 * gauge_liquidity) // pool_liquidity
 
-  return Lp({
-    lp: _data[1],
-    symbol: self._safe_symbol(pool.address),
-    decimals: decimals,
-    liquidity: pool_liquidity,
+  return Lp(
+    lp=_data[1],
+    symbol=self._safe_symbol(pool.address),
+    decimals=decimals,
+    liquidity=pool_liquidity,
 
-    type: type,
-    tick: 0,
-    sqrt_ratio: 0,
+    type=type,
+    tick=0,
+    sqrt_ratio=0,
 
-    token0: _token0,
-    reserve0: reserve0,
-    staked0: staked0,
+    token0=_token0,
+    reserve0=reserve0,
+    staked0=staked0,
 
-    token1: _token1,
-    reserve1: reserve1,
-    staked1: staked1,
+    token1=_token1,
+    reserve1=reserve1,
+    staked1=staked1,
 
-    gauge: gauge.address,
-    gauge_liquidity: gauge_liquidity,
-    gauge_alive: gauge_alive,
+    gauge=gauge.address,
+    gauge_liquidity=gauge_liquidity,
+    gauge_alive=gauge_alive,
 
-    fee: staticcall lp_shared.voter.gaugeToFees(gauge.address),
-    bribe: lp_shared._voter_gauge_to_incentive(gauge.address),
-    factory: _data[0],
+    fee=staticcall lp_shared.voter.gaugeToFees(gauge.address),
+    bribe=lp_shared._voter_gauge_to_incentive(gauge.address),
+    factory=_data[0],
 
-    emissions: emissions,
-    emissions_token: emissions_token,
+    emissions=emissions,
+    emissions_token=emissions_token,
 
-    pool_fee: pool_fee,
-    unstaked_fee: 0,
-    token0_fees: token0_fees,
-    token1_fees: token1_fees,
+    pool_fee=pool_fee,
+    unstaked_fee=0,
+    token0_fees=token0_fees,
+    token1_fees=token1_fees,
 
-    nfpm: empty(address),
-    alm: empty(address),
+    nfpm=empty(address),
+    alm=empty(address),
 
-    root: lp_shared._root_lp_address(_data[0], _token0, _token1, type)
-  })
+    root=lp_shared._root_lp_address(_data[0], _token0, _token1, type)
+  )
 
 @external
 @view
@@ -1004,45 +1006,45 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if self.alm_factory != empty(IAlmFactory):
     alm_wrapper = staticcall self.alm_factory.poolToWrapper(pool.address)
 
-  return Lp({
-    lp: pool.address,
-    symbol: "",
-    decimals: 18,
-    liquidity: convert(pool_liquidity, uint256),
+  return Lp(
+    lp=pool.address,
+    symbol="",
+    decimals=18,
+    liquidity=convert(pool_liquidity, uint256),
 
-    type: tick_spacing,
-    tick: slot.tick,
-    sqrt_ratio: slot.sqrtPriceX96,
+    type=tick_spacing,
+    tick=slot.tick,
+    sqrt_ratio=slot.sqrtPriceX96,
 
-    token0: _token0,
-    reserve0: self._safe_balance_of(_token0, pool.address),
-    staked0: staked0,
+    token0=_token0,
+    reserve0=self._safe_balance_of(_token0, pool.address),
+    staked0=staked0,
 
-    token1: _token1,
-    reserve1: self._safe_balance_of(_token1, pool.address),
-    staked1: staked1,
+    token1=_token1,
+    reserve1=self._safe_balance_of(_token1, pool.address),
+    staked1=staked1,
 
-    gauge: gauge.address,
-    gauge_liquidity: convert(gauge_liquidity, uint256),
-    gauge_alive: gauge_alive,
+    gauge=gauge.address,
+    gauge_liquidity=convert(gauge_liquidity, uint256),
+    gauge_alive=gauge_alive,
 
-    fee: fee_voting_reward,
-    bribe: lp_shared._voter_gauge_to_incentive(gauge.address),
-    factory: _data[0],
+    fee=fee_voting_reward,
+    bribe=lp_shared._voter_gauge_to_incentive(gauge.address),
+    factory=_data[0],
 
-    emissions: emissions,
-    emissions_token: emissions_token,
+    emissions=emissions,
+    emissions_token=emissions_token,
 
-    pool_fee: convert(staticcall pool.fee(), uint256),
-    unstaked_fee: convert(staticcall pool.unstakedFee(), uint256),
-    token0_fees: token0_fees,
-    token1_fees: token1_fees,
+    pool_fee=convert(staticcall pool.fee(), uint256),
+    unstaked_fee=convert(staticcall pool.unstakedFee(), uint256),
+    token0_fees=token0_fees,
+    token1_fees=token1_fees,
 
-    nfpm: _data[3],
-    alm: alm_wrapper,
+    nfpm=_data[3],
+    alm=alm_wrapper,
 
-    root: lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
-  })
+    root=lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
+  )
 
 @internal
 @view
