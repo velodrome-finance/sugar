@@ -1,4 +1,4 @@
-FROM ghcr.io/apeworx/ape:latest-slim
+FROM ghcr.io/apeworx/ape:stable
 
 USER root
 
