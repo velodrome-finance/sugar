@@ -23,6 +23,9 @@ networks:
     - name: mainnet
       ecosystem: ink
       chain_id: 57073
+    - name: mainnet
+      ecosystem: soneium
+      chain_id: 1868
 
 node:
   mode:
@@ -40,3 +43,6 @@ node:
   ink:
     mainnet:
       uri: https://ink.drpc.org
+  soneium:
+    mainnet:
+      uri: https://rpc.soneium.org
