@@ -20,6 +20,9 @@ networks:
     - name: mainnet
       ecosystem: metall2
       chain_id: 1750
+    - name: mainnet
+      ecosystem: ink
+      chain_id: 57073
 
 node:
   mode:
@@ -34,3 +37,6 @@ node:
   optimism:
     mainnet:
       uri: https://optimism-mainnet.wallet.coinbase.com
+  ink:
+    mainnet:
+      uri: https://ink.drpc.org
