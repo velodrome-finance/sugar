@@ -22,6 +22,12 @@ jobs:
             experimental: true
           - chain: metall2
             experimental: true
+          - chain: ink
+            experimental: true
+          - chain: superseed
+            experimental: true
+          - chain: soneium
+            experimental: true
 
     steps:
     - uses: actions/checkout@master
