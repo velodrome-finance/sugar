@@ -26,6 +26,9 @@ networks:
     - name: mainnet
       ecosystem: soneium
       chain_id: 1868
+    - name: mainnet
+      ecosystem: superseed
+      chain_id: 5330
 
 node:
   mode:
@@ -46,3 +49,6 @@ node:
   soneium:
     mainnet:
       uri: https://rpc.soneium.org
+  superseed:
+    mainnet:
+      uri: https://mainnet.superseed.xyz

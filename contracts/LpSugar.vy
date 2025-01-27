@@ -984,8 +984,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   token1_fees: uint256 = 0
 
   slot: Slot = staticcall pool.slot0()
-  tick_low: int24 = slot.tick - tick_spacing
-  tick_high: int24 = slot.tick
+  tick_low: int24 = (slot.tick // tick_spacing) * tick_spacing
+  tick_high: int24 = tick_low + tick_spacing
 
   if gauge_liquidity > 0 and gauge.address != empty(address):
     fee_voting_reward = staticcall gauge.feesVotingReward()
