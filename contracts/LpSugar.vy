@@ -323,8 +323,11 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     if len(col) >= _limit or index >= addresses_count:
       break
 
-    col.append(self._token(_addresses[index], _account))
     seen.append(_addresses[index])
+    new_token: Token = self._token(_addresses[index], _account)
+
+    if new_token.decimals != 0 and new_token.symbol != "":
+      col.append(new_token)
 
   for index: uint256 in range(0, lp_shared.MAX_POOLS):
     if len(col) >= _limit or index >= pools_count:
@@ -333,16 +336,18 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     pool_data: address[4] = pools[index]
 
     pool: IPool = IPool(pool_data[1])
-    token0: address = staticcall pool.token0()
-    token1: address = staticcall pool.token1()
+    tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
 
-    if token0 not in seen:
-      col.append(self._token(token0, _account))
-      seen.append(token0)
+    for ptoken: address in tokens:
+      if ptoken in seen:
+        continue
 
-    if token1 not in seen:
-      col.append(self._token(token1, _account))
-      seen.append(token1)
+      seen.append(ptoken)
+      new_token: Token = self._token(ptoken, _account)
+
+      # Skip tokens that fail basic ERC20 calls
+      if new_token.decimals != 0 and new_token.symbol != "":
+        col.append(new_token)
 
   return col
 
@@ -1092,7 +1097,7 @@ def _safe_decimals(_token: address) -> uint8:
   if len(response) > 0:
     return (abi_decode(response, uint8))
 
-  return 18
+  return 0
 
 @internal
 @view
@@ -1113,6 +1118,9 @@ def _safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]:
   )[1]
 
   resp_len: uint256 = len(response)
+
+  if resp_len == 0:
+    return ""
 
   # Check response as revert_on_failure is set to False
   # And that the symbol size is not some large value (probably spam)

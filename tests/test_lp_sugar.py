@@ -66,6 +66,20 @@ def test_tokens_long_symbol(sugar_contract):
     assert token.symbol == "-???-"
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
+def test_tokens_invalid_erc20(sugar_contract):
+    tokens = sugar_contract.tokens(2, 0, ADDRESS_ZERO, [ADDRESS_ZERO])
+
+    assert tokens is not None
+    assert len(tokens) > 1
+
+    token_addresses = list(map(lambda t: t.token_address, tokens))
+    token_symbols = list(map(lambda t: t.symbol, tokens))
+
+    assert ADDRESS_ZERO not in token_addresses
+    assert "-???-" not in token_symbols
+
+
 @pytest.mark.skipif(int(CHAIN_ID) not in [8453], reason="Only BASE")
 def test_tokens_max_long_symbol(sugar_contract):
     tokens = sugar_contract.tokens(1, 2508, ADDRESS_ZERO, [])
