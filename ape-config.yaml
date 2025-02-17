@@ -4,10 +4,9 @@ vyper:
   evm_version: cancun
 
 dependencies:
-  - pypi: snekmate
+  - site_package: snekmate
     config_override:
-      base_path: src
-      contracts_folder: snekmate
+      contracts_folder: .
 
 networks:
   custom:
