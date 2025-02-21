@@ -2,6 +2,10 @@ name: Sugar
 
 vyper:
   evm_version: cancun
+  output_format:
+    - bytecode
+    - abi
+    - solc_json
 
 dependencies:
   - site_package: snekmate
