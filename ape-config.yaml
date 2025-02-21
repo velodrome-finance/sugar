@@ -2,6 +2,10 @@ name: Sugar
 
 vyper:
   evm_version: cancun
+  output_format:
+    - bytecode
+    - abi
+    - solc_json
 
 dependencies:
   - site_package: snekmate
@@ -28,6 +32,12 @@ networks:
     - name: mainnet
       ecosystem: superseed
       chain_id: 5330
+    - name: mainnet
+      ecosystem: swell
+      chain_id: 1923
+    - name: mainnet
+      ecosystem: unichain
+      chain_id: 130
 
 node:
   mode:
@@ -51,3 +61,9 @@ node:
   superseed:
     mainnet:
       uri: https://mainnet.superseed.xyz
+  swell:
+    mainnet:
+      uri: https://swell.drpc.org
+  unichain:
+    mainnet:
+      uri: https://unichain.drpc.org
