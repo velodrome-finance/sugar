@@ -28,6 +28,10 @@ jobs:
             experimental: true
           - chain: soneium
             experimental: true
+          - chain: swell
+            experimental: true
+          - chain: unichain
+            experimental: true
 
     steps:
     - uses: actions/checkout@master
