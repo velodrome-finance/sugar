@@ -23,6 +23,16 @@ def test_byIndex(sugar_contract):
     assert lp.gauge != ADDRESS_ZERO
 
 
+def test_byAddress(sugar_contract):
+    lp = sugar_contract.byAddress("0x65E6Aab6f1b644260676672304463DFbaA296FbB")
+
+    assert lp is not None
+    assert len(lp) == 28
+    assert lp.lp is not None
+    assert lp.gauge != ADDRESS_ZERO
+    assert lp.symbol == "vAMMV2-fBOMB/USDC"
+
+
 def test_forSwaps(sugar_contract):
     first_lp = sugar_contract.byIndex(0)
     second_lp = sugar_contract.byIndex(1)

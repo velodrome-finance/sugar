@@ -67,7 +67,8 @@ def epochsLatest(_limit: uint256, _offset: uint256) \
   @param _offset The amount of pools to skip
   @return Array for LpEpoch structs
   """
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = lp_shared._pools(_limit, _offset)
+  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
+    lp_shared._pools(_limit, _offset, empty(address))
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
@@ -231,7 +232,8 @@ def rewards(_limit: uint256, _offset: uint256, _venft_id: uint256) \
   @param _venft_id The veNFT ID to get rewards for
   @return Array for VeNFT Reward structs
   """
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = lp_shared._pools(_limit, _offset)
+  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
+    lp_shared._pools(_limit, _offset, empty(address))
   pools_count: uint256 = len(pools)
   counted: uint256 = 0
 
