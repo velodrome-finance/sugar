@@ -312,7 +312,8 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   @param _account The account to check the balances
   @return Array for Token structs
   """
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = lp_shared._pools(_limit, _offset)
+  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
+    lp_shared._pools(_limit, _offset, empty(address))
 
   pools_count: uint256 = len(pools)
   addresses_count: uint256 = len(_addresses)
@@ -377,7 +378,8 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = lp_shared._pools(_limit, _offset)
+  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
+    lp_shared._pools(_limit, _offset, empty(address))
   pools_count: uint256 = len(pools)
 
   for index: uint256 in range(0, lp_shared.MAX_POOLS):
@@ -399,6 +401,29 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
 
 @external
 @view
+def byAddress(_address: address) -> Lp:
+  """
+  @notice Returns pool data for a specific address
+  @param _address The pool address to lookup
+  @return Lp struct
+  """
+  # Basically index is the limit and the offset is always one...
+  # This will fire if _index is out of bounds
+  pool_data: address[4] = \
+    lp_shared._pools(0, lp_shared.MAX_POOLS, empty(address))[0]
+  pool: IPool = IPool(pool_data[1])
+  token0: address = staticcall pool.token0()
+  token1: address = staticcall pool.token1()
+
+  # If this is a CL factory/NFPM present...
+  if pool_data[3] != empty(address):
+    return self._cl_lp(pool_data, token0, token1)
+
+  return self._v2_lp(pool_data, token0, token1)
+
+
+@external
+@view
 def byIndex(_index: uint256) -> Lp:
   """
   @notice Returns pool data at a specific stored index
@@ -407,7 +432,7 @@ def byIndex(_index: uint256) -> Lp:
   """
   # Basically index is the limit and the offset is always one...
   # This will fire if _index is out of bounds
-  pool_data: address[4] = lp_shared._pools(1, _index)[0]
+  pool_data: address[4] = lp_shared._pools(1, _index, empty(address))[0]
   pool: IPool = IPool(pool_data[1])
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
