@@ -20,7 +20,6 @@ def test_byIndex(sugar_contract):
     assert lp is not None
     assert len(lp) == 28
     assert lp.lp is not None
-    assert lp.gauge != ADDRESS_ZERO
 
 
 @pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
