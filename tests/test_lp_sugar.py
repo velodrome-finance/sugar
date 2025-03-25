@@ -23,6 +23,7 @@ def test_byIndex(sugar_contract):
     assert lp.gauge != ADDRESS_ZERO
 
 
+@pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
 def test_byAddress(sugar_contract):
     lp = sugar_contract.byAddress("0x8134A2fDC127549480865fB8E5A9E8A8a95a54c5")
 
