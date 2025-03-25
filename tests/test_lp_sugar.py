@@ -20,7 +20,17 @@ def test_byIndex(sugar_contract):
     assert lp is not None
     assert len(lp) == 28
     assert lp.lp is not None
+
+
+@pytest.mark.skipif(int(CHAIN_ID) not in [10], reason="Only OP")
+def test_byAddress(sugar_contract):
+    lp = sugar_contract.byAddress("0x8134A2fDC127549480865fB8E5A9E8A8a95a54c5")
+
+    assert lp is not None
+    assert len(lp) == 28
+    assert lp.lp is not None
     assert lp.gauge != ADDRESS_ZERO
+    assert lp.symbol == "vAMMV2-USDC/VELO"
 
 
 def test_forSwaps(sugar_contract):

@@ -54,11 +54,12 @@ def __init__(_voter: address, _registry: address, _convertor: address):
 
 @internal
 @view
-def _pools(_limit: uint256, _offset: uint256)\
+def _pools(_limit: uint256, _offset: uint256, _to_find: address)\
     -> DynArray[address[4], MAX_POOLS]:
   """
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip (for optimization)
+  @param _to_find The pool address to find
   @notice Returns a compiled list of pool and its factory and gauge
   @return Array of four addresses (factory, pool, gauge, nfpm)
   """
@@ -98,9 +99,16 @@ def _pools(_limit: uint256, _offset: uint256)\
         continue
 
       pool_addr: address = staticcall factory.allPools(pindex)
+
+      if _to_find != empty(address) and _to_find != pool_addr:
+        continue
+
       gauge_addr: address = staticcall self.voter.gauges(pool_addr)
 
       pools.append([factory.address, pool_addr, gauge_addr, nfpm])
+
+      if _to_find != empty(address) and _to_find == pool_addr:
+        break
 
   return pools
 

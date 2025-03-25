@@ -76,6 +76,8 @@ The available methods are:
    returns a paginated list of `Lp` structs.
  * `LpSugar.byIndex(_index: uint256) -> Lp` - returns the
    `Lp` data for a specific index of a pool.
+ * `LpSugar.byAddress(_pool: address) -> Lp` - returns the
+   `Lp` data for a specific pool address.
 
 ---
 
