@@ -72,4 +72,4 @@ node:
       uri: https://unichain.drpc.org
   celo:
     mainnet:
-      uri: https://celo.drpc.org
+      uri: https://forno.celo.org
