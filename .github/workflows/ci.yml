@@ -32,6 +32,8 @@ jobs:
             experimental: true
           - chain: unichain
             experimental: true
+          - chain: celo
+            experimental: true
 
     steps:
     - uses: actions/checkout@master

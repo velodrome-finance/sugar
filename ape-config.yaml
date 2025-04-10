@@ -38,6 +38,9 @@ networks:
     - name: mainnet
       ecosystem: unichain
       chain_id: 130
+    - name: mainnet
+      ecosystem: celo
+      chain_id: 42220
 
 node:
   mode:
@@ -67,3 +70,6 @@ node:
   unichain:
     mainnet:
       uri: https://unichain.drpc.org
+  celo:
+    mainnet:
+      uri: https://forno.celo.org
