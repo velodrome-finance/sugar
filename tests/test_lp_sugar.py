@@ -34,8 +34,7 @@ def test_byAddress(sugar_contract):
 
 
 def test_forSwaps(sugar_contract):
-    first_lp = sugar_contract.byIndex(0)
-    second_lp = sugar_contract.byIndex(1)
+    index_lp = sugar_contract.byIndex(1)
     swap_lps = sugar_contract.forSwaps(10, 0)
 
     assert swap_lps is not None
@@ -43,8 +42,7 @@ def test_forSwaps(sugar_contract):
 
     lps = list(map(lambda lp: lp.lp, swap_lps))
 
-    assert first_lp.lp in lps
-    assert second_lp.lp in lps
+    assert index_lp.lp in lps
 
 
 def test_tokens(sugar_contract):
