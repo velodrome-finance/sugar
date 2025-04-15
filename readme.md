@@ -214,6 +214,7 @@ The returned data/struct of type `Relay` values represent:
   * `run_at` - timestamp of last compounding
   * `manager` - Relay manager
   * `relay` - Relay address
+  * `compounder` - indicates if Relay is an autocompounder or an autoconverter
   * `inactive` - Relay active/inactive status
   * `name` - Relay name
   * `account_venfts` - List of veNFTs deposited into this Relay by the account in the form of `ManagedVenft`

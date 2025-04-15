@@ -34,6 +34,7 @@ struct Relay:
   run_at: uint256
   manager: address
   relay: address
+  compounder: bool
   inactive: bool
   name: String[100]
   account_venfts: DynArray[ManagedVenft, MAX_RESULTS]
@@ -232,7 +233,25 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     run_at=staticcall relay.keeperLastRun(),
     manager=manager,
     relay=_relay,
+    compounder=self._is_compounder(_relay),
     inactive=inactive,
     name=staticcall relay.name(),
     account_venfts=account_venfts
   )
+
+@internal
+@view
+def _is_compounder(_relay: address) -> bool:
+  """
+  @notice Returns true if the given Relay is an autocompounder, returns false otherwise
+  @param _relay The Relay to call
+  """
+  return raw_call(
+      _relay,
+      method_id("autoCompounderFactory()"),
+      max_outsize=64,
+      gas=100000,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[0]
