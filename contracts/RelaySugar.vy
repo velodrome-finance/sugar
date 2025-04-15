@@ -247,7 +247,7 @@ def _is_compounder(_relay: address) -> bool:
   @param _relay The Relay to call
   """
   return raw_call(
-      _token,
+      _relay,
       method_id("autoCompounderFactory()"),
       max_outsize=64,
       gas=100000,
