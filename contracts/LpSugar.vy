@@ -704,9 +704,12 @@ def _positions(
         if self.alm_factory == empty(IAlmFactory):
           continue
 
-        alm_staking: IGauge = IGauge(
-          staticcall self.alm_factory.poolToWrapper(pool_addr)
-        )
+        if chain.id == 57073 and pool_addr == 0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9:
+          alm_staking: IGauge = IGauge(0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1)
+        else:
+          alm_staking: IGauge = IGauge(
+            staticcall self.alm_factory.poolToWrapper(pool_addr)
+          )
 
         if alm_staking.address == empty(address):
           continue
@@ -1033,7 +1036,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   alm_wrapper: address = empty(address)
   if self.alm_factory != empty(IAlmFactory):
-    alm_wrapper = staticcall self.alm_factory.poolToWrapper(pool.address)
+    if chain.id == 57073 and pool.address == 0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9:
+      alm_wrapper = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
+    else:
+      alm_wrapper = staticcall self.alm_factory.poolToWrapper(pool.address)
+    
 
   return Lp(
     lp=pool.address,
