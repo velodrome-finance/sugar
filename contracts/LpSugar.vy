@@ -212,6 +212,7 @@ interface IAlmLpWrapper:
 # Vars
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
+alm_map: public(HashMap[uint256, HashMap[address, address]])
 
 # Methods
 
@@ -223,6 +224,7 @@ def __init__(_voter: address, _registry: address,\
   """
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
+  self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
 
   # Modules...
   lp_shared.__init__(_voter, _registry, _convertor)
@@ -705,7 +707,7 @@ def _positions(
           continue
 
         alm_staking: IGauge = IGauge(
-          staticcall self.alm_factory.poolToWrapper(pool_addr)
+          self._alm_pool_to_wrapper(pool_addr)
         )
 
         if alm_staking.address == empty(address):
@@ -1033,7 +1035,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   alm_wrapper: address = empty(address)
   if self.alm_factory != empty(IAlmFactory):
-    alm_wrapper = staticcall self.alm_factory.poolToWrapper(pool.address)
+    alm_wrapper = self._alm_pool_to_wrapper(pool.address)
+    
 
   return Lp(
     lp=pool.address,
@@ -1175,6 +1178,18 @@ def _has_userPositions(_nfpm: address) -> bool:
   )[1]
 
   return len(response) > 0
+
+@internal
+@view
+def _alm_pool_to_wrapper(_pool: address) -> address:
+  """
+  @notice Returns the ALM wrapper for the given pool
+  @param _pool The pool to return the wrapper for
+  """
+  mapped_wrapper: address = self.alm_map[chain.id][_pool]
+  if mapped_wrapper != empty(address):
+    return mapped_wrapper
+  return staticcall self.alm_factory.poolToWrapper(_pool)
 
 
 @external
