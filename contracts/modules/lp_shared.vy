@@ -135,7 +135,7 @@ def _count() -> uint256:
     factory_pools: uint256 = staticcall factory.allPoolsLength()
 
     count += factory_pools
-    if len(factory_pools) > 0 and staticcall factory.allPools(0) == self.convertor:
+    if factory_pools > 0 and staticcall factory.allPools(0) == self.convertor:
       count -= 1
 
   return count
