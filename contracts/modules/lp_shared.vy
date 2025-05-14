@@ -132,8 +132,10 @@ def _count() -> uint256:
     if self._is_root_placeholder_factory(factory.address):
       continue
 
-    count += staticcall factory.allPoolsLength()
-    if staticcall factory.allPools(0) == self.convertor:
+    factory_pools: uint256 = staticcall factory.allPoolsLength()
+
+    count += factory_pools
+    if len(factory_pools) > 0 and staticcall factory.allPools(0) == self.convertor:
       count -= 1
 
   return count
