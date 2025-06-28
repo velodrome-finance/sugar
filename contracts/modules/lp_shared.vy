@@ -8,7 +8,7 @@ from snekmate.utils import create2_address
 
 MAX_FACTORIES: constant(uint256) = 10
 MAX_POOLS: constant(uint256) = 2000
-MAX_ITERATIONS: constant(uint256) = 8000
+MAX_ITERATIONS: constant(uint256) = 16000
 
 ROOT_CHAIN_IDS: constant(uint256[2]) = [10, 8453]
 
