@@ -78,6 +78,7 @@ The available methods are:
    `Lp` data for a specific index of a pool.
  * `LpSugar.byAddress(_pool: address) -> Lp` - returns the
    `Lp` data for a specific pool address.
+ * `LpSugar.count() -> uint256` - returns the total number of pools.
 
 ---
 

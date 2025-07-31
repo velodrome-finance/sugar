@@ -114,6 +114,34 @@ def _pools(_limit: uint256, _offset: uint256, _to_find: address)\
 
 @internal
 @view
+def _count() -> uint256:
+  """
+  @notice Returns total pool count
+  @return Total number of pools across all factories
+  """
+  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
+  factories_count: uint256 = len(factories)
+
+  count: uint256 = 0
+
+  for index: uint256 in range(0, MAX_FACTORIES):
+    if index >= factories_count:
+      break
+
+    factory: IPoolFactory = IPoolFactory(factories[index])
+    if self._is_root_placeholder_factory(factory.address):
+      continue
+
+    factory_pools: uint256 = staticcall factory.allPoolsLength()
+
+    count += factory_pools
+    if factory_pools > 0 and staticcall factory.allPools(0) == self.convertor:
+      count -= 1
+
+  return count
+
+@internal
+@view
 def _is_root_placeholder_factory(_factory: address) -> bool:
   """
   @notice Checks if the factory is for root placeholder pools

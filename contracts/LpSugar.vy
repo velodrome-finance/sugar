@@ -372,6 +372,15 @@ def _token(_address: address, _account: address) -> Token:
 
 @external
 @view
+def count() -> uint256:
+  """
+  @notice Returns total pool count
+  @return Total number of pools across all factories
+  """
+  return lp_shared._count()
+
+@external
+@view
 def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
   """
   @notice Returns a collection of pool data
