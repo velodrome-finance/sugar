@@ -29,6 +29,13 @@ struct Slot:
   cardinalityNext: uint16
   unlocked: bool
 
+# Observation from CLPool.sol
+struct Observation:
+  blockTimestamp: uint32
+  tickCumulative: int56
+  secondsPerLiquidityCumulativeX128: uint160
+  initialized: bool
+
 # GaugeFees from CLPool.sol
 struct GaugeFees:
   token0: uint128
@@ -130,6 +137,7 @@ struct Lp:
   token1_fees: uint256
   locked: uint256
   emerging: bool
+  created_at: uint32 # creation timestamp of gaugeless launcher pools
 
   nfpm: address
   alm: address
@@ -172,6 +180,9 @@ interface IPool:
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
   def factory() -> address: view # CL factory address
+  def observations(_index: uint256) -> Observation: view # CL oracle observations
+  def feeGrowthGlobal0X128() -> uint256: view # CL token0 fee growth
+  def feeGrowthGlobal1X128() -> uint256: view # CL token1 fee growth
 
 interface IGauge:
   def fees0() -> uint256: view
@@ -529,6 +540,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   type: int24 = -1
   locked: uint256 = staticcall locker_factory.locked(_data[1])
   emerging: bool = staticcall self.v2_launcher.emerging(_data[1])
+  created_at: uint32 = 0
 
   if is_stable:
     type = 0
@@ -536,6 +548,13 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge.address != empty(address):
     gauge_liquidity = staticcall gauge.totalSupply()
     emissions_token = staticcall gauge.rewardToken()
+  else:
+    launcher_pool: PoolLauncherPool = staticcall self.v2_launcher.pools(_data[1])
+
+    if launcher_pool.created_at != 0:
+      created_at = launcher_pool.created_at
+      token0_fees = staticcall pool.index0()
+      token1_fees = staticcall pool.index1()
 
   if gauge_alive and staticcall gauge.periodFinish() > block.timestamp:
     emissions = staticcall gauge.rewardRate()
@@ -580,6 +599,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token1_fees=token1_fees,
     locked=locked,
     emerging=emerging,
+    created_at=created_at,
 
     nfpm=empty(address),
     alm=empty(address),
@@ -1132,12 +1152,35 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   token1_fees: uint256 = 0
   locked: uint256 = staticcall locker_factory.locked(_data[1])
   emerging: bool = staticcall self.cl_launcher.emerging(_data[1])
+  created_at: uint32 = 0
 
   slot: Slot = staticcall pool.slot0()
   tick_low: int24 = (slot.tick // tick_spacing) * tick_spacing
   tick_high: int24 = tick_low + tick_spacing
 
-  if gauge_liquidity > 0 and gauge.address != empty(address):
+  if gauge.address == empty(address):
+    launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
+
+    if launcher_pool.created_at != 0:
+      created_at = launcher_pool.created_at
+      
+      # fetch new and old observations from pool oracle
+      obs_new: Observation = staticcall pool.observations(slot.observationIndex)
+      obs_old: Observation = staticcall pool.observations(0)
+
+      if slot.cardinality >= slot.cardinalityNext:
+        old_index: uint16 = (slot.observationIndex + 1) % slot.cardinality
+        obs_old = staticcall pool.observations(old_index)
+
+      # compute time delta and seconds per liquidity delta
+      time_delta: uint256 = convert(obs_new.blockTimestamp, uint256) - convert(obs_old.blockTimestamp, uint256)
+      splc_delta: uint256 = convert(obs_new.secondsPerLiquidityCumulativeX128, uint256) - convert(obs_old.secondsPerLiquidityCumulativeX128, uint256)
+
+      avg_liquidity: uint256 = shift(time_delta, 128) / splc_delta
+
+      token0_fees = (staticcall pool.feeGrowthGlobal0X128() / 2**128) * avg_liquidity
+      token1_fees = (staticcall pool.feeGrowthGlobal1X128() / 2**128) * avg_liquidity
+  elif gauge_liquidity > 0:
     fee_voting_reward = staticcall gauge.feesVotingReward()
     emissions_token = staticcall gauge.rewardToken()
 
@@ -1197,6 +1240,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     token1_fees=token1_fees,
     locked=locked,
     emerging=emerging,
+    created_at=created_at,
 
     nfpm=_data[3],
     alm=alm_wrapper,
