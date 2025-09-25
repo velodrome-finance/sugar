@@ -136,7 +136,7 @@ struct Lp:
   token0_fees: uint256
   token1_fees: uint256
   locked: uint256
-  emerging: bool
+  emerging: uint256
   created_at: uint32 # creation timestamp of gaugeless launcher pools
 
   nfpm: address
@@ -393,7 +393,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
         launcher = self.cl_launcher
 
       # if pool is emerging and other token is pairable, set token as emerging
-      if staticcall launcher.emerging(pool_data[1]) and staticcall launcher.isPairableToken(tokens[1 - i]):
+      if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
         emerging = True
 
       seen.append(tokens[i])
@@ -539,7 +539,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   staked1: uint256 = 0
   type: int24 = -1
   locked: uint256 = staticcall locker_factory.locked(_data[1])
-  emerging: bool = staticcall self.v2_launcher.emerging(_data[1])
+  emerging: uint256 = staticcall self.v2_launcher.emerging(_data[1])
   created_at: uint32 = 0
 
   if is_stable:
@@ -551,8 +551,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   else:
     launcher_pool: PoolLauncherPool = staticcall self.v2_launcher.pools(_data[1])
 
-    if launcher_pool.created_at != 0:
-      created_at = launcher_pool.created_at
+    if launcher_pool.createdAt != 0:
+      created_at = launcher_pool.createdAt
       token0_fees = staticcall pool.index0()
       token1_fees = staticcall pool.index1()
 
@@ -722,7 +722,7 @@ def _positions(
           locker: ILocker = ILocker(lockers[lindex])
           locked_pos: Position = self._v2_position(
             _account,
-            staticcall locker.lp(),
+            pool_addr,
             lockers[lindex]
           )
 
@@ -1151,7 +1151,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   token0_fees: uint256 = 0
   token1_fees: uint256 = 0
   locked: uint256 = staticcall locker_factory.locked(_data[1])
-  emerging: bool = staticcall self.cl_launcher.emerging(_data[1])
+  emerging: uint256 = staticcall self.cl_launcher.emerging(_data[1])
   created_at: uint32 = 0
 
   slot: Slot = staticcall pool.slot0()
@@ -1161,25 +1161,26 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge.address == empty(address):
     launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
 
-    if launcher_pool.created_at != 0:
-      created_at = launcher_pool.created_at
+    if launcher_pool.createdAt != 0:
+      created_at = launcher_pool.createdAt
       
       # fetch new and old observations from pool oracle
-      obs_new: Observation = staticcall pool.observations(slot.observationIndex)
+      obs_new: Observation = staticcall pool.observations(convert(slot.observationIndex, uint256))
       obs_old: Observation = staticcall pool.observations(0)
 
       if slot.cardinality >= slot.cardinalityNext:
-        old_index: uint16 = (slot.observationIndex + 1) % slot.cardinality
+        old_index: uint256 = convert(((slot.observationIndex + 1) % slot.cardinality), uint256)
         obs_old = staticcall pool.observations(old_index)
 
       # compute time delta and seconds per liquidity delta
-      time_delta: uint256 = convert(obs_new.blockTimestamp, uint256) - convert(obs_old.blockTimestamp, uint256)
-      splc_delta: uint256 = convert(obs_new.secondsPerLiquidityCumulativeX128, uint256) - convert(obs_old.secondsPerLiquidityCumulativeX128, uint256)
+      time_delta: uint256 = convert((obs_new.blockTimestamp - obs_old.blockTimestamp), uint256)
+      splc_delta: uint256 = convert((obs_new.secondsPerLiquidityCumulativeX128 - obs_old.secondsPerLiquidityCumulativeX128), uint256)
 
-      avg_liquidity: uint256 = shift(time_delta, 128) / splc_delta
+      if splc_delta != 0:
+        avg_liquidity: uint256 = (time_delta << 128) // splc_delta
 
-      token0_fees = (staticcall pool.feeGrowthGlobal0X128() / 2**128) * avg_liquidity
-      token1_fees = (staticcall pool.feeGrowthGlobal1X128() / 2**128) * avg_liquidity
+        token0_fees = (staticcall pool.feeGrowthGlobal0X128() // 2**128) * avg_liquidity
+        token1_fees = (staticcall pool.feeGrowthGlobal1X128() // 2**128) * avg_liquidity
   elif gauge_liquidity > 0:
     fee_voting_reward = staticcall gauge.feesVotingReward()
     emissions_token = staticcall gauge.rewardToken()
