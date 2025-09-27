@@ -1179,8 +1179,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
       if splc_delta != 0:
         historical_liquidity: uint256 = (time_delta << 128) // splc_delta
 
-        token0_fees = (staticcall pool.feeGrowthGlobal0X128() // 2**128) * historical_liquidity
-        token1_fees = (staticcall pool.feeGrowthGlobal1X128() // 2**128) * historical_liquidity
+        token0_fees = (staticcall pool.feeGrowthGlobal0X128() * historical_liquidity) // (1 << 128)
+        token1_fees = (staticcall pool.feeGrowthGlobal1X128() * historical_liquidity) // (1 << 128)
   elif gauge_liquidity > 0:
     fee_voting_reward = staticcall gauge.feesVotingReward()
     emissions_token = staticcall gauge.rewardToken()
