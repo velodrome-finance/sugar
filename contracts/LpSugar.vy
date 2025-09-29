@@ -349,7 +349,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     _addresses: DynArray[address, MAX_TOKENS]) -> DynArray[Token, MAX_TOKENS]:
   """
   @notice Returns a collection of tokens data based on available pools
-  @param _limit The max amount of tokens to return
+  @param _limit The max amount of pools to check
   @param _offset The amount of pools to skip
   @param _account The account to check the balances
   @return Array for Token structs
@@ -363,7 +363,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
 
   for index: uint256 in range(0, MAX_TOKENS):
-    if len(col) >= _limit or index >= addresses_count:
+    if index >= addresses_count:
       break
 
     seen.append(_addresses[index])
@@ -373,7 +373,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
       col.append(new_token)
 
   for index: uint256 in range(0, lp_shared.MAX_POOLS):
-    if len(col) >= _limit or index >= pools_count:
+    if index >= pools_count:
       break
 
     pool_data: address[4] = pools[index]
