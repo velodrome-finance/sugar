@@ -458,7 +458,7 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
     # Minimize gas while filtering pool category
     listed: bool = False
     if _filter == 1 or _filter == 2 or _filter == 4:
-      if staticcall lp_shared.voter.isWhitelistedToken(token0) or \
+      if staticcall lp_shared.voter.isWhitelistedToken(token0) and \
         staticcall lp_shared.voter.isWhitelistedToken(token1):
         listed = True
 
