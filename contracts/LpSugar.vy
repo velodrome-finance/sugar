@@ -480,6 +480,8 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
       include = emerging
     elif _filter == 4:
       include = listed or emerging
+    elif _filter == 5:
+      include = not (listed or emerging)
 
     if include:
       if pool_data[3] != empty(address):
