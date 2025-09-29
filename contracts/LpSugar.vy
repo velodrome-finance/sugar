@@ -457,13 +457,13 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
 
     # Minimize gas while filtering pool category
     listed: bool = False
-    if _filter == 1 or _filter == 2 or _filter == 4:
+    if _filter == 1 or _filter == 2 or _filter == 4 or _filter == 5:
       if staticcall lp_shared.voter.isWhitelistedToken(token0) and \
         staticcall lp_shared.voter.isWhitelistedToken(token1):
         listed = True
 
     emerging: bool = False
-    if _filter == 3 or (_filter == 4 and not listed):
+    if _filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed):
       if pool_data[3] != empty(address):
         emerging = staticcall self.cl_launcher.emerging(pool.address) > 0
       else:
