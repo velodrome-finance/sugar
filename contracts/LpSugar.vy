@@ -433,11 +433,12 @@ def count() -> uint256:
 
 @external
 @view
-def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
+def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX_LPS]:
   """
   @notice Returns a collection of pool data
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip
+  @param _filter The category of pools to filter on
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
@@ -454,11 +455,39 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
     token0: address = staticcall pool.token0()
     token1: address = staticcall pool.token1()
 
-    # If this is a CL factory/NFPM present...
-    if pool_data[3] != empty(address):
-      col.append(self._cl_lp(pool_data, token0, token1))
-    else:
-      col.append(self._v2_lp(pool_data, token0, token1))
+    # Minimize gas while filtering pool category
+    listed: bool = False
+    if _filter == 1 or _filter == 2 or _filter == 4 or _filter == 5:
+      if staticcall lp_shared.voter.isWhitelistedToken(token0) and \
+        staticcall lp_shared.voter.isWhitelistedToken(token1):
+        listed = True
+
+    emerging: bool = False
+    if _filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed):
+      if pool_data[3] != empty(address):
+        emerging = staticcall self.cl_launcher.emerging(pool.address) > 0
+      else:
+        emerging = staticcall self.v2_launcher.emerging(pool.address) > 0
+
+    include: bool = False
+    if _filter == 0:
+      include = True
+    elif _filter == 1:
+      include = listed
+    elif _filter == 2:
+      include = not listed
+    elif _filter == 3:
+      include = emerging
+    elif _filter == 4:
+      include = listed or emerging
+    elif _filter == 5:
+      include = not (listed or emerging)
+
+    if include:
+      if pool_data[3] != empty(address):
+        col.append(self._cl_lp(pool_data, token0, token1))
+      else:
+        col.append(self._v2_lp(pool_data, token0, token1))
 
   return col
 
