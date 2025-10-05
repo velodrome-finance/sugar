@@ -352,6 +352,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   @param _limit The max amount of pools to check
   @param _offset The amount of pools to skip
   @param _account The account to check the balances
+  @param _addresses Custom tokens to check
   @return Array for Token structs
   """
   pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
@@ -540,6 +541,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
+  @param _token0 The first token of the pool
+  @param _token1 The second token of the pool
   @return Lp struct
   """
   pool: IPool = IPool(_data[1])
@@ -1028,6 +1031,8 @@ def _cl_position(
   @param _pool The pool address
   @param _gauge The pool gauge address
   @param _factory The CL factory address
+  @param _nfpm The NFPM address
+  @param _locker The locker contract address
   @return A Position struct
   """
   pos: Position = empty(Position)
@@ -1107,7 +1112,8 @@ def _v2_position(_account: address, _pool: address, _locker: address) -> Positio
   """
   @notice Returns v2 pool position data
   @param _account The account to fetch positions for
-  @param _factory The pool address
+  @param _pool The pool address
+  @param _locker The locker contract address
   @return A Position struct
   """
   pool: IPool = IPool(_pool)
@@ -1161,7 +1167,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   @notice Returns CL pool data based on the factory, pool and gauge addresses
   @param _data The addresses to lookup
-  @param _account The user account
+  @param _token0 The first token of the pool
+  @param _token1 The second token of the pool
   @return Lp struct
   """
   pool: IPool = IPool(_data[1])
@@ -1307,7 +1314,6 @@ def _safe_decimals(_token: address) -> uint8:
   """
   @notice Returns the `ERC20.decimals()` result safely. Defaults to 18
   @param _token The token to call
-  @param _address The address to get the balanceOf
   """
   response: Bytes[32] = b""
   response = raw_call(
