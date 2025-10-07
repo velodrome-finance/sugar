@@ -85,7 +85,6 @@ interface IRelay:
 interface ISwapper:
   def amountTokenEarned(_autoConverter: address, _epoch: uint256) -> uint256: view
 
-
 # Vars
 registries: public(DynArray[address, MAX_REGISTRIES])
 voter: public(IVoter)
