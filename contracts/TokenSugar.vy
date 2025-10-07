@@ -4,6 +4,7 @@
 # @title Velodrome Finance Token Sugar
 # @author stas, ethzoomer
 # @notice Makes it nicer to work with tokens.
+# @notice All functions are accessible by LpSugar.
 
 from modules import lp_shared
 
