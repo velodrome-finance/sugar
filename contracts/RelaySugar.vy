@@ -184,7 +184,6 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   last_voted: uint256 = 0
   withdrawable: uint256 = 0
   inactive: bool = staticcall self.ve.deactivated(managed_id)
-  rewards_compounded: uint256 = 0
 
   admin_role: bytes32 = staticcall relay.DEFAULT_ADMIN_ROLE()
   manager: address = staticcall relay.getRoleMember(admin_role, 0)
@@ -199,7 +198,7 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   is_compounder: bool = self._is_compounder(_relay)
   
   # Rewards claimed this epoch
-  rewards_compounded = staticcall relay.amountTokenEarned(epoch_start_ts)
+  rewards_compounded: uint256 = staticcall relay.amountTokenEarned(epoch_start_ts)
   if not is_compounder:
     rewards_compounded += staticcall self.swapper.amountTokenEarned(_relay, epoch_start_ts)
 
