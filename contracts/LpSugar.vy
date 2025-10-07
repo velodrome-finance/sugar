@@ -245,18 +245,25 @@ interface ILocker:
   def lockedUntil() -> uint32: view
   def lp() -> uint256: view
 
+interface ITokenSugar:
+  def tokens(_limit: uint256, _offset: uint256, _account: address, _addresses: DynArray[address, MAX_TOKENS]) -> DynArray[Token, MAX_TOKENS]: view
+  def safe_balance_of(_token: address, _address: address) -> uint256: view
+  def safe_decimals(_token: address) -> uint8: view
+  def safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]: view
+
 # Vars
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
 alm_map: public(HashMap[uint256, HashMap[address, address]])
 v2_launcher: public(IPoolLauncher)
 cl_launcher: public(IPoolLauncher)
+token_sugar: public(ITokenSugar)
 
 # Methods
 
 @deploy
 def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
-    _alm_factory: address, _v2_launcher: address, _cl_launcher: address):
+    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -265,6 +272,7 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
   self.v2_launcher = IPoolLauncher(_v2_launcher)
   self.cl_launcher = IPoolLauncher(_cl_launcher)
+  self.token_sugar = ITokenSugar(_token_sugar)
 
   # Modules...
   lp_shared.__init__(_voter, _registry, _convertor)
@@ -321,7 +329,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MA
 
       if nfpm != empty(address):
         type = staticcall pool.tickSpacing()
-        reserve0 = self._safe_balance_of(token0, pool_addr)
+        reserve0 = staticcall self.token_sugar.safe_balance_of(token0, pool_addr)
         pool_fee = convert(staticcall pool.fee(), uint256)
       else:
         if staticcall pool.stable():
@@ -355,73 +363,7 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   @param _addresses Custom tokens to check
   @return Array for Token structs
   """
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
-    lp_shared._pools(_limit, _offset, empty(address))
-
-  pools_count: uint256 = len(pools)
-  addresses_count: uint256 = len(_addresses)
-  col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
-  seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
-
-  for index: uint256 in range(0, MAX_TOKENS):
-    if index >= addresses_count:
-      break
-
-    seen.append(_addresses[index])
-    new_token: Token = self._token(_addresses[index], _account, False)
-
-    if new_token.decimals != 0 and new_token.symbol != "":
-      col.append(new_token)
-
-  for index: uint256 in range(0, lp_shared.MAX_POOLS):
-    if index >= pools_count:
-      break
-
-    pool_data: address[4] = pools[index]
-
-    pool: IPool = IPool(pool_data[1])
-    tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
-
-    for i: uint256 in range(2):
-      if tokens[i] in seen:
-        continue
-
-      emerging: bool = False
-
-      launcher: IPoolLauncher = self.v2_launcher
-      # check if pool is CL pool
-      if pool_data[3] != empty(address):
-        launcher = self.cl_launcher
-
-      # if pool is emerging and other token is pairable, set token as emerging
-      if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
-        emerging = True
-
-      seen.append(tokens[i])
-      new_token: Token = self._token(tokens[i], _account, emerging)
-
-      # Skip tokens that fail basic ERC20 calls
-      if new_token.decimals != 0 and new_token.symbol != "":
-        col.append(new_token)
-
-  return col
-
-@internal
-@view
-def _token(_address: address, _account: address, _emerging: bool) -> Token:
-  bal: uint256 = empty(uint256)
-
-  if _account != empty(address):
-    bal = self._safe_balance_of(_address, _account)
-
-  return Token(
-    token_address=_address,
-    symbol=self._safe_symbol(_address),
-    decimals=self._safe_decimals(_address),
-    account_balance=bal,
-    listed=staticcall lp_shared.voter.isWhitelistedToken(_address),
-    emerging=_emerging
-  )
+  return staticcall self.token_sugar.tokens(_limit, _offset, _account, _addresses)
 
 @external
 @view
@@ -558,8 +500,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   is_stable: bool = staticcall pool.stable()
   pool_fee: uint256 = staticcall lp_shared.IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = staticcall pool.poolFees()
-  token0_fees: uint256 = self._safe_balance_of(_token0, pool_fees)
-  token1_fees: uint256 = self._safe_balance_of(_token1, pool_fees)
+  token0_fees: uint256 = staticcall self.token_sugar.safe_balance_of(_token0, pool_fees)
+  token1_fees: uint256 = staticcall self.token_sugar.safe_balance_of(_token1, pool_fees)
   gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   decimals: uint8 = staticcall pool.decimals()
   claimable0: uint256 = 0
@@ -598,7 +540,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp(
     lp=_data[1],
-    symbol=self._safe_symbol(pool.address),
+    symbol=staticcall self.token_sugar.safe_symbol(pool.address),
     decimals=decimals,
     liquidity=pool_liquidity,
 
@@ -1253,11 +1195,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     sqrt_ratio=slot.sqrtPriceX96,
 
     token0=_token0,
-    reserve0=self._safe_balance_of(_token0, pool.address),
+    reserve0=staticcall self.token_sugar.safe_balance_of(_token0, pool.address),
     staked0=staked0,
 
     token1=_token1,
-    reserve1=self._safe_balance_of(_token1, pool.address),
+    reserve1=staticcall self.token_sugar.safe_balance_of(_token1, pool.address),
     staked1=staked1,
 
     gauge=gauge.address,
@@ -1284,83 +1226,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     root=lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
   )
-
-@internal
-@view
-def _safe_balance_of(_token: address, _address: address) -> uint256:
-  """
-  @notice Returns the balance if the call to balanceOf was successfull, otherwise 0
-  @param _token The token to call
-  @param _address The address to get the balanceOf
-  """
-  response: Bytes[32] = raw_call(
-      _token,
-      abi_encode(_address, method_id=method_id("balanceOf(address)")),
-      max_outsize=32,
-      gas=100000,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  if len(response) > 0:
-    return (abi_decode(response, uint256))
-
-  return 0
-
-@internal
-@view
-def _safe_decimals(_token: address) -> uint8:
-  """
-  @notice Returns the `ERC20.decimals()` result safely. Defaults to 18
-  @param _token The token to call
-  """
-  response: Bytes[32] = b""
-  response = raw_call(
-      _token,
-      method_id("decimals()"),
-      max_outsize=32,
-      gas=50000,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  # Check response as revert_on_failure is set to False
-  if len(response) > 0:
-    return (abi_decode(response, uint8))
-
-  return 0
-
-@internal
-@view
-def _safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]:
-  """
-  @notice Returns the `ERC20.symbol()` safely (max 30 chars)
-  @param _token The token to call
-  """
-  response: Bytes[100] = raw_call(
-      _token,
-      method_id("symbol()"),
-      # Min bytes to use abi_decode()
-      max_outsize=100,
-      gas=50000,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  resp_len: uint256 = len(response)
-
-  if resp_len == 0:
-    return ""
-
-  # Check response as revert_on_failure is set to False
-  # And that the symbol size is not some large value (probably spam)
-  if resp_len > 0 and resp_len <= 96:
-    return abi_decode(response, String[MAX_TOKEN_SYMBOL_LEN])
-
-  return "-???-"
 
 @internal
 @view
