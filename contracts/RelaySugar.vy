@@ -199,10 +199,9 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   is_compounder: bool = self._is_compounder(_relay)
   
   # Rewards claimed this epoch
-  if is_compounder:
-    rewards_compounded = staticcall relay.amountTokenEarned(epoch_start_ts)
-  else:
-    rewards_compounded = staticcall self.swapper.amountTokenEarned(_relay, epoch_start_ts)
+  rewards_compounded = staticcall relay.amountTokenEarned(epoch_start_ts)
+  if not is_compounder:
+    rewards_compounded += staticcall self.swapper.amountTokenEarned(_relay, epoch_start_ts)
 
   if staticcall self.ve.voted(managed_id):
     last_voted = staticcall self.voter.lastVoted(managed_id)
