@@ -48,6 +48,7 @@ def main():
         project.RelaySugar.deploy(
             str(os.getenv(f"RELAY_REGISTRY_ADDRESSES_{chain_id}")).split(","),
             os.getenv(f"VOTER_{chain_id}"),
+            os.getenv(f"SWAPPER_{chain_id}"),
             sender=account,
             publish=publish,
         )
