@@ -26,7 +26,7 @@ def main():
             publish=publish,
         )
 
-    token_sugar_address = token_sugar.address if token is not None else os.getenv(f"TOKEN_SUGAR_{chain_id}")
+    token_sugar_address = token_sugar.address if token_sugar is not None else os.getenv(f"TOKEN_SUGAR_{chain_id}")
 
     if "lp" in contract_name:
         project.LpSugar.deploy(
