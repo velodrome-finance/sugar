@@ -189,13 +189,13 @@ def _byAddress(_relay: address, _account: address) -> Relay:
 
   managers: DynArray[address, MAX_MANAGERS] = []
   admin_role: bytes32 = staticcall relay.DEFAULT_ADMIN_ROLE()
-  admin_role_count: uint256 = relay.getRoleMemberCount(admin_role)
+  admin_role_count: uint256 = staticcall relay.getRoleMemberCount(admin_role)
 
   for manager_index: uint256 in range(0, MAX_MANAGERS):
     if manager_index >= admin_role_count:
       break
 
-    manager: address = staticcall relay.getRoleMember(admin_role, index)
+    manager: address = staticcall relay.getRoleMember(admin_role, manager_index)
     managers.append(manager)
 
   # If the Relay is an AutoConverter, fetch withdrawable amount
