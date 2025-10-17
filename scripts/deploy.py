@@ -15,6 +15,19 @@ def main():
     elif len(accounts) > 0:
         account = accounts[0]
 
+    if "token" in contract_name:
+        token_sugar = project.TokenSugar.deploy(
+            os.getenv(f"VOTER_{chain_id}"),
+            os.getenv(f"REGISTRY_{chain_id}"),
+            os.getenv(f"CONVERTOR_{chain_id}"),
+            os.getenv(f"V2_LAUNCHER_{chain_id}"),
+            os.getenv(f"CL_LAUNCHER_{chain_id}"),
+            sender=account,
+            publish=publish,
+        )
+
+    token_sugar_address = token_sugar.address if token_sugar is not None else os.getenv(f"TOKEN_SUGAR_{chain_id}")
+
     if "lp" in contract_name:
         project.LpSugar.deploy(
             os.getenv(f"VOTER_{chain_id}"),
@@ -22,6 +35,9 @@ def main():
             os.getenv(f"CONVERTOR_{chain_id}"),
             os.getenv(f"SLIPSTREAM_HELPER_{chain_id}"),
             os.getenv(f"ALM_FACTORY_{chain_id}"),
+            os.getenv(f"V2_LAUNCHER_{chain_id}"),
+            os.getenv(f"CL_LAUNCHER_{chain_id}"),
+            token_sugar_address,
             sender=account,
             publish=publish,
         )
