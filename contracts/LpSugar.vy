@@ -130,6 +130,7 @@ struct Lp:
 
   emissions: uint256
   emissions_token: address
+  emissions_cap: uint256
 
   pool_fee: uint256 # staked fee % on CL, fee % on v2
   unstaked_fee: uint256 # unstaked fee % on CL, 0 on v2
@@ -205,6 +206,7 @@ interface ICLGauge:
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
   def stakedValues(_account: address) -> DynArray[uint256, MAX_POSITIONS]: view
   def periodFinish() -> uint256: view
+  def gaugeFactory() -> address: view
 
 interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
@@ -566,6 +568,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     emissions=emissions,
     emissions_token=emissions_token,
+    emissions_cap=0,
 
     pool_fee=pool_fee,
     unstaked_fee=0,
@@ -1115,12 +1118,14 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
+  gauge_factory: address = staticcall gauge.gaugeFactory()
   locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
 
   gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
+  emissions_cap: uint256 = self._safe_emissions_cap(_data[2], gauge_factory)
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = staticcall pool.tickSpacing()
@@ -1212,6 +1217,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     emissions=emissions,
     emissions_token=emissions_token,
+    emissions_cap=emissions_cap,
 
     pool_fee=convert(staticcall pool.fee(), uint256),
     unstaked_fee=convert(staticcall pool.unstakedFee(), uint256),
@@ -1249,6 +1255,24 @@ def _has_userPositions(_nfpm: address) -> bool:
   )[1]
 
   return len(response) > 0
+
+@internal
+@view
+def _safe_emissions_cap(_gauge: address, _factory: address) -> uint256:
+  response: Bytes[32] = raw_call(
+      _factory,
+      abi_encode(_gauge, method_id=method_id("emissionsCaps(address)")),
+      max_outsize=32,
+      gas=100000,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  if len(response) > 0:
+    return (abi_decode(response, uint256))
+
+  return 0
 
 @internal
 @view
