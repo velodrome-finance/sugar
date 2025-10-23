@@ -61,7 +61,7 @@ The returned data/struct of type `Lp` values represent:
  * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
  * `emissions_token` - pool emissions token address
- * `emissions_cap` - pool emissions weekly cap
+ * `emissions_cap` - pool emissions cap measured in bps of weekly emissions
  * `pool_fee` - pool swap fee (percentage)
  * `unstaked_fee` - unstaked fee percentage on CL pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
