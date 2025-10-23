@@ -61,10 +61,14 @@ The returned data/struct of type `Lp` values represent:
  * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
  * `emissions_token` - pool emissions token address
+ * `emissions_cap` - pool emissions weekly cap
  * `pool_fee` - pool swap fee (percentage)
  * `unstaked_fee` - unstaked fee percentage on CL pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
+ * `locked` - pool total locked liquidity amount
+ * `emerging` - indicates if the pool is emerging
+ * `created_at` - pool creation timestamp
  * `nfpm` - pool non-fungible position manager contract address
  * `alm` - pool ALM vault contract address
  * `root` - root (placeholder) pool, for (non-canonical) leaf chain pools
