@@ -1118,14 +1118,13 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
-  gauge_factory: address = staticcall gauge.gaugeFactory()
   locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
 
   gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
-  emissions_cap: uint256 = self._safe_emissions_cap(_data[2], gauge_factory)
+  emissions_cap: uint256 = 0
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = staticcall pool.tickSpacing()
@@ -1140,6 +1139,10 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   slot: Slot = staticcall pool.slot0()
   tick_low: int24 = (slot.tick // tick_spacing) * tick_spacing
   tick_high: int24 = tick_low + tick_spacing
+
+  if gauge.address != empty(address):
+    gauge_factory: address = staticcall gauge.gaugeFactory()
+    emissions_cap = self._safe_emissions_cap(_data[2], gauge_factory)
 
   if gauge.address == empty(address):
     launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
