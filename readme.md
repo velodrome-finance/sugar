@@ -61,10 +61,14 @@ The returned data/struct of type `Lp` values represent:
  * `factory` - pool factory address
  * `emissions` - pool emissions (per second)
  * `emissions_token` - pool emissions token address
+ * `emissions_cap` - pool emissions cap measured in bps of weekly emissions
  * `pool_fee` - pool swap fee (percentage)
  * `unstaked_fee` - unstaked fee percentage on CL pools, 0 on v2 pools
  * `token0_fees` - current epoch token0 accrued fees (next week gauge fees)
  * `token1_fees` - current epoch token1 accrued fees (next week gauge fees)
+ * `locked` - pool total locked liquidity amount
+ * `emerging` - indicates if the pool is emerging
+ * `created_at` - pool creation timestamp
  * `nfpm` - pool non-fungible position manager contract address
  * `alm` - pool ALM vault contract address
  * `root` - root (placeholder) pool, for (non-canonical) leaf chain pools
@@ -104,6 +108,8 @@ The returned data is a struct of type `Position` with the following values:
   * `tick_upper` - upper tick of position on CL, 0 on v2
   * `sqrt_ratio_lower` - sqrt ratio X96 at lower tick on CL, 0 on v2
   * `sqrt_ratio_upper` - sqrt ratio X96 at upper tick on CL, 0 on v2
+  * `locker` - locker address for locked launcher liquidity, 0 otherwise
+  * `unlocks_at` - unlock timestamp for locked launcher liquidity, 0 otherwise
   * `alm` - pool ALM vault contract address
 
 ---
@@ -116,6 +122,7 @@ The pools token list (compiled from all the pools `token0`/`token1`) uses the ty
  * `decimals` - the token decimals
  * `account_balance` - the provided account/wallet balance
  * `listed` - indicates if the token was listed for gauge voting rewards
+ * `emerging` - indicates if the token is an emerging token from the launcher
 
 To fetch the token list this method is available:
 

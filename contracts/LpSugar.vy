@@ -29,6 +29,13 @@ struct Slot:
   cardinalityNext: uint16
   unlocked: bool
 
+# Observation from CLPool.sol
+struct Observation:
+  blockTimestamp: uint32
+  tickCumulative: int56
+  secondsPerLiquidityCumulativeX128: uint160
+  initialized: bool
+
 # GaugeFees from CLPool.sol
 struct GaugeFees:
   token0: uint128
@@ -37,6 +44,12 @@ struct GaugeFees:
 struct Amounts:
   amount0: uint256
   amount1: uint256
+
+struct PoolLauncherPool:
+  createdAt: uint32
+  pool: address
+  poolLauncherToken: address
+  tokenToPair: address
 
 # Position from NonfungiblePositionManager.sol (NFT)
 struct PositionData:
@@ -69,6 +82,8 @@ struct Position:
   tick_upper: int24 # Position upper tick on CL, 0 on v2
   sqrt_ratio_lower: uint160 # sqrtRatio at lower tick on CL, 0 on v2
   sqrt_ratio_upper: uint160 # sqrtRatio at upper tick on CL, 0 on v2
+  locker: address # locker address for locked liquidity, 0 otherwise
+  unlocks_at: uint32 # unlock timestamp for locked liquidity, 0 otherwise
   alm: address
 
 struct Token:
@@ -77,6 +92,7 @@ struct Token:
   decimals: uint8
   account_balance: uint256
   listed: bool
+  emerging: bool
 
 struct SwapLp:
   lp: address
@@ -114,11 +130,15 @@ struct Lp:
 
   emissions: uint256
   emissions_token: address
+  emissions_cap: uint256
 
   pool_fee: uint256 # staked fee % on CL, fee % on v2
   unstaked_fee: uint256 # unstaked fee % on CL, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
+  locked: uint256
+  emerging: uint256
+  created_at: uint32 # creation timestamp of gaugeless launcher pools
 
   nfpm: address
   alm: address
@@ -161,6 +181,9 @@ interface IPool:
   def liquidity() -> uint128: view # CL active liquidity
   def stakedLiquidity() -> uint128: view # CL active staked liquidity
   def factory() -> address: view # CL factory address
+  def observations(_index: uint256) -> Observation: view # CL oracle observations
+  def feeGrowthGlobal0X128() -> uint256: view # CL token0 fee growth
+  def feeGrowthGlobal1X128() -> uint256: view # CL token1 fee growth
 
 interface IGauge:
   def fees0() -> uint256: view
@@ -183,6 +206,7 @@ interface ICLGauge:
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
   def stakedValues(_account: address) -> DynArray[uint256, MAX_POSITIONS]: view
   def periodFinish() -> uint256: view
+  def gaugeFactory() -> address: view
 
 interface INFPositionManager:
   def positions(_position_id: uint256) -> PositionData: view
@@ -209,22 +233,48 @@ interface IAlmLpWrapper:
   def positionId() -> uint256: view
   def previewMint(scale: uint256) -> uint256[2]: view
 
+interface IPoolLauncher:
+  def lockerFactory() -> address: view
+  def emerging(_pool: address) -> uint256: view
+  def pools(_underlyingPool: address) -> PoolLauncherPool: view
+  def isPairableToken(_token: address) -> bool: view
+
+interface ILockerFactory:
+  def locked(_pool: address) -> uint256: view
+  def lockersPerPoolPerUser(_pool: address, _user: address) -> DynArray[address, MAX_POSITIONS]: view
+
+interface ILocker:
+  def lockedUntil() -> uint32: view
+  def lp() -> uint256: view
+
+interface ITokenSugar:
+  def tokens(_limit: uint256, _offset: uint256, _account: address, _addresses: DynArray[address, MAX_TOKENS]) -> DynArray[Token, MAX_TOKENS]: view
+  def safe_balance_of(_token: address, _address: address) -> uint256: view
+  def safe_decimals(_token: address) -> uint8: view
+  def safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]: view
+
 # Vars
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
 alm_map: public(HashMap[uint256, HashMap[address, address]])
+v2_launcher: public(IPoolLauncher)
+cl_launcher: public(IPoolLauncher)
+token_sugar: public(ITokenSugar)
 
 # Methods
 
 @deploy
-def __init__(_voter: address, _registry: address,\
-    _convertor: address, _slipstream_helper: address, _alm_factory: address):
+def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
+    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address):
   """
   @dev Sets up our external contract addresses
   """
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
   self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
+  self.v2_launcher = IPoolLauncher(_v2_launcher)
+  self.cl_launcher = IPoolLauncher(_cl_launcher)
+  self.token_sugar = ITokenSugar(_token_sugar)
 
   # Modules...
   lp_shared.__init__(_voter, _registry, _convertor)
@@ -281,7 +331,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MA
 
       if nfpm != empty(address):
         type = staticcall pool.tickSpacing()
-        reserve0 = self._safe_balance_of(token0, pool_addr)
+        reserve0 = staticcall self.token_sugar.safe_balance_of(token0, pool_addr)
         pool_fee = convert(staticcall pool.fee(), uint256)
       else:
         if staticcall pool.stable():
@@ -309,66 +359,13 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     _addresses: DynArray[address, MAX_TOKENS]) -> DynArray[Token, MAX_TOKENS]:
   """
   @notice Returns a collection of tokens data based on available pools
-  @param _limit The max amount of tokens to return
+  @param _limit The max amount of pools to check
   @param _offset The amount of pools to skip
   @param _account The account to check the balances
+  @param _addresses Custom tokens to check
   @return Array for Token structs
   """
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
-    lp_shared._pools(_limit, _offset, empty(address))
-
-  pools_count: uint256 = len(pools)
-  addresses_count: uint256 = len(_addresses)
-  col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
-  seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
-
-  for index: uint256 in range(0, MAX_TOKENS):
-    if len(col) >= _limit or index >= addresses_count:
-      break
-
-    seen.append(_addresses[index])
-    new_token: Token = self._token(_addresses[index], _account)
-
-    if new_token.decimals != 0 and new_token.symbol != "":
-      col.append(new_token)
-
-  for index: uint256 in range(0, lp_shared.MAX_POOLS):
-    if len(col) >= _limit or index >= pools_count:
-      break
-
-    pool_data: address[4] = pools[index]
-
-    pool: IPool = IPool(pool_data[1])
-    tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
-
-    for ptoken: address in tokens:
-      if ptoken in seen:
-        continue
-
-      seen.append(ptoken)
-      new_token: Token = self._token(ptoken, _account)
-
-      # Skip tokens that fail basic ERC20 calls
-      if new_token.decimals != 0 and new_token.symbol != "":
-        col.append(new_token)
-
-  return col
-
-@internal
-@view
-def _token(_address: address, _account: address) -> Token:
-  bal: uint256 = empty(uint256)
-
-  if _account != empty(address):
-    bal = self._safe_balance_of(_address, _account)
-
-  return Token(
-    token_address=_address,
-    symbol=self._safe_symbol(_address),
-    decimals=self._safe_decimals(_address),
-    account_balance=bal,
-    listed=staticcall lp_shared.voter.isWhitelistedToken(_address)
-  )
+  return staticcall self.token_sugar.tokens(_limit, _offset, _account, _addresses)
 
 @external
 @view
@@ -381,11 +378,12 @@ def count() -> uint256:
 
 @external
 @view
-def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
+def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX_LPS]:
   """
   @notice Returns a collection of pool data
   @param _limit The max amount of pools to return
   @param _offset The amount of pools to skip
+  @param _filter The category of pools to filter on
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
@@ -402,11 +400,39 @@ def all(_limit: uint256, _offset: uint256) -> DynArray[Lp, MAX_LPS]:
     token0: address = staticcall pool.token0()
     token1: address = staticcall pool.token1()
 
-    # If this is a CL factory/NFPM present...
-    if pool_data[3] != empty(address):
-      col.append(self._cl_lp(pool_data, token0, token1))
-    else:
-      col.append(self._v2_lp(pool_data, token0, token1))
+    # Minimize gas while filtering pool category
+    listed: bool = False
+    if _filter == 1 or _filter == 2 or _filter == 4 or _filter == 5:
+      if staticcall lp_shared.voter.isWhitelistedToken(token0) and \
+        staticcall lp_shared.voter.isWhitelistedToken(token1):
+        listed = True
+
+    emerging: bool = False
+    if _filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed):
+      if pool_data[3] != empty(address):
+        emerging = staticcall self.cl_launcher.emerging(pool.address) > 0
+      else:
+        emerging = staticcall self.v2_launcher.emerging(pool.address) > 0
+
+    include: bool = False
+    if _filter == 0:
+      include = True
+    elif _filter == 1:
+      include = listed
+    elif _filter == 2:
+      include = not listed
+    elif _filter == 3:
+      include = emerging
+    elif _filter == 4:
+      include = listed or emerging
+    elif _filter == 5:
+      include = not (listed or emerging)
+
+    if include:
+      if pool_data[3] != empty(address):
+        col.append(self._cl_lp(pool_data, token0, token1))
+      else:
+        col.append(self._v2_lp(pool_data, token0, token1))
 
   return col
 
@@ -459,10 +485,13 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   @notice Returns pool data based on the factory, pool and gauge addresses
   @param _address The addresses to lookup
+  @param _token0 The first token of the pool
+  @param _token1 The second token of the pool
   @return Lp struct
   """
   pool: IPool = IPool(_data[1])
   gauge: IGauge = IGauge(_data[2])
+  locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
@@ -473,8 +502,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   is_stable: bool = staticcall pool.stable()
   pool_fee: uint256 = staticcall lp_shared.IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = staticcall pool.poolFees()
-  token0_fees: uint256 = self._safe_balance_of(_token0, pool_fees)
-  token1_fees: uint256 = self._safe_balance_of(_token1, pool_fees)
+  token0_fees: uint256 = staticcall self.token_sugar.safe_balance_of(_token0, pool_fees)
+  token1_fees: uint256 = staticcall self.token_sugar.safe_balance_of(_token1, pool_fees)
   gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   decimals: uint8 = staticcall pool.decimals()
   claimable0: uint256 = 0
@@ -485,6 +514,9 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   staked0: uint256 = 0
   staked1: uint256 = 0
   type: int24 = -1
+  locked: uint256 = staticcall locker_factory.locked(_data[1])
+  emerging: uint256 = staticcall self.v2_launcher.emerging(_data[1])
+  created_at: uint32 = 0
 
   if is_stable:
     type = 0
@@ -492,6 +524,13 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if gauge.address != empty(address):
     gauge_liquidity = staticcall gauge.totalSupply()
     emissions_token = staticcall gauge.rewardToken()
+  else:
+    launcher_pool: PoolLauncherPool = staticcall self.v2_launcher.pools(_data[1])
+
+    if launcher_pool.createdAt != 0:
+      created_at = launcher_pool.createdAt
+      token0_fees = staticcall pool.index0()
+      token1_fees = staticcall pool.index1()
 
   if gauge_alive and staticcall gauge.periodFinish() > block.timestamp:
     emissions = staticcall gauge.rewardRate()
@@ -503,7 +542,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   return Lp(
     lp=_data[1],
-    symbol=self._safe_symbol(pool.address),
+    symbol=staticcall self.token_sugar.safe_symbol(pool.address),
     decimals=decimals,
     liquidity=pool_liquidity,
 
@@ -529,11 +568,15 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     emissions=emissions,
     emissions_token=emissions_token,
+    emissions_cap=0,
 
     pool_fee=pool_fee,
     unstaked_fee=0,
     token0_fees=token0_fees,
     token1_fees=token1_fees,
+    locked=locked,
+    emerging=emerging,
+    created_at=created_at,
 
     nfpm=empty(address),
     alm=empty(address),
@@ -637,11 +680,31 @@ def _positions(
         if pool_addr == lp_shared.convertor:
           continue
 
-        pos: Position = self._v2_position(_account, pool_addr)
+        pos: Position = self._v2_position(_account, pool_addr, empty(address))
 
         if pos.lp != empty(address):
           if len(positions) < MAX_POSITIONS:
             positions.append(pos)
+          else:
+            break
+
+        # Fetch locked V2/Basic positions
+        v2_locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
+        lockers: DynArray[address, MAX_POSITIONS] = staticcall v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+
+        for lindex: uint256 in range(0, MAX_POSITIONS):
+          if lindex >= len(lockers):
+            break
+
+          locker: ILocker = ILocker(lockers[lindex])
+          locked_pos: Position = self._v2_position(
+            _account,
+            pool_addr,
+            lockers[lindex]
+          )
+
+          if len(positions) < MAX_POSITIONS:
+            positions.append(locked_pos)
           else:
             break
 
@@ -680,7 +743,8 @@ def _positions(
             pool_addr,
             gauge.address,
             factory.address,
-            nfpm.address
+            nfpm.address,
+            empty(address)
           )
 
           if len(positions) < MAX_POSITIONS:
@@ -703,13 +767,38 @@ def _positions(
               pool_addr,
               gauge.address,
               factory.address,
-              nfpm.address
+              nfpm.address,
+              empty(address)
             )
 
             if len(positions) < MAX_POSITIONS:
               positions.append(pos)
             else:
               break
+
+        # Fetch locked CL positions
+        cl_locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
+        lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+
+        for lindex: uint256 in range(0, MAX_POSITIONS):
+          if lindex >= len(lockers):
+            break
+
+          locker: ILocker = ILocker(lockers[lindex])
+          pos: Position = self._cl_position(
+            staticcall locker.lp(),
+            _account,
+            pool_addr,
+            gauge.address,
+            factory.address,
+            nfpm.address,
+            lockers[lindex]
+          )
+
+          if len(positions) < MAX_POSITIONS:
+            positions.append(pos)
+          else:
+            break
 
         # Next, continue with fetching the ALM positions!
         if self.alm_factory == empty(IAlmFactory):
@@ -743,7 +832,8 @@ def _positions(
           pool_addr,
           gauge.address if staked else empty(address),
           factory.address,
-          nfpm.address
+          nfpm.address,
+          empty(address)
         )
 
         # For the Temper strategy we might have a second position to add up
@@ -755,7 +845,8 @@ def _positions(
             pool_addr,
             gauge.address if staked else empty(address),
             factory.address,
-            nfpm.address
+            nfpm.address,
+            empty(address)
           )
           pos.amount0 += pos2.amount0
           pos.amount1 += pos2.amount1
@@ -855,7 +946,8 @@ def positionsUnstakedConcentrated(
         empty(address),
         empty(address),
         factory.address,
-        nfpm.address
+        nfpm.address,
+        empty(address)
       )
 
       if pos.lp != empty(address):
@@ -874,7 +966,8 @@ def _cl_position(
     _pool:address,
     _gauge:address,
     _factory: address,
-    _nfpm: address
+    _nfpm: address,
+    _locker: address
   ) -> Position:
   """
   @notice Returns concentrated pool position data
@@ -883,9 +976,19 @@ def _cl_position(
   @param _pool The pool address
   @param _gauge The pool gauge address
   @param _factory The CL factory address
+  @param _nfpm The NFPM address
+  @param _locker The locker contract address
   @return A Position struct
   """
   pos: Position = empty(Position)
+
+  account: address = _account
+  if _locker != empty(address):
+    account = _locker
+    locker: ILocker = ILocker(_locker)
+    pos.locker = _locker
+    pos.unlocks_at = staticcall locker.lockedUntil()
+  
   pos.id = _id
   pos.lp = _pool
 
@@ -931,10 +1034,10 @@ def _cl_position(
   pos.unstaked_earned1 = amounts_fees.amount1
 
   if gauge.address != empty(address):
-    staked = staticcall gauge.stakedContains(_account, pos.id)
+    staked = staticcall gauge.stakedContains(account, pos.id)
 
   if staked:
-    pos.emissions_earned = staticcall gauge.earned(_account, pos.id) \
+    pos.emissions_earned = staticcall gauge.earned(account, pos.id) \
       + staticcall gauge.rewards(pos.id)
 
   # Reverse the liquidity since a staked position uses full available liquidity
@@ -950,11 +1053,12 @@ def _cl_position(
 
 @internal
 @view
-def _v2_position(_account: address, _pool: address) -> Position:
+def _v2_position(_account: address, _pool: address, _locker: address) -> Position:
   """
   @notice Returns v2 pool position data
   @param _account The account to fetch positions for
-  @param _factory The pool address
+  @param _pool The pool address
+  @param _locker The locker contract address
   @return A Position struct
   """
   pool: IPool = IPool(_pool)
@@ -962,12 +1066,20 @@ def _v2_position(_account: address, _pool: address) -> Position:
   decimals: uint8 = staticcall pool.decimals()
 
   pos: Position = empty(Position)
+
+  account: address = _account
+  if _locker != empty(address):
+    account = _locker
+    locker: ILocker = ILocker(_locker)
+    pos.locker = _locker
+    pos.unlocks_at = staticcall locker.lockedUntil()
+  
   pos.lp = pool.address
-  pos.liquidity = staticcall pool.balanceOf(_account)
-  pos.unstaked_earned0 = staticcall pool.claimable0(_account)
-  pos.unstaked_earned1 = staticcall pool.claimable1(_account)
-  claimable_delta0: uint256 = staticcall pool.index0() - staticcall pool.supplyIndex0(_account)
-  claimable_delta1: uint256 = staticcall pool.index1() - staticcall pool.supplyIndex1(_account)
+  pos.liquidity = staticcall pool.balanceOf(account)
+  pos.unstaked_earned0 = staticcall pool.claimable0(account)
+  pos.unstaked_earned1 = staticcall pool.claimable1(account)
+  claimable_delta0: uint256 = staticcall pool.index0() - staticcall pool.supplyIndex0(account)
+  claimable_delta1: uint256 = staticcall pool.index1() - staticcall pool.supplyIndex1(account)
 
   if claimable_delta0 > 0:
     pos.unstaked_earned0 += \
@@ -977,8 +1089,8 @@ def _v2_position(_account: address, _pool: address) -> Position:
       (pos.liquidity * claimable_delta1) // 10**convert(decimals, uint256)
 
   if gauge.address != empty(address):
-    pos.staked = staticcall gauge.balanceOf(_account)
-    pos.emissions_earned = staticcall gauge.earned(_account)
+    pos.staked = staticcall gauge.balanceOf(account)
+    pos.emissions_earned = staticcall gauge.earned(account)
 
   if pos.liquidity + pos.staked + pos.emissions_earned + pos.unstaked_earned0 == 0:
     return empty(Position)
@@ -1000,16 +1112,19 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   @notice Returns CL pool data based on the factory, pool and gauge addresses
   @param _data The addresses to lookup
-  @param _account The user account
+  @param _token0 The first token of the pool
+  @param _token1 The second token of the pool
   @return Lp struct
   """
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
+  locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
 
   gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
+  emissions_cap: uint256 = 0
   staked0: uint256 = 0
   staked1: uint256 = 0
   tick_spacing: int24 = staticcall pool.tickSpacing()
@@ -1017,12 +1132,42 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   gauge_liquidity: uint128 = staticcall pool.stakedLiquidity()
   token0_fees: uint256 = 0
   token1_fees: uint256 = 0
+  locked: uint256 = staticcall locker_factory.locked(_data[1])
+  emerging: uint256 = staticcall self.cl_launcher.emerging(_data[1])
+  created_at: uint32 = 0
 
   slot: Slot = staticcall pool.slot0()
   tick_low: int24 = (slot.tick // tick_spacing) * tick_spacing
   tick_high: int24 = tick_low + tick_spacing
 
-  if gauge_liquidity > 0 and gauge.address != empty(address):
+  if gauge.address != empty(address):
+    gauge_factory: address = staticcall gauge.gaugeFactory()
+    emissions_cap = self._safe_emissions_cap(_data[2], gauge_factory)
+
+  if gauge.address == empty(address):
+    launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
+
+    if launcher_pool.createdAt != 0:
+      created_at = launcher_pool.createdAt
+      
+      # fetch new and old observations from pool oracle
+      obs_new: Observation = staticcall pool.observations(convert(slot.observationIndex, uint256))
+      obs_old: Observation = staticcall pool.observations(0)
+
+      if slot.cardinality >= slot.cardinalityNext:
+        old_index: uint256 = convert(((slot.observationIndex + 1) % slot.cardinality), uint256)
+        obs_old = staticcall pool.observations(old_index)
+
+      # compute time delta and seconds per liquidity delta
+      time_delta: uint256 = convert((obs_new.blockTimestamp - obs_old.blockTimestamp), uint256)
+      splc_delta: uint256 = convert((obs_new.secondsPerLiquidityCumulativeX128 - obs_old.secondsPerLiquidityCumulativeX128), uint256)
+
+      if splc_delta != 0:
+        historical_liquidity: uint256 = (time_delta << 128) // splc_delta
+
+        token0_fees = (staticcall pool.feeGrowthGlobal0X128() * historical_liquidity) // (1 << 128)
+        token1_fees = (staticcall pool.feeGrowthGlobal1X128() * historical_liquidity) // (1 << 128)
+  elif gauge_liquidity > 0:
     fee_voting_reward = staticcall gauge.feesVotingReward()
     emissions_token = staticcall gauge.rewardToken()
 
@@ -1058,11 +1203,11 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     sqrt_ratio=slot.sqrtPriceX96,
 
     token0=_token0,
-    reserve0=self._safe_balance_of(_token0, pool.address),
+    reserve0=staticcall self.token_sugar.safe_balance_of(_token0, pool.address),
     staked0=staked0,
 
     token1=_token1,
-    reserve1=self._safe_balance_of(_token1, pool.address),
+    reserve1=staticcall self.token_sugar.safe_balance_of(_token1, pool.address),
     staked1=staked1,
 
     gauge=gauge.address,
@@ -1075,95 +1220,21 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     emissions=emissions,
     emissions_token=emissions_token,
+    emissions_cap=emissions_cap,
 
     pool_fee=convert(staticcall pool.fee(), uint256),
     unstaked_fee=convert(staticcall pool.unstakedFee(), uint256),
     token0_fees=token0_fees,
     token1_fees=token1_fees,
+    locked=locked,
+    emerging=emerging,
+    created_at=created_at,
 
     nfpm=_data[3],
     alm=alm_wrapper,
 
     root=lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
   )
-
-@internal
-@view
-def _safe_balance_of(_token: address, _address: address) -> uint256:
-  """
-  @notice Returns the balance if the call to balanceOf was successfull, otherwise 0
-  @param _token The token to call
-  @param _address The address to get the balanceOf
-  """
-  response: Bytes[32] = raw_call(
-      _token,
-      abi_encode(_address, method_id=method_id("balanceOf(address)")),
-      max_outsize=32,
-      gas=100000,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  if len(response) > 0:
-    return (abi_decode(response, uint256))
-
-  return 0
-
-@internal
-@view
-def _safe_decimals(_token: address) -> uint8:
-  """
-  @notice Returns the `ERC20.decimals()` result safely. Defaults to 18
-  @param _token The token to call
-  @param _address The address to get the balanceOf
-  """
-  response: Bytes[32] = b""
-  response = raw_call(
-      _token,
-      method_id("decimals()"),
-      max_outsize=32,
-      gas=50000,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  # Check response as revert_on_failure is set to False
-  if len(response) > 0:
-    return (abi_decode(response, uint8))
-
-  return 0
-
-@internal
-@view
-def _safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]:
-  """
-  @notice Returns the `ERC20.symbol()` safely (max 30 chars)
-  @param _token The token to call
-  """
-  response: Bytes[100] = raw_call(
-      _token,
-      method_id("symbol()"),
-      # Min bytes to use abi_decode()
-      max_outsize=100,
-      gas=50000,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  resp_len: uint256 = len(response)
-
-  if resp_len == 0:
-    return ""
-
-  # Check response as revert_on_failure is set to False
-  # And that the symbol size is not some large value (probably spam)
-  if resp_len > 0 and resp_len <= 96:
-    return abi_decode(response, String[MAX_TOKEN_SYMBOL_LEN])
-
-  return "-???-"
 
 @internal
 @view
@@ -1187,6 +1258,24 @@ def _has_userPositions(_nfpm: address) -> bool:
   )[1]
 
   return len(response) > 0
+
+@internal
+@view
+def _safe_emissions_cap(_gauge: address, _factory: address) -> uint256:
+  response: Bytes[32] = raw_call(
+      _factory,
+      abi_encode(_gauge, method_id=method_id("emissionsCaps(address)")),
+      max_outsize=32,
+      gas=100000,
+      is_delegate_call=False,
+      is_static_call=True,
+      revert_on_failure=False
+  )[1]
+
+  if len(response) > 0:
+    return (abi_decode(response, uint256))
+
+  return 0
 
 @internal
 @view
