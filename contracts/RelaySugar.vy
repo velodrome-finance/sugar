@@ -9,6 +9,7 @@ MAX_RELAYS: constant(uint256) = 150
 MAX_RESULTS: constant(uint256) = 50
 MAX_PAIRS: constant(uint256) = 30
 MAX_REGISTRIES: constant(uint256) = 12
+MAX_MANAGERS: constant(uint256) = 10
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 
 struct LpVotes:
@@ -32,7 +33,7 @@ struct Relay:
   compounded: uint256
   withdrawable: uint256
   run_at: uint256
-  manager: address
+  managers: DynArray[address, MAX_MANAGERS]
   relay: address
   compounder: bool
   inactive: bool
@@ -81,20 +82,26 @@ interface IRelay:
   def amountTokenEarned(_epoch_ts: uint256) -> uint256: view
   def DEFAULT_ADMIN_ROLE() -> bytes32: view
   def getRoleMember(_role: bytes32, _index: uint256) -> address: view
+  def getRoleMemberCount(_role: bytes32) -> uint256: view
+
+interface ISwapper:
+  def amountTokenEarned(_autoConverter: address, _epoch: uint256) -> uint256: view
 
 # Vars
 registries: public(DynArray[address, MAX_REGISTRIES])
 voter: public(IVoter)
+swapper: public(ISwapper)
 ve: public(IVotingEscrow)
 token: public(address)
 
 @deploy
-def __init__(_registries: DynArray[address, MAX_REGISTRIES], _voter: address):
+def __init__(_registries: DynArray[address, MAX_REGISTRIES], _voter: address, _swapper: address):
   """
-  @dev Set up our external registry and voter contracts
+  @dev Set up our external registry, voter, swapper contracts
   """
   self.registries = _registries
   self.voter = IVoter(_voter)
+  self.swapper = ISwapper(_swapper)
   self.ve = IVotingEscrow(staticcall self.voter.ve())
   self.token = staticcall self.ve.token()
 
@@ -180,8 +187,16 @@ def _byAddress(_relay: address, _account: address) -> Relay:
   withdrawable: uint256 = 0
   inactive: bool = staticcall self.ve.deactivated(managed_id)
 
+  managers: DynArray[address, MAX_MANAGERS] = []
   admin_role: bytes32 = staticcall relay.DEFAULT_ADMIN_ROLE()
-  manager: address = staticcall relay.getRoleMember(admin_role, 0)
+  admin_role_count: uint256 = staticcall relay.getRoleMemberCount(admin_role)
+
+  for manager_index: uint256 in range(0, MAX_MANAGERS):
+    if manager_index >= admin_role_count:
+      break
+
+    manager: address = staticcall relay.getRoleMember(admin_role, manager_index)
+    managers.append(manager)
 
   # If the Relay is an AutoConverter, fetch withdrawable amount
   relay_token: address = staticcall relay.token()
@@ -190,9 +205,12 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     withdrawable = staticcall token.balanceOf(_relay)
 
   epoch_start_ts: uint256 = block.timestamp // WEEK * WEEK
-
+  is_compounder: bool = self._is_compounder(_relay)
+  
   # Rewards claimed this epoch
   rewards_compounded: uint256 = staticcall relay.amountTokenEarned(epoch_start_ts)
+  if not is_compounder:
+    rewards_compounded += staticcall self.swapper.amountTokenEarned(_relay, epoch_start_ts)
 
   if staticcall self.ve.voted(managed_id):
     last_voted = staticcall self.voter.lastVoted(managed_id)
@@ -231,9 +249,9 @@ def _byAddress(_relay: address, _account: address) -> Relay:
     compounded=rewards_compounded,
     withdrawable=withdrawable,
     run_at=staticcall relay.keeperLastRun(),
-    manager=manager,
+    managers=managers,
     relay=_relay,
-    compounder=self._is_compounder(_relay),
+    compounder=is_compounder,
     inactive=inactive,
     name=staticcall relay.name(),
     account_venfts=account_venfts

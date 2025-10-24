@@ -220,7 +220,7 @@ The returned data/struct of type `Relay` values represent:
   * `token` - token address the Relay is compounding into
   * `compounded` - amount of tokens compounded into in the recent epoch
   * `run_at` - timestamp of last compounding
-  * `manager` - Relay manager
+  * `managers` - Relay managers
   * `relay` - Relay address
   * `compounder` - indicates if Relay is an autocompounder or an autoconverter
   * `inactive` - Relay active/inactive status
