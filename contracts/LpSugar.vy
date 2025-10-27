@@ -435,7 +435,7 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
         listed = True
 
     emerging: bool = False
-    if _filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed):
+    if self.cl_launcher.address != empty(address) and (_filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed)):
       if pool_data[3] != empty(address):
         emerging = staticcall self.cl_launcher.emerging(pool.address) > 0
       else:
@@ -516,7 +516,6 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   pool: IPool = IPool(_data[1])
   gauge: IGauge = IGauge(_data[2])
-  locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
 
   earned: uint256 = 0
   acc_staked: uint256 = 0
@@ -539,17 +538,22 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   staked0: uint256 = 0
   staked1: uint256 = 0
   type: int24 = -1
-  locked: uint256 = staticcall locker_factory.locked(_data[1])
-  emerging: uint256 = staticcall self.v2_launcher.emerging(_data[1])
+  locked: uint256 = 0
+  emerging: uint256 = 0
   created_at: uint32 = 0
 
   if is_stable:
     type = 0
 
+  if self.v2_launcher.address != empty(address):
+    locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
+    locked = staticcall locker_factory.locked(_data[1])
+    emerging = staticcall self.v2_launcher.emerging(_data[1])
+
   if gauge.address != empty(address):
     gauge_liquidity = staticcall gauge.totalSupply()
     emissions_token = staticcall gauge.rewardToken()
-  else:
+  elif self.v2_launcher.address != empty(address):
     launcher_pool: PoolLauncherPool = staticcall self.v2_launcher.pools(_data[1])
 
     if launcher_pool.createdAt != 0:
@@ -714,24 +718,25 @@ def _positions(
             break
 
         # Fetch locked V2/Basic positions
-        v2_locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
-        lockers: DynArray[address, MAX_POSITIONS] = staticcall v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+        if self.v2_launcher.address != empty(address):
+          v2_locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
 
-        for lindex: uint256 in range(0, MAX_POSITIONS):
-          if lindex >= len(lockers):
-            break
+          for lindex: uint256 in range(0, MAX_POSITIONS):
+            if lindex >= len(lockers):
+              break
 
-          locker: ILocker = ILocker(lockers[lindex])
-          locked_pos: Position = self._v2_position(
-            _account,
-            pool_addr,
-            lockers[lindex]
-          )
+            locker: ILocker = ILocker(lockers[lindex])
+            locked_pos: Position = self._v2_position(
+              _account,
+              pool_addr,
+              lockers[lindex]
+            )
 
-          if len(positions) < MAX_POSITIONS:
-            positions.append(locked_pos)
-          else:
-            break
+            if len(positions) < MAX_POSITIONS:
+              positions.append(locked_pos)
+            else:
+              break
 
     else:
       # Fetch CL positions
@@ -802,28 +807,29 @@ def _positions(
               break
 
         # Fetch locked CL positions
-        cl_locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
-        lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+        if self.cl_launcher.address != empty(address):
+          cl_locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
 
-        for lindex: uint256 in range(0, MAX_POSITIONS):
-          if lindex >= len(lockers):
-            break
+          for lindex: uint256 in range(0, MAX_POSITIONS):
+            if lindex >= len(lockers):
+              break
 
-          locker: ILocker = ILocker(lockers[lindex])
-          pos: Position = self._cl_position(
-            staticcall locker.lp(),
-            _account,
-            pool_addr,
-            gauge.address,
-            factory.address,
-            nfpm.address,
-            lockers[lindex]
-          )
+            locker: ILocker = ILocker(lockers[lindex])
+            pos: Position = self._cl_position(
+              staticcall locker.lp(),
+              _account,
+              pool_addr,
+              gauge.address,
+              factory.address,
+              nfpm.address,
+              lockers[lindex]
+            )
 
-          if len(positions) < MAX_POSITIONS:
-            positions.append(pos)
-          else:
-            break
+            if len(positions) < MAX_POSITIONS:
+              positions.append(pos)
+            else:
+              break
 
         # Next, continue with fetching the ALM positions!
         if self.alm_factory == empty(IAlmFactory):
@@ -1143,7 +1149,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   """
   pool: IPool = IPool(_data[1])
   gauge: ICLGauge = ICLGauge(_data[2])
-  locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
 
   gauge_alive: bool = staticcall self.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
@@ -1157,41 +1162,47 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   gauge_liquidity: uint128 = staticcall pool.stakedLiquidity()
   token0_fees: uint256 = 0
   token1_fees: uint256 = 0
-  locked: uint256 = staticcall locker_factory.locked(_data[1])
-  emerging: uint256 = staticcall self.cl_launcher.emerging(_data[1])
+  locked: uint256 = 0
+  emerging: uint256 = 0
   created_at: uint32 = 0
 
   slot: Slot = staticcall pool.slot0()
   tick_low: int24 = (slot.tick // tick_spacing) * tick_spacing
   tick_high: int24 = tick_low + tick_spacing
 
+  if self.cl_launcher.address != empty(address):
+    locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
+    locked = staticcall locker_factory.locked(_data[1])
+    emerging = staticcall self.cl_launcher.emerging(_data[1])
+
   if gauge.address != empty(address):
     gauge_factory: address = staticcall gauge.gaugeFactory()
     emissions_cap = self._safe_emissions_cap(_data[2], gauge_factory)
 
   if gauge.address == empty(address):
-    launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
+    if self.cl_launcher.address != empty(address):
+      launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
 
-    if launcher_pool.createdAt != 0:
-      created_at = launcher_pool.createdAt
-      
-      # fetch new and old observations from pool oracle
-      obs_new: Observation = staticcall pool.observations(convert(slot.observationIndex, uint256))
-      obs_old: Observation = staticcall pool.observations(0)
+      if launcher_pool.createdAt != 0:
+        created_at = launcher_pool.createdAt
+        
+        # fetch new and old observations from pool oracle
+        obs_new: Observation = staticcall pool.observations(convert(slot.observationIndex, uint256))
+        obs_old: Observation = staticcall pool.observations(0)
 
-      if slot.cardinality >= slot.cardinalityNext:
-        old_index: uint256 = convert(((slot.observationIndex + 1) % slot.cardinality), uint256)
-        obs_old = staticcall pool.observations(old_index)
+        if slot.cardinality >= slot.cardinalityNext:
+          old_index: uint256 = convert(((slot.observationIndex + 1) % slot.cardinality), uint256)
+          obs_old = staticcall pool.observations(old_index)
 
-      # compute time delta and seconds per liquidity delta
-      time_delta: uint256 = convert((obs_new.blockTimestamp - obs_old.blockTimestamp), uint256)
-      splc_delta: uint256 = convert((obs_new.secondsPerLiquidityCumulativeX128 - obs_old.secondsPerLiquidityCumulativeX128), uint256)
+        # compute time delta and seconds per liquidity delta
+        time_delta: uint256 = convert((obs_new.blockTimestamp - obs_old.blockTimestamp), uint256)
+        splc_delta: uint256 = convert((obs_new.secondsPerLiquidityCumulativeX128 - obs_old.secondsPerLiquidityCumulativeX128), uint256)
 
-      if splc_delta != 0:
-        historical_liquidity: uint256 = (time_delta << 128) // splc_delta
+        if splc_delta != 0:
+          historical_liquidity: uint256 = (time_delta << 128) // splc_delta
 
-        token0_fees = (staticcall pool.feeGrowthGlobal0X128() * historical_liquidity) // (1 << 128)
-        token1_fees = (staticcall pool.feeGrowthGlobal1X128() * historical_liquidity) // (1 << 128)
+          token0_fees = (staticcall pool.feeGrowthGlobal0X128() * historical_liquidity) // (1 << 128)
+          token1_fees = (staticcall pool.feeGrowthGlobal1X128() * historical_liquidity) // (1 << 128)
   elif gauge_liquidity > 0:
     fee_voting_reward = staticcall gauge.feesVotingReward()
     emissions_token = staticcall gauge.rewardToken()
