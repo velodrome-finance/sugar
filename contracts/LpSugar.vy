@@ -1185,18 +1185,13 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
       if launcher_pool.createdAt != 0:
         created_at = launcher_pool.createdAt
-        
-        # fetch new and old observations from pool oracle
-        obs_new: Observation = staticcall pool.observations(convert(slot.observationIndex, uint256))
-        obs_old: Observation = staticcall pool.observations(0)
 
-        if slot.cardinality >= slot.cardinalityNext:
-          old_index: uint256 = convert(((slot.observationIndex + 1) % slot.cardinality), uint256)
-          obs_old = staticcall pool.observations(old_index)
+        obs_index: uint256 = convert(slot.observationIndex, uint256)
+        obs: Observation = staticcall pool.observations(obs_index)
 
         # compute time delta and seconds per liquidity delta
-        time_delta: uint256 = convert((obs_new.blockTimestamp - obs_old.blockTimestamp), uint256)
-        splc_delta: uint256 = convert((obs_new.secondsPerLiquidityCumulativeX128 - obs_old.secondsPerLiquidityCumulativeX128), uint256)
+        time_delta: uint256 = convert((obs.blockTimestamp - created_at), uint256)
+        splc_delta: uint256 = convert(obs.secondsPerLiquidityCumulativeX128, uint256)
 
         if splc_delta != 0:
           historical_liquidity: uint256 = (time_delta << 128) // splc_delta
