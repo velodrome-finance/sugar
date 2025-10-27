@@ -26,7 +26,17 @@ def main():
             publish=publish,
         )
 
+    if "shared" in contract_name:
+        lp_shared = project.LpShared.deploy(
+            os.getenv(f"VOTER_{chain_id}"),
+            os.getenv(f"REGISTRY_{chain_id}"),
+            os.getenv(f"CONVERTOR_{chain_id}"),
+            sender=account,
+            publish=publish,
+        )
+
     token_sugar_address = token_sugar.address if token_sugar is not None else os.getenv(f"TOKEN_SUGAR_{chain_id}")
+    lp_shared_address = lp_shared.address if lp_shared is not None else os.getenv(f"LP_SHARED_{chain_id}")
 
     if "lp" in contract_name:
         project.LpSugar.deploy(
@@ -38,6 +48,7 @@ def main():
             os.getenv(f"V2_LAUNCHER_{chain_id}"),
             os.getenv(f"CL_LAUNCHER_{chain_id}"),
             token_sugar_address,
+            lp_shared_address,
             sender=account,
             publish=publish,
         )
