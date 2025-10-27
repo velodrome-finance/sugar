@@ -5,17 +5,16 @@
 # @author stas, ethzoomer
 # @notice Makes it nicer to work with the liquidity pools.
 
-from modules import lp_shared
 from snekmate.utils import math
-
-initializes: lp_shared
 
 # Structs
 
-MAX_TOKENS: public(constant(uint256)) = 2000
+MAX_TOKENS: public(constant(uint256)) = 2000 # also used for pools count
 MAX_LPS: public(constant(uint256)) = 500
 MAX_POSITIONS: public(constant(uint256)) = 200
 MAX_TOKEN_SYMBOL_LEN: public(constant(uint256)) = 32
+MAX_FACTORIES: public(constant(uint256)) = 10
+MAX_ITERATIONS: public(constant(uint256)) = 16000
 
 ALM_SCALE: constant(uint256) = as_wei_value(1000, "ether")
 MAX_UINT: constant(uint256) = max_value(uint256)
@@ -253,61 +252,89 @@ interface ITokenSugar:
   def safe_decimals(_token: address) -> uint8: view
   def safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]: view
 
+interface ILpShared:
+  def pools(_limit: uint256, _offset: uint256, _to_find: address) -> DynArray[address[4], MAX_TOKENS]: view
+  def count() -> uint256: view
+  def is_root_placeholder_factory(_factory: address) -> bool: view
+  def fetch_nfpm(_factory: address) -> address: view
+  def voter_gauge_to_incentive(_gauge: address) -> address: view
+  def root_lp_address(_factory: address, _token0: address, _token1: address, _type: int24) -> address: view
+
+interface IFactoryRegistry:
+  def poolFactories() -> DynArray[address, MAX_FACTORIES]: view
+
+interface IVoter:
+  def gauges(_pool_addr: address) -> address: view
+  def gaugeToFees(_gauge_addr: address) -> address: view
+  def isAlive(_gauge_addr: address) -> bool: view
+  def isWhitelistedToken(_token_addr: address) -> bool: view
+
+interface IPoolFactory:
+  def allPoolsLength() -> uint256: view
+  def allPools(_index: uint256) -> address: view
+  def getFee(_pool_addr: address, _stable: bool) -> uint256: view
+  def getPool(_token0: address, _token1: address, _fee: int24) -> address: view
+
 # Vars
+voter: public(IVoter)
+registry: public(IFactoryRegistry)
+convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
 alm_map: public(HashMap[uint256, HashMap[address, address]])
 v2_launcher: public(IPoolLauncher)
 cl_launcher: public(IPoolLauncher)
 token_sugar: public(ITokenSugar)
+lp_shared: public(ILpShared)
 
 # Methods
 
 @deploy
 def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
-    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address):
+    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address, _lp_shared: address):
   """
   @dev Sets up our external contract addresses
   """
+  self.voter = IVoter(_voter)
+  self.registry = IFactoryRegistry(_registry)
+  self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
   self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
   self.v2_launcher = IPoolLauncher(_v2_launcher)
   self.cl_launcher = IPoolLauncher(_cl_launcher)
   self.token_sugar = ITokenSugar(_token_sugar)
-
-  # Modules...
-  lp_shared.__init__(_voter, _registry, _convertor)
+  self.lp_shared = ILpShared(_lp_shared)
 
 @external
 @view
-def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MAX_POOLS]:
+def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_TOKENS]:
   """
   @notice Returns a compiled list of pools for swaps from pool factories (sans v1)
   @param _limit The max amount of pools to process
   @param _offset The amount of pools to skip
   @return `SwapLp` structs
   """
-  factories: DynArray[address, lp_shared.MAX_FACTORIES] = staticcall lp_shared.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
   factories_count: uint256 = len(factories)
 
-  pools: DynArray[SwapLp, lp_shared.MAX_POOLS] = empty(DynArray[SwapLp, lp_shared.MAX_POOLS])
+  pools: DynArray[SwapLp, MAX_TOKENS] = empty(DynArray[SwapLp, MAX_TOKENS])
   to_skip: uint256 = _offset
   left: uint256 = _limit
 
-  for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
+  for index: uint256 in range(0, MAX_FACTORIES):
     if index >= factories_count:
       break
 
-    factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(factories[index])
-    if lp_shared._is_root_placeholder_factory(factory.address):
+    factory: IPoolFactory = IPoolFactory(factories[index])
+    if staticcall self.lp_shared.is_root_placeholder_factory(factory.address):
       continue
 
-    nfpm: address = lp_shared._fetch_nfpm(factory.address)
+    nfpm: address = staticcall self.lp_shared.fetch_nfpm(factory.address)
     pools_count: uint256 = staticcall factory.allPoolsLength()
 
-    for pindex: uint256 in range(0, lp_shared.MAX_ITERATIONS):
-      if pindex >= pools_count or len(pools) >= lp_shared.MAX_POOLS:
+    for pindex: uint256 in range(0, MAX_ITERATIONS):
+      if pindex >= pools_count or len(pools) >= MAX_TOKENS:
         break
 
       # If no pools to process are left...
@@ -339,7 +366,7 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, lp_shared.MA
         reserve0 = staticcall pool.reserve0()
         pool_fee = staticcall factory.getFee(pool_addr, (type == 0))
 
-      if reserve0 > 0 or pool_addr == lp_shared.convertor:
+      if reserve0 > 0 or pool_addr == self.convertor:
         pools.append(
           SwapLp(
             lp=pool_addr,
@@ -374,7 +401,7 @@ def count() -> uint256:
   @notice Returns total pool count
   @return Total number of pools across all factories
   """
-  return lp_shared._count()
+  return staticcall self.lp_shared.count()
 
 @external
 @view
@@ -387,11 +414,11 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
   @return Array for Lp structs
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
-  pools: DynArray[address[4], lp_shared.MAX_POOLS] = \
-    lp_shared._pools(_limit, _offset, empty(address))
+  pools: DynArray[address[4], MAX_TOKENS] = \
+    staticcall self.lp_shared.pools(_limit, _offset, empty(address))
   pools_count: uint256 = len(pools)
 
-  for index: uint256 in range(0, lp_shared.MAX_POOLS):
+  for index: uint256 in range(0, MAX_TOKENS):
     if len(col) == _limit or index >= pools_count:
       break
 
@@ -403,8 +430,8 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
     # Minimize gas while filtering pool category
     listed: bool = False
     if _filter == 1 or _filter == 2 or _filter == 4 or _filter == 5:
-      if staticcall lp_shared.voter.isWhitelistedToken(token0) and \
-        staticcall lp_shared.voter.isWhitelistedToken(token1):
+      if staticcall self.voter.isWhitelistedToken(token0) and \
+        staticcall self.voter.isWhitelistedToken(token1):
         listed = True
 
     emerging: bool = False
@@ -445,8 +472,7 @@ def byAddress(_address: address) -> Lp:
   @return Lp struct
   """
   # Limit is max, internal call will return when _address is hit
-  pool_data: address[4] = \
-    lp_shared._pools(lp_shared.MAX_ITERATIONS, 0, _address)[0]
+  pool_data: address[4] = (staticcall self.lp_shared.pools(MAX_ITERATIONS, 0, _address))[0]
   pool: IPool = IPool(pool_data[1])
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
@@ -456,7 +482,6 @@ def byAddress(_address: address) -> Lp:
     return self._cl_lp(pool_data, token0, token1)
 
   return self._v2_lp(pool_data, token0, token1)
-
 
 @external
 @view
@@ -468,7 +493,7 @@ def byIndex(_index: uint256) -> Lp:
   """
   # Basically index is the offset and the limit is always one...
   # This will fire if _index is out of bounds
-  pool_data: address[4] = lp_shared._pools(1, _index, empty(address))[0]
+  pool_data: address[4] = (staticcall self.lp_shared.pools(1, _index, empty(address)))[0]
   pool: IPool = IPool(pool_data[1])
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
@@ -500,11 +525,11 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   emissions: uint256 = 0
   emissions_token: address = empty(address)
   is_stable: bool = staticcall pool.stable()
-  pool_fee: uint256 = staticcall lp_shared.IPoolFactory(_data[0]).getFee(pool.address, is_stable)
+  pool_fee: uint256 = staticcall IPoolFactory(_data[0]).getFee(pool.address, is_stable)
   pool_fees: address = staticcall pool.poolFees()
   token0_fees: uint256 = staticcall self.token_sugar.safe_balance_of(_token0, pool_fees)
   token1_fees: uint256 = staticcall self.token_sugar.safe_balance_of(_token1, pool_fees)
-  gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
+  gauge_alive: bool = staticcall self.voter.isAlive(gauge.address)
   decimals: uint8 = staticcall pool.decimals()
   claimable0: uint256 = 0
   claimable1: uint256 = 0
@@ -562,8 +587,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_liquidity=gauge_liquidity,
     gauge_alive=gauge_alive,
 
-    fee=staticcall lp_shared.voter.gaugeToFees(gauge.address),
-    bribe=lp_shared._voter_gauge_to_incentive(gauge.address),
+    fee=staticcall self.voter.gaugeToFees(gauge.address),
+    bribe=staticcall self.lp_shared.voter_gauge_to_incentive(gauge.address),
     factory=_data[0],
 
     emissions=emissions,
@@ -581,7 +606,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm=empty(address),
     alm=empty(address),
 
-    root=lp_shared._root_lp_address(_data[0], _token0, _token1, type)
+    root=staticcall self.lp_shared.root_lp_address(_data[0], _token0, _token1, type)
   )
 
 @external
@@ -595,7 +620,7 @@ def positions(_limit: uint256, _offset: uint256, _account: address)\
   @param _offset The amount of pools to skip (for optimization)
   @return Array for Lp structs
   """
-  factories: DynArray[address, lp_shared.MAX_FACTORIES] = staticcall lp_shared.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
 
   return self._positions(_limit, _offset, _account, factories)
 
@@ -623,7 +648,7 @@ def _positions(
   _limit: uint256,
   _offset: uint256,
   _account: address,
-  _factories: DynArray[address, lp_shared.MAX_FACTORIES]
+  _factories: DynArray[address, MAX_FACTORIES]
 ) -> DynArray[Position, MAX_POSITIONS]:
   """
   @notice Returns a collection of positions for a set of factories
@@ -648,23 +673,23 @@ def _positions(
   if self.alm_factory != empty(IAlmFactory):
     alm_core = IAlmCore(staticcall self.alm_factory.core())
 
-  for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
+  for index: uint256 in range(0, MAX_FACTORIES):
     if index >= factories_count:
       break
 
-    factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(_factories[index])
+    factory: IPoolFactory = IPoolFactory(_factories[index])
 
-    if lp_shared._is_root_placeholder_factory(factory.address):
+    if staticcall self.lp_shared.is_root_placeholder_factory(factory.address):
       continue
 
     pools_count: uint256 = staticcall factory.allPoolsLength()
 
     nfpm: INFPositionManager = \
-      INFPositionManager(lp_shared._fetch_nfpm(factory.address))
+      INFPositionManager(staticcall self.lp_shared.fetch_nfpm(factory.address))
 
     # V2/Basic pool
     if nfpm.address == empty(address):
-      for pindex: uint256 in range(0, lp_shared.MAX_ITERATIONS):
+      for pindex: uint256 in range(0, MAX_ITERATIONS):
         if pindex >= pools_count or pools_done >= _limit:
           break
 
@@ -677,7 +702,7 @@ def _positions(
 
         pool_addr: address = staticcall factory.allPools(pindex)
 
-        if pool_addr == lp_shared.convertor:
+        if pool_addr == self.convertor:
           continue
 
         pos: Position = self._v2_position(_account, pool_addr, empty(address))
@@ -710,7 +735,7 @@ def _positions(
 
     else:
       # Fetch CL positions
-      for pindex: uint256 in range(0, lp_shared.MAX_POOLS):
+      for pindex: uint256 in range(0, MAX_TOKENS):
         if pindex >= pools_count or pools_done >= _limit:
           break
 
@@ -722,7 +747,7 @@ def _positions(
           pools_done += 1
 
         pool_addr: address = staticcall factory.allPools(pindex)
-        gauge: ICLGauge = ICLGauge(staticcall lp_shared.voter.gauges(pool_addr))
+        gauge: ICLGauge = ICLGauge(staticcall self.voter.gauges(pool_addr))
         staked: bool = False
 
         # Fetch unstaked CL positions if supported,
@@ -897,26 +922,26 @@ def positionsUnstakedConcentrated(
   if _account == empty(address):
     return positions
 
-  factories: DynArray[address, lp_shared.MAX_FACTORIES] = \
-    staticcall lp_shared.registry.poolFactories()
+  factories: DynArray[address, MAX_FACTORIES] = \
+    staticcall self.registry.poolFactories()
 
   to_skip: uint256 = _offset
   positions_done: uint256 = 0
   factories_count: uint256 = len(factories)
 
-  for index: uint256 in range(0, lp_shared.MAX_FACTORIES):
+  for index: uint256 in range(0, MAX_FACTORIES):
     if index >= factories_count:
       break
 
-    factory: lp_shared.IPoolFactory = lp_shared.IPoolFactory(factories[index])
+    factory: IPoolFactory = IPoolFactory(factories[index])
 
     nfpm: INFPositionManager = \
-      INFPositionManager(lp_shared._fetch_nfpm(factory.address))
+      INFPositionManager(staticcall self.lp_shared.fetch_nfpm(factory.address))
 
     if nfpm.address == empty(address):
       continue
 
-    if lp_shared._is_root_placeholder_factory(factory.address):
+    if staticcall self.lp_shared.is_root_placeholder_factory(factory.address):
       continue
 
     # Handled in `positions()`
@@ -998,7 +1023,7 @@ def _cl_position(
 
   # Try to find the pool if we're fetching an unstaked position
   if pos.lp == empty(address):
-    pos.lp = staticcall lp_shared.IPoolFactory(_factory).getPool(
+    pos.lp = staticcall IPoolFactory(_factory).getPool(
       data.token0,
       data.token1,
       convert(data.tickSpacing, int24)
@@ -1014,7 +1039,7 @@ def _cl_position(
 
   # Try to find the gauge if we're fetching an unstaked position
   if _gauge == empty(address):
-    gauge = ICLGauge(staticcall lp_shared.voter.gauges(pos.lp))
+    gauge = ICLGauge(staticcall self.voter.gauges(pos.lp))
 
   amounts: Amounts = staticcall self.cl_helper.principal(
     nfpm.address, pos.id, slot.sqrtPriceX96
@@ -1062,7 +1087,7 @@ def _v2_position(_account: address, _pool: address, _locker: address) -> Positio
   @return A Position struct
   """
   pool: IPool = IPool(_pool)
-  gauge: IGauge = IGauge(staticcall lp_shared.voter.gauges(_pool))
+  gauge: IGauge = IGauge(staticcall self.voter.gauges(_pool))
   decimals: uint8 = staticcall pool.decimals()
 
   pos: Position = empty(Position)
@@ -1120,7 +1145,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   gauge: ICLGauge = ICLGauge(_data[2])
   locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
 
-  gauge_alive: bool = staticcall lp_shared.voter.isAlive(gauge.address)
+  gauge_alive: bool = staticcall self.voter.isAlive(gauge.address)
   fee_voting_reward: address = empty(address)
   emissions: uint256 = 0
   emissions_token: address = empty(address)
@@ -1215,7 +1240,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive=gauge_alive,
 
     fee=fee_voting_reward,
-    bribe=lp_shared._voter_gauge_to_incentive(gauge.address),
+    bribe=staticcall self.lp_shared.voter_gauge_to_incentive(gauge.address),
     factory=_data[0],
 
     emissions=emissions,
@@ -1233,7 +1258,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm=_data[3],
     alm=alm_wrapper,
 
-    root=lp_shared._root_lp_address(_data[0], _token0, _token1, tick_spacing),
+    root=staticcall self.lp_shared.root_lp_address(_data[0], _token0, _token1, tick_spacing),
   )
 
 @internal
