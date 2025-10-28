@@ -252,7 +252,7 @@ interface ITokenSugar:
   def safe_decimals(_token: address) -> uint8: view
   def safe_symbol(_token: address) -> String[MAX_TOKEN_SYMBOL_LEN]: view
 
-interface ILpShared:
+interface ILpHelper:
   def pools(_limit: uint256, _offset: uint256, _to_find: address) -> DynArray[address[4], MAX_TOKENS]: view
   def count() -> uint256: view
   def is_root_placeholder_factory(_factory: address) -> bool: view
@@ -285,13 +285,15 @@ alm_map: public(HashMap[uint256, HashMap[address, address]])
 v2_launcher: public(IPoolLauncher)
 cl_launcher: public(IPoolLauncher)
 token_sugar: public(ITokenSugar)
-lp_shared: public(ILpShared)
+lp_helper: public(ILpHelper)
+v2_locker_factory: public(ILockerFactory)
+cl_locker_factory: public(ILockerFactory)
 
 # Methods
 
 @deploy
 def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
-    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address, _lp_shared: address):
+    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address, _lp_helper: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -304,7 +306,10 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   self.v2_launcher = IPoolLauncher(_v2_launcher)
   self.cl_launcher = IPoolLauncher(_cl_launcher)
   self.token_sugar = ITokenSugar(_token_sugar)
-  self.lp_shared = ILpShared(_lp_shared)
+  self.lp_helper = ILpHelper(_lp_helper)
+  if _v2_launcher != empty(address) and _cl_launcher != empty(address):
+    self.v2_locker_factory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
+    self.cl_locker_factory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
 
 @external
 @view
@@ -327,10 +332,10 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_TOKENS]:
       break
 
     factory: IPoolFactory = IPoolFactory(factories[index])
-    if staticcall self.lp_shared.is_root_placeholder_factory(factory.address):
+    if staticcall self.lp_helper.is_root_placeholder_factory(factory.address):
       continue
 
-    nfpm: address = staticcall self.lp_shared.fetch_nfpm(factory.address)
+    nfpm: address = staticcall self.lp_helper.fetch_nfpm(factory.address)
     pools_count: uint256 = staticcall factory.allPoolsLength()
 
     for pindex: uint256 in range(0, MAX_ITERATIONS):
@@ -401,7 +406,7 @@ def count() -> uint256:
   @notice Returns total pool count
   @return Total number of pools across all factories
   """
-  return staticcall self.lp_shared.count()
+  return staticcall self.lp_helper.count()
 
 @external
 @view
@@ -415,7 +420,7 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
   """
   col: DynArray[Lp, MAX_LPS] = empty(DynArray[Lp, MAX_LPS])
   pools: DynArray[address[4], MAX_TOKENS] = \
-    staticcall self.lp_shared.pools(_limit, _offset, empty(address))
+    staticcall self.lp_helper.pools(_limit, _offset, empty(address))
   pools_count: uint256 = len(pools)
 
   for index: uint256 in range(0, MAX_TOKENS):
@@ -472,7 +477,7 @@ def byAddress(_address: address) -> Lp:
   @return Lp struct
   """
   # Limit is max, internal call will return when _address is hit
-  pool_data: address[4] = (staticcall self.lp_shared.pools(MAX_ITERATIONS, 0, _address))[0]
+  pool_data: address[4] = (staticcall self.lp_helper.pools(MAX_ITERATIONS, 0, _address))[0]
   pool: IPool = IPool(pool_data[1])
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
@@ -493,7 +498,7 @@ def byIndex(_index: uint256) -> Lp:
   """
   # Basically index is the offset and the limit is always one...
   # This will fire if _index is out of bounds
-  pool_data: address[4] = (staticcall self.lp_shared.pools(1, _index, empty(address)))[0]
+  pool_data: address[4] = (staticcall self.lp_helper.pools(1, _index, empty(address)))[0]
   pool: IPool = IPool(pool_data[1])
   token0: address = staticcall pool.token0()
   token1: address = staticcall pool.token1()
@@ -546,8 +551,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     type = 0
 
   if self.v2_launcher.address != empty(address):
-    locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
-    locked = staticcall locker_factory.locked(_data[1])
+    locked = staticcall self.v2_locker_factory.locked(_data[1])
     emerging = staticcall self.v2_launcher.emerging(_data[1])
 
   if gauge.address != empty(address):
@@ -592,7 +596,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive=gauge_alive,
 
     fee=staticcall self.voter.gaugeToFees(gauge.address),
-    bribe=staticcall self.lp_shared.voter_gauge_to_incentive(gauge.address),
+    bribe=staticcall self.lp_helper.voter_gauge_to_incentive(gauge.address),
     factory=_data[0],
 
     emissions=emissions,
@@ -610,7 +614,7 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm=empty(address),
     alm=empty(address),
 
-    root=staticcall self.lp_shared.root_lp_address(_data[0], _token0, _token1, type)
+    root=staticcall self.lp_helper.root_lp_address(_data[0], _token0, _token1, type)
   )
 
 @external
@@ -683,13 +687,13 @@ def _positions(
 
     factory: IPoolFactory = IPoolFactory(_factories[index])
 
-    if staticcall self.lp_shared.is_root_placeholder_factory(factory.address):
+    if staticcall self.lp_helper.is_root_placeholder_factory(factory.address):
       continue
 
     pools_count: uint256 = staticcall factory.allPoolsLength()
 
     nfpm: INFPositionManager = \
-      INFPositionManager(staticcall self.lp_shared.fetch_nfpm(factory.address))
+      INFPositionManager(staticcall self.lp_helper.fetch_nfpm(factory.address))
 
     # V2/Basic pool
     if nfpm.address == empty(address):
@@ -719,8 +723,7 @@ def _positions(
 
         # Fetch locked V2/Basic positions
         if self.v2_launcher.address != empty(address):
-          v2_locker_factory: ILockerFactory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall self.v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
 
           for lindex: uint256 in range(0, MAX_POSITIONS):
             if lindex >= len(lockers):
@@ -808,8 +811,7 @@ def _positions(
 
         # Fetch locked CL positions
         if self.cl_launcher.address != empty(address):
-          cl_locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall self.cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
 
           for lindex: uint256 in range(0, MAX_POSITIONS):
             if lindex >= len(lockers):
@@ -942,12 +944,12 @@ def positionsUnstakedConcentrated(
     factory: IPoolFactory = IPoolFactory(factories[index])
 
     nfpm: INFPositionManager = \
-      INFPositionManager(staticcall self.lp_shared.fetch_nfpm(factory.address))
+      INFPositionManager(staticcall self.lp_helper.fetch_nfpm(factory.address))
 
     if nfpm.address == empty(address):
       continue
 
-    if staticcall self.lp_shared.is_root_placeholder_factory(factory.address):
+    if staticcall self.lp_helper.is_root_placeholder_factory(factory.address):
       continue
 
     # Handled in `positions()`
@@ -1171,8 +1173,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_high: int24 = tick_low + tick_spacing
 
   if self.cl_launcher.address != empty(address):
-    locker_factory: ILockerFactory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
-    locked = staticcall locker_factory.locked(_data[1])
+    locked = staticcall self.cl_locker_factory.locked(_data[1])
     emerging = staticcall self.cl_launcher.emerging(_data[1])
 
   if gauge.address != empty(address):
@@ -1190,6 +1191,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
         obs: Observation = staticcall pool.observations(obs_index)
 
         # compute time delta and seconds per liquidity delta
+        # beginning of delta is assigned as created_at timestamp, with 0 splc
         time_delta: uint256 = convert((obs.blockTimestamp - created_at), uint256)
         splc_delta: uint256 = convert(obs.secondsPerLiquidityCumulativeX128, uint256)
 
@@ -1246,7 +1248,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     gauge_alive=gauge_alive,
 
     fee=fee_voting_reward,
-    bribe=staticcall self.lp_shared.voter_gauge_to_incentive(gauge.address),
+    bribe=staticcall self.lp_helper.voter_gauge_to_incentive(gauge.address),
     factory=_data[0],
 
     emissions=emissions,
@@ -1264,7 +1266,7 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     nfpm=_data[3],
     alm=alm_wrapper,
 
-    root=staticcall self.lp_shared.root_lp_address(_data[0], _token0, _token1, tick_spacing),
+    root=staticcall self.lp_helper.root_lp_address(_data[0], _token0, _token1, tick_spacing),
   )
 
 @internal
