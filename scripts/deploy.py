@@ -20,13 +20,23 @@ def main():
             os.getenv(f"VOTER_{chain_id}"),
             os.getenv(f"REGISTRY_{chain_id}"),
             os.getenv(f"CONVERTOR_{chain_id}"),
-            os.getenv(f"V2_LAUNCHER_{chain_id}"),
-            os.getenv(f"CL_LAUNCHER_{chain_id}"),
+            os.getenv(f"V2_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
+            os.getenv(f"CL_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
+            sender=account,
+            publish=publish,
+        )
+
+    if "helper" in contract_name:
+        lp_helper = project.LpHelper.deploy(
+            os.getenv(f"VOTER_{chain_id}"),
+            os.getenv(f"REGISTRY_{chain_id}"),
+            os.getenv(f"CONVERTOR_{chain_id}"),
             sender=account,
             publish=publish,
         )
 
     token_sugar_address = token_sugar.address if token_sugar is not None else os.getenv(f"TOKEN_SUGAR_{chain_id}")
+    lp_helper_address = lp_helper.address if lp_helper is not None else os.getenv(f"LP_HELPER_{chain_id}")
 
     if "lp" in contract_name:
         project.LpSugar.deploy(
@@ -35,9 +45,10 @@ def main():
             os.getenv(f"CONVERTOR_{chain_id}"),
             os.getenv(f"SLIPSTREAM_HELPER_{chain_id}"),
             os.getenv(f"ALM_FACTORY_{chain_id}"),
-            os.getenv(f"V2_LAUNCHER_{chain_id}"),
-            os.getenv(f"CL_LAUNCHER_{chain_id}"),
+            os.getenv(f"V2_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
+            os.getenv(f"CL_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
             token_sugar_address,
+            lp_helper_address,
             sender=account,
             publish=publish,
         )
