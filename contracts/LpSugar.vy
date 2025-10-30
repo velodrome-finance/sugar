@@ -1176,9 +1176,9 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     locked = staticcall self.cl_locker_factory.locked(_data[1])
     emerging = staticcall self.cl_launcher.emerging(_data[1])
 
-  if gauge.address != empty(address):
-    gauge_factory: address = staticcall gauge.gaugeFactory()
-    emissions_cap = self._safe_emissions_cap(_data[2], gauge_factory)
+    if gauge.address != empty(address):
+      gauge_factory: address = staticcall gauge.gaugeFactory()
+      emissions_cap = self._safe_emissions_cap(_data[2], gauge_factory)
 
   if gauge.address == empty(address):
     if self.cl_launcher.address != empty(address):
