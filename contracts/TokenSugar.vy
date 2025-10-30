@@ -94,14 +94,15 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
 
       emerging: bool = False
 
-      launcher: IPoolLauncher = self.v2_launcher
-      # check if pool is CL pool
-      if pool_data[3] != empty(address):
-        launcher = self.cl_launcher
+      if self.v2_launcher.address != empty(address):
+        launcher: IPoolLauncher = self.v2_launcher
+        # check if pool is CL pool
+        if pool_data[3] != empty(address):
+          launcher = self.cl_launcher
 
-      # if pool is emerging and other token is pairable, set token as emerging
-      if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
-        emerging = True
+        # if pool is emerging and other token is pairable, set token as emerging
+        if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
+          emerging = True
 
       seen.append(tokens[i])
       new_token: Token = self._token(tokens[i], _account, emerging)
