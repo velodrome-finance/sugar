@@ -14,7 +14,7 @@ MAX_LPS: public(constant(uint256)) = 500
 MAX_POSITIONS: public(constant(uint256)) = 200
 MAX_TOKEN_SYMBOL_LEN: public(constant(uint256)) = 32
 MAX_FACTORIES: public(constant(uint256)) = 10
-MAX_ITERATIONS: public(constant(uint256)) = 16000
+MAX_ITERATIONS: public(constant(uint256)) = 30000
 
 ALM_SCALE: constant(uint256) = as_wei_value(1000, "ether")
 MAX_UINT: constant(uint256) = max_value(uint256)
@@ -743,7 +743,7 @@ def _positions(
 
     else:
       # Fetch CL positions
-      for pindex: uint256 in range(0, MAX_TOKENS):
+      for pindex: uint256 in range(0, MAX_ITERATIONS):
         if pindex >= pools_count or pools_done >= _limit:
           break
 
