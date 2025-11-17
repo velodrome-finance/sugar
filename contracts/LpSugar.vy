@@ -50,41 +50,6 @@ struct PoolLauncherPool:
   poolLauncherToken: address
   tokenToPair: address
 
-# Position from NonfungiblePositionManager.sol (NFT)
-struct PositionData:
-  nonce: uint96
-  operator: address
-  token0: address
-  token1: address
-  tickSpacing: uint24
-  tickLower: int24
-  tickUpper: int24
-  liquidity: uint128
-  feeGrowthInside0LastX128: uint256
-  feeGrowthInside1LastX128: uint256
-  tokensOwed0: uint128
-  tokensOwed1: uint128
-
-struct Position:
-  id: uint256 # NFT ID on CL, 0 on v2
-  lp: address
-  liquidity: uint256 # Liquidity amount on CL, amount of LP tokens on v2
-  staked: uint256 # liq amount staked on CL, amount of staked LP tokens on v2
-  amount0: uint256 # amount of unstaked token0 on both v2 and CL
-  amount1: uint256 # amount of unstaked token1 on both v2 and CL
-  staked0: uint256 # amount of staked token0 on both v2 and CL
-  staked1: uint256 # amount of staked token1 on both v2 and CL
-  unstaked_earned0: uint256 # unstaked token0 fees earned on both v2 and CL
-  unstaked_earned1: uint256 # unstaked token1 fees earned on both v2 and CL
-  emissions_earned: uint256 # staked liq emissions earned on both v2 and CL
-  tick_lower: int24 # Position lower tick on CL, 0 on v2
-  tick_upper: int24 # Position upper tick on CL, 0 on v2
-  sqrt_ratio_lower: uint160 # sqrtRatio at lower tick on CL, 0 on v2
-  sqrt_ratio_upper: uint160 # sqrtRatio at upper tick on CL, 0 on v2
-  locker: address # locker address for locked liquidity, 0 otherwise
-  unlocks_at: uint32 # unlock timestamp for locked liquidity, 0 otherwise
-  alm: address
-
 struct Token:
   token_address: address
   symbol: String[MAX_TOKEN_SYMBOL_LEN]
@@ -135,23 +100,14 @@ struct Lp:
   unstaked_fee: uint256 # unstaked fee % on CL, 0 on v2
   token0_fees: uint256
   token1_fees: uint256
-  locked: uint256
+  locked0: uint256
+  locked1: uint256
   emerging: uint256
   created_at: uint32 # creation timestamp of gaugeless launcher pools
 
   nfpm: address
   alm: address
   root: address
-
-# See:
-#   https://github.com/mellow-finance/mellow-alm-toolkit/blob/main/src/interfaces/ICore.sol#L71-L120
-struct AlmManagedPositionInfo:
-  slippageD9: uint32
-  property: uint24
-  owner: address
-  pool: address
-  ammPositionIds: DynArray[uint256, 10]
-  # ...Params removed as we don't use those
 
 # Our contracts / Interfaces
 
@@ -208,7 +164,6 @@ interface ICLGauge:
   def gaugeFactory() -> address: view
 
 interface INFPositionManager:
-  def positions(_position_id: uint256) -> PositionData: view
   def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def factory() -> address: view
@@ -225,9 +180,6 @@ interface IAlmFactory:
   def poolToWrapper(pool: address) -> address: view
   def core() -> address: view
 
-interface IAlmCore:
-  def managedPositionAt(_id: uint256) -> AlmManagedPositionInfo: view
-
 interface IAlmLpWrapper:
   def positionId() -> uint256: view
   def previewMint(scale: uint256) -> uint256[2]: view
@@ -241,6 +193,7 @@ interface IPoolLauncher:
 interface ILockerFactory:
   def locked(_pool: address) -> uint256: view
   def lockersPerPoolPerUser(_pool: address, _user: address) -> DynArray[address, MAX_POSITIONS]: view
+  def lockers(_pool: address, _start: uint256, _end: uint256) -> DynArray[address, MAX_POSITIONS]: view
 
 interface ILocker:
   def lockedUntil() -> uint32: view
@@ -488,27 +441,6 @@ def byAddress(_address: address) -> Lp:
 
   return self._v2_lp(pool_data, token0, token1)
 
-@external
-@view
-def byIndex(_index: uint256) -> Lp:
-  """
-  @notice Returns pool data at a specific stored index
-  @param _index The index to lookup
-  @return Lp struct
-  """
-  # Basically index is the offset and the limit is always one...
-  # This will fire if _index is out of bounds
-  pool_data: address[4] = (staticcall self.lp_helper.pools(1, _index, empty(address)))[0]
-  pool: IPool = IPool(pool_data[1])
-  token0: address = staticcall pool.token0()
-  token1: address = staticcall pool.token1()
-
-  # If this is a CL factory/NFPM present...
-  if pool_data[3] != empty(address):
-    return self._cl_lp(pool_data, token0, token1)
-
-  return self._v2_lp(pool_data, token0, token1)
-
 @internal
 @view
 def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
@@ -543,7 +475,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   staked0: uint256 = 0
   staked1: uint256 = 0
   type: int24 = -1
-  locked: uint256 = 0
+  locked0: uint256 = 0
+  locked1: uint256 = 0
   emerging: uint256 = 0
   created_at: uint32 = 0
 
@@ -551,7 +484,9 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     type = 0
 
   if self.v2_launcher.address != empty(address):
-    locked = staticcall self.v2_locker_factory.locked(_data[1])
+    locked: uint256 = staticcall self.v2_locker_factory.locked(_data[1])
+    locked0 = (reserve0 * locked) // pool_liquidity
+    locked1 = (reserve1 * locked) // pool_liquidity
     emerging = staticcall self.v2_launcher.emerging(_data[1])
 
   if gauge.address != empty(address):
@@ -562,8 +497,10 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     if launcher_pool.createdAt != 0:
       created_at = launcher_pool.createdAt
-      token0_fees = staticcall pool.index0()
-      token1_fees = staticcall pool.index1()
+
+      # v2 LP token liquidity is always measured in 18 decimals
+      token0_fees = (staticcall pool.index0() * pool_liquidity) // (10**18)
+      token1_fees = (staticcall pool.index1() * pool_liquidity) // (10**18)
 
   if gauge_alive and staticcall gauge.periodFinish() > block.timestamp:
     emissions = staticcall gauge.rewardRate()
@@ -607,7 +544,8 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     unstaked_fee=0,
     token0_fees=token0_fees,
     token1_fees=token1_fees,
-    locked=locked,
+    locked0=locked0,
+    locked1=locked1,
     emerging=emerging,
     created_at=created_at,
 
@@ -616,528 +554,6 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     root=staticcall self.lp_helper.root_lp_address(_data[0], _token0, _token1, type)
   )
-
-@external
-@view
-def positions(_limit: uint256, _offset: uint256, _account: address)\
-    -> DynArray[Position, MAX_POSITIONS]:
-  """
-  @notice Returns a collection of positions
-  @param _account The account to fetch positions for
-  @param _limit The max amount of pools to process
-  @param _offset The amount of pools to skip (for optimization)
-  @return Array for Lp structs
-  """
-  factories: DynArray[address, MAX_FACTORIES] = staticcall self.registry.poolFactories()
-
-  return self._positions(_limit, _offset, _account, factories)
-
-@external
-@view
-def positionsByFactory(
-    _limit: uint256,
-    _offset: uint256,
-    _account: address,
-    _factory: address
-) -> DynArray[Position, MAX_POSITIONS]:
-  """
-  @notice Returns a collection of positions for the given factory
-  @param _account The account to fetch positions for
-  @param _limit The max amount of pools to process
-  @param _offset The amount of pools to skip (for optimization)
-  @param _factory The INFPositionManager address used to fetch positions
-  @return Array for Lp structs
-  """
-  return self._positions(_limit, _offset, _account, [_factory])
-
-@internal
-@view
-def _positions(
-  _limit: uint256,
-  _offset: uint256,
-  _account: address,
-  _factories: DynArray[address, MAX_FACTORIES]
-) -> DynArray[Position, MAX_POSITIONS]:
-  """
-  @notice Returns a collection of positions for a set of factories
-  @param _account The account to fetch positions for
-  @param _limit The max amount of pools to process
-  @param _offset The amount of pools to skip (for optimization)
-  @param _factories The factories to fetch from
-  @return Array for Lp structs
-  """
-  positions: DynArray[Position, MAX_POSITIONS] = \
-    empty(DynArray[Position, MAX_POSITIONS])
-
-  if _account == empty(address):
-    return positions
-
-  to_skip: uint256 = _offset
-  pools_done: uint256 = 0
-
-  factories_count: uint256 = len(_factories)
-
-  alm_core: IAlmCore = empty(IAlmCore)
-  if self.alm_factory != empty(IAlmFactory):
-    alm_core = IAlmCore(staticcall self.alm_factory.core())
-
-  for index: uint256 in range(0, MAX_FACTORIES):
-    if index >= factories_count:
-      break
-
-    factory: IPoolFactory = IPoolFactory(_factories[index])
-
-    if staticcall self.lp_helper.is_root_placeholder_factory(factory.address):
-      continue
-
-    pools_count: uint256 = staticcall factory.allPoolsLength()
-
-    nfpm: INFPositionManager = \
-      INFPositionManager(staticcall self.lp_helper.fetch_nfpm(factory.address))
-
-    # V2/Basic pool
-    if nfpm.address == empty(address):
-      for pindex: uint256 in range(0, MAX_ITERATIONS):
-        if pindex >= pools_count or pools_done >= _limit:
-          break
-
-        # Basically skip calls for offset records...
-        if to_skip > 0:
-          to_skip -= 1
-          continue
-        else:
-          pools_done += 1
-
-        pool_addr: address = staticcall factory.allPools(pindex)
-
-        if pool_addr == self.convertor:
-          continue
-
-        pos: Position = self._v2_position(_account, pool_addr, empty(address))
-
-        if pos.lp != empty(address):
-          if len(positions) < MAX_POSITIONS:
-            positions.append(pos)
-          else:
-            break
-
-        # Fetch locked V2/Basic positions
-        if self.v2_launcher.address != empty(address):
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall self.v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
-
-          for lindex: uint256 in range(0, MAX_POSITIONS):
-            if lindex >= len(lockers):
-              break
-
-            locker: ILocker = ILocker(lockers[lindex])
-            locked_pos: Position = self._v2_position(
-              _account,
-              pool_addr,
-              lockers[lindex]
-            )
-
-            if len(positions) < MAX_POSITIONS:
-              positions.append(locked_pos)
-            else:
-              break
-
-    else:
-      # Fetch CL positions
-      for pindex: uint256 in range(0, MAX_ITERATIONS):
-        if pindex >= pools_count or pools_done >= _limit:
-          break
-
-        # Basically skip calls for offset records...
-        if to_skip > 0:
-          to_skip -= 1
-          continue
-        else:
-          pools_done += 1
-
-        pool_addr: address = staticcall factory.allPools(pindex)
-        gauge: ICLGauge = ICLGauge(staticcall self.voter.gauges(pool_addr))
-        staked: bool = False
-
-        # Fetch unstaked CL positions if supported,
-        # else see `positionsUnstakedConcentrated()`
-        user_pos_ids: DynArray[uint256, MAX_POSITIONS] = \
-          empty(DynArray[uint256, MAX_POSITIONS])
-
-        if self._has_userPositions(nfpm.address):
-          user_pos_ids = staticcall nfpm.userPositions(_account, pool_addr)
-
-        for upindex: uint256 in range(0, MAX_POSITIONS):
-          if upindex >= len(user_pos_ids):
-            break
-
-          pos: Position = self._cl_position(
-            user_pos_ids[upindex],
-            _account,
-            pool_addr,
-            gauge.address,
-            factory.address,
-            nfpm.address,
-            empty(address)
-          )
-
-          if len(positions) < MAX_POSITIONS:
-            positions.append(pos)
-          else:
-            break
-
-        # Fetch staked CL positions
-        if gauge.address != empty(address):
-          staked_position_ids: DynArray[uint256, MAX_POSITIONS] = \
-            staticcall gauge.stakedValues(_account)
-
-          for sindex: uint256 in range(0, MAX_POSITIONS):
-            if sindex >= len(staked_position_ids):
-              break
-
-            pos: Position = self._cl_position(
-              staked_position_ids[sindex],
-              _account,
-              pool_addr,
-              gauge.address,
-              factory.address,
-              nfpm.address,
-              empty(address)
-            )
-
-            if len(positions) < MAX_POSITIONS:
-              positions.append(pos)
-            else:
-              break
-
-        # Fetch locked CL positions
-        if self.cl_launcher.address != empty(address):
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall self.cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
-
-          for lindex: uint256 in range(0, MAX_POSITIONS):
-            if lindex >= len(lockers):
-              break
-
-            locker: ILocker = ILocker(lockers[lindex])
-            pos: Position = self._cl_position(
-              staticcall locker.lp(),
-              _account,
-              pool_addr,
-              gauge.address,
-              factory.address,
-              nfpm.address,
-              lockers[lindex]
-            )
-
-            if len(positions) < MAX_POSITIONS:
-              positions.append(pos)
-            else:
-              break
-
-        # Next, continue with fetching the ALM positions!
-        if self.alm_factory == empty(IAlmFactory):
-          continue
-
-        alm_staking: IGauge = IGauge(
-          self._alm_pool_to_wrapper(pool_addr)
-        )
-
-        if alm_staking.address == empty(address):
-          continue
-
-        alm_user_liq: uint256 = staticcall alm_staking.balanceOf(_account)
-
-        if alm_user_liq == 0:
-          continue
-
-        alm_pos: AlmManagedPositionInfo = staticcall alm_core.managedPositionAt(
-          staticcall IAlmLpWrapper(alm_staking.address).positionId()
-        )
-
-        if gauge.address != empty(address) and len(alm_pos.ammPositionIds) > 0:
-          staked = staticcall gauge.stakedContains(
-            alm_core.address, alm_pos.ammPositionIds[0]
-          )
-
-        pos: Position = self._cl_position(
-          alm_pos.ammPositionIds[0],
-          # Account is the ALM Core contract here...
-          alm_core.address,
-          pool_addr,
-          gauge.address if staked else empty(address),
-          factory.address,
-          nfpm.address,
-          empty(address)
-        )
-
-        # For the Temper strategy we might have a second position to add up
-        if len(alm_pos.ammPositionIds) > 1:
-          pos2: Position = self._cl_position(
-            alm_pos.ammPositionIds[1],
-            # Account is the ALM Core contract here...
-            alm_core.address,
-            pool_addr,
-            gauge.address if staked else empty(address),
-            factory.address,
-            nfpm.address,
-            empty(address)
-          )
-          pos.amount0 += pos2.amount0
-          pos.amount1 += pos2.amount1
-          pos.staked0 += pos2.staked0
-          pos.staked1 += pos2.staked1
-
-        alm_liq: uint256 = staticcall alm_staking.totalSupply()
-        # adjust user share of the vault...
-        pos.amount0 = (alm_user_liq * pos.amount0) // alm_liq
-        pos.amount1 = (alm_user_liq * pos.amount1) // alm_liq
-        pos.staked0 = (alm_user_liq * pos.staked0) // alm_liq
-        pos.staked1 = (alm_user_liq * pos.staked1) // alm_liq
-
-        # ignore dust as the rebalancing might report "fees"
-        pos.unstaked_earned0 = 0
-        pos.unstaked_earned1 = 0
-
-        pos.emissions_earned = staticcall alm_staking.earned(_account)
-        # ALM liquidity is fully staked
-        pos.liquidity = 0
-        pos.staked = alm_user_liq
-        pos.alm = alm_staking.address
-
-        if len(positions) < MAX_POSITIONS:
-          positions.append(pos)
-        else:
-          break
-
-  return positions
-
-@external
-@view
-def positionsUnstakedConcentrated(
-  _limit: uint256,
-  _offset: uint256,
-  _account: address
-) -> DynArray[Position, MAX_POSITIONS]:
-  """
-  @notice Returns a collection of unstaked CL positions (legacy)
-  @param _account The account to fetch positions for
-  @param _limit The max amount of positions to process
-  @param _offset The amount of positions to skip
-  @return Array for Position structs
-  """
-  positions: DynArray[Position, MAX_POSITIONS] = \
-    empty(DynArray[Position, MAX_POSITIONS])
-
-  if _account == empty(address):
-    return positions
-
-  factories: DynArray[address, MAX_FACTORIES] = \
-    staticcall self.registry.poolFactories()
-
-  to_skip: uint256 = _offset
-  positions_done: uint256 = 0
-  factories_count: uint256 = len(factories)
-
-  for index: uint256 in range(0, MAX_FACTORIES):
-    if index >= factories_count:
-      break
-
-    factory: IPoolFactory = IPoolFactory(factories[index])
-
-    nfpm: INFPositionManager = \
-      INFPositionManager(staticcall self.lp_helper.fetch_nfpm(factory.address))
-
-    if nfpm.address == empty(address):
-      continue
-
-    if staticcall self.lp_helper.is_root_placeholder_factory(factory.address):
-      continue
-
-    # Handled in `positions()`
-    if self._has_userPositions(nfpm.address):
-      continue
-
-    positions_count: uint256 = staticcall nfpm.balanceOf(_account)
-
-    for pindex: uint256 in range(0, MAX_POSITIONS):
-      if pindex >= positions_count:
-        break
-
-      if pindex >= positions_count or positions_done >= _limit:
-        break
-
-      # Basically skip calls for offset records...
-      if to_skip > 0:
-        to_skip -= 1
-        continue
-      else:
-        positions_done += 1
-
-      pos_id: uint256 = staticcall nfpm.tokenOfOwnerByIndex(_account, pindex)
-      pos: Position = self._cl_position(
-        pos_id,
-        _account,
-        empty(address),
-        empty(address),
-        factory.address,
-        nfpm.address,
-        empty(address)
-      )
-
-      if pos.lp != empty(address):
-        if len(positions) < MAX_POSITIONS:
-          positions.append(pos)
-        else:
-          break
-
-  return positions
-
-@internal
-@view
-def _cl_position(
-    _id: uint256,
-    _account: address,
-    _pool:address,
-    _gauge:address,
-    _factory: address,
-    _nfpm: address,
-    _locker: address
-  ) -> Position:
-  """
-  @notice Returns concentrated pool position data
-  @param _id The token ID of the position
-  @param _account The account to fetch positions for
-  @param _pool The pool address
-  @param _gauge The pool gauge address
-  @param _factory The CL factory address
-  @param _nfpm The NFPM address
-  @param _locker The locker contract address
-  @return A Position struct
-  """
-  pos: Position = empty(Position)
-
-  account: address = _account
-  if _locker != empty(address):
-    account = _locker
-    locker: ILocker = ILocker(_locker)
-    pos.locker = _locker
-    pos.unlocks_at = staticcall locker.lockedUntil()
-  
-  pos.id = _id
-  pos.lp = _pool
-
-  nfpm: INFPositionManager = INFPositionManager(_nfpm)
-
-  data: PositionData = staticcall nfpm.positions(pos.id)
-
-  # Try to find the pool if we're fetching an unstaked position
-  if pos.lp == empty(address):
-    pos.lp = staticcall IPoolFactory(_factory).getPool(
-      data.token0,
-      data.token1,
-      convert(data.tickSpacing, int24)
-    )
-
-  if pos.lp == empty(address):
-    return empty(Position)
-
-  pool: IPool = IPool(pos.lp)
-  gauge: ICLGauge = ICLGauge(_gauge)
-  slot: Slot = staticcall pool.slot0()
-  staked: bool = False
-
-  # Try to find the gauge if we're fetching an unstaked position
-  if _gauge == empty(address):
-    gauge = ICLGauge(staticcall self.voter.gauges(pos.lp))
-
-  amounts: Amounts = staticcall self.cl_helper.principal(
-    nfpm.address, pos.id, slot.sqrtPriceX96
-  )
-  pos.amount0 = amounts.amount0
-  pos.amount1 = amounts.amount1
-
-  pos.liquidity = convert(data.liquidity, uint256)
-  pos.tick_lower = data.tickLower
-  pos.tick_upper = data.tickUpper
-
-  pos.sqrt_ratio_lower = staticcall self.cl_helper.getSqrtRatioAtTick(pos.tick_lower)
-  pos.sqrt_ratio_upper = staticcall self.cl_helper.getSqrtRatioAtTick(pos.tick_upper)
-
-  amounts_fees: Amounts = staticcall self.cl_helper.fees(nfpm.address, pos.id)
-  pos.unstaked_earned0 = amounts_fees.amount0
-  pos.unstaked_earned1 = amounts_fees.amount1
-
-  if gauge.address != empty(address):
-    staked = staticcall gauge.stakedContains(account, pos.id)
-
-  if staked:
-    pos.emissions_earned = staticcall gauge.earned(account, pos.id) \
-      + staticcall gauge.rewards(pos.id)
-
-  # Reverse the liquidity since a staked position uses full available liquidity
-  if staked:
-    pos.staked = pos.liquidity
-    pos.staked0 = pos.amount0
-    pos.staked1 = pos.amount1
-    pos.amount0 = 0
-    pos.amount1 = 0
-    pos.liquidity = 0
-
-  return pos
-
-@internal
-@view
-def _v2_position(_account: address, _pool: address, _locker: address) -> Position:
-  """
-  @notice Returns v2 pool position data
-  @param _account The account to fetch positions for
-  @param _pool The pool address
-  @param _locker The locker contract address
-  @return A Position struct
-  """
-  pool: IPool = IPool(_pool)
-  gauge: IGauge = IGauge(staticcall self.voter.gauges(_pool))
-  decimals: uint8 = staticcall pool.decimals()
-
-  pos: Position = empty(Position)
-
-  account: address = _account
-  if _locker != empty(address):
-    account = _locker
-    locker: ILocker = ILocker(_locker)
-    pos.locker = _locker
-    pos.unlocks_at = staticcall locker.lockedUntil()
-  
-  pos.lp = pool.address
-  pos.liquidity = staticcall pool.balanceOf(account)
-  pos.unstaked_earned0 = staticcall pool.claimable0(account)
-  pos.unstaked_earned1 = staticcall pool.claimable1(account)
-  claimable_delta0: uint256 = staticcall pool.index0() - staticcall pool.supplyIndex0(account)
-  claimable_delta1: uint256 = staticcall pool.index1() - staticcall pool.supplyIndex1(account)
-
-  if claimable_delta0 > 0:
-    pos.unstaked_earned0 += \
-      (pos.liquidity * claimable_delta0) // 10**convert(decimals, uint256)
-  if claimable_delta1 > 0:
-    pos.unstaked_earned1 += \
-      (pos.liquidity * claimable_delta1) // 10**convert(decimals, uint256)
-
-  if gauge.address != empty(address):
-    pos.staked = staticcall gauge.balanceOf(account)
-    pos.emissions_earned = staticcall gauge.earned(account)
-
-  if pos.liquidity + pos.staked + pos.emissions_earned + pos.unstaked_earned0 == 0:
-    return empty(Position)
-
-  pool_liquidity: uint256 = staticcall pool.totalSupply()
-  reserve0: uint256 = staticcall pool.reserve0()
-  reserve1: uint256 = staticcall pool.reserve1()
-
-  pos.amount0 = (pos.liquidity * reserve0) // pool_liquidity
-  pos.amount1 = (pos.liquidity * reserve1) // pool_liquidity
-  pos.staked0 = (pos.staked * reserve0) // pool_liquidity
-  pos.staked1 = (pos.staked * reserve1) // pool_liquidity
-
-  return pos
 
 @internal
 @view
@@ -1164,7 +580,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   gauge_liquidity: uint128 = staticcall pool.stakedLiquidity()
   token0_fees: uint256 = 0
   token1_fees: uint256 = 0
-  locked: uint256 = 0
+  locked0: uint256 = 0
+  locked1: uint256 = 0
   emerging: uint256 = 0
   created_at: uint32 = 0
 
@@ -1173,7 +590,23 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_high: int24 = tick_low + tick_spacing
 
   if self.cl_launcher.address != empty(address):
-    locked = staticcall self.cl_locker_factory.locked(_data[1])
+    lockers: DynArray[address, MAX_POSITIONS] = staticcall self.cl_locker_factory.lockers(_data[1], 0, MAX_POSITIONS)
+    lockers_count: uint256 = len(lockers)
+
+    # compute total amount of locked tokens
+    for i: uint256 in range(0, MAX_POSITIONS):
+      if i >= lockers_count or lockers[i] == empty(address):
+        break
+
+      locker: ILocker = ILocker(lockers[i])
+      locker_pos_id: uint256 = staticcall locker.lp()
+
+      amounts: Amounts = staticcall self.cl_helper.principal(
+        _data[3], locker_pos_id, slot.sqrtPriceX96
+      )
+      locked0 += amounts.amount0
+      locked1 += amounts.amount1
+
     emerging = staticcall self.cl_launcher.emerging(_data[1])
 
     if gauge.address != empty(address):
@@ -1259,7 +692,8 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     unstaked_fee=convert(staticcall pool.unstakedFee(), uint256),
     token0_fees=token0_fees,
     token1_fees=token1_fees,
-    locked=locked,
+    locked0=locked0,
+    locked1=locked1,
     emerging=emerging,
     created_at=created_at,
 
@@ -1268,29 +702,6 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
     root=staticcall self.lp_helper.root_lp_address(_data[0], _token0, _token1, tick_spacing),
   )
-
-@internal
-@view
-def _has_userPositions(_nfpm: address) -> bool:
-  """
-  @notice Checks for `userPositions()` support, missing for pre-Superchain NFPM
-  @param _nfpm The NFPM address
-  @return Returns True if supported
-  """
-  response: Bytes[32] = b""
-  response = raw_call(
-      _nfpm,
-      abi_encode(
-        # We just need valid addresses, please ignore the values
-        _nfpm, _nfpm, method_id=method_id("userPositions(address,address)"),
-      ),
-      max_outsize=32,
-      is_delegate_call=False,
-      is_static_call=True,
-      revert_on_failure=False
-  )[1]
-
-  return len(response) > 0
 
 @internal
 @view
@@ -1321,7 +732,6 @@ def _alm_pool_to_wrapper(_pool: address) -> address:
   if mapped_wrapper != empty(address):
     return mapped_wrapper
   return staticcall self.alm_factory.poolToWrapper(_pool)
-
 
 @external
 @view
