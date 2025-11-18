@@ -143,7 +143,6 @@ interface IPool:
 interface IGauge:
   def fees0() -> uint256: view
   def fees1() -> uint256: view
-  def earned(_account: address) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
   def rewardRate() -> uint256: view
@@ -152,22 +151,17 @@ interface IGauge:
   def periodFinish() -> uint256: view
 
 interface ICLGauge:
-  def earned(_account: address, _position_id: uint256) -> uint256: view
   def rewards(_position_id: uint256) -> uint256: view
   def rewardRate() -> uint256: view
   def rewardRateByEpoch(_ts: uint256) -> uint256: view
   def rewardToken() -> address: view
   def feesVotingReward() -> address: view
-  def stakedContains(_account: address, _position_id: uint256) -> bool: view
-  def stakedValues(_account: address) -> DynArray[uint256, MAX_POSITIONS]: view
   def periodFinish() -> uint256: view
   def gaugeFactory() -> address: view
 
 interface INFPositionManager:
-  def tokenOfOwnerByIndex(_account: address, _index: uint256) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def factory() -> address: view
-  def userPositions(_account: address, _pool: address) -> DynArray[uint256, MAX_POSITIONS]: view
 
 interface ISlipstreamHelper:
   def getAmountsForLiquidity(_ratio: uint160, _ratioA: uint160, _ratioB: uint160, _liquidity: uint128) -> Amounts: view
@@ -181,7 +175,6 @@ interface IAlmFactory:
   def core() -> address: view
 
 interface IAlmLpWrapper:
-  def positionId() -> uint256: view
   def previewMint(scale: uint256) -> uint256[2]: view
 
 interface IPoolLauncher:
@@ -192,11 +185,9 @@ interface IPoolLauncher:
 
 interface ILockerFactory:
   def locked(_pool: address) -> uint256: view
-  def lockersPerPoolPerUser(_pool: address, _user: address) -> DynArray[address, MAX_POSITIONS]: view
   def lockers(_pool: address, _start: uint256, _end: uint256) -> DynArray[address, MAX_POSITIONS]: view
 
 interface ILocker:
-  def lockedUntil() -> uint32: view
   def lp() -> uint256: view
 
 interface ITokenSugar:

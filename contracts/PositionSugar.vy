@@ -72,8 +72,6 @@ struct AlmManagedPositionInfo:
 # Our contracts / Interfaces
 
 interface IPool:
-  def token0() -> address: view
-  def token1() -> address: view
   def reserve0() -> uint256: view
   def reserve1() -> uint256: view
   def claimable0(_account: address) -> uint256: view
@@ -87,38 +85,19 @@ interface IPool:
   def stable() -> bool: view
   def balanceOf(_account: address) -> uint256: view
   def poolFees() -> address: view
-  def gauge() -> address: view # fetches gauge from CL pool
-  def tickSpacing() -> int24: view # CL tick spacing
   def slot0() -> Slot: view # CL slot data
-  def fee() -> uint24: view # CL fee level
-  def unstakedFee() -> uint24: view # CL unstaked fee level
-  def liquidity() -> uint128: view # CL active liquidity
-  def stakedLiquidity() -> uint128: view # CL active staked liquidity
   def factory() -> address: view # CL factory address
-  def feeGrowthGlobal0X128() -> uint256: view # CL token0 fee growth
-  def feeGrowthGlobal1X128() -> uint256: view # CL token1 fee growth
 
 interface IGauge:
-  def fees0() -> uint256: view
-  def fees1() -> uint256: view
   def earned(_account: address) -> uint256: view
   def balanceOf(_account: address) -> uint256: view
   def totalSupply() -> uint256: view
-  def rewardRate() -> uint256: view
-  def rewardRateByEpoch(_ts: uint256) -> uint256: view
-  def rewardToken() -> address: view
-  def periodFinish() -> uint256: view
 
 interface ICLGauge:
   def earned(_account: address, _position_id: uint256) -> uint256: view
   def rewards(_position_id: uint256) -> uint256: view
-  def rewardRate() -> uint256: view
-  def rewardRateByEpoch(_ts: uint256) -> uint256: view
-  def rewardToken() -> address: view
-  def feesVotingReward() -> address: view
   def stakedContains(_account: address, _position_id: uint256) -> bool: view
   def stakedValues(_account: address) -> DynArray[uint256, MAX_POSITIONS]: view
-  def periodFinish() -> uint256: view
   def gaugeFactory() -> address: view
 
 interface INFPositionManager:
@@ -148,11 +127,8 @@ interface IAlmLpWrapper:
 
 interface IPoolLauncher:
   def lockerFactory() -> address: view
-  def emerging(_pool: address) -> uint256: view
-  def isPairableToken(_token: address) -> bool: view
 
 interface ILockerFactory:
-  def locked(_pool: address) -> uint256: view
   def lockersPerPoolPerUser(_pool: address, _user: address) -> DynArray[address, MAX_POSITIONS]: view
   def lockers(_pool: address, _start: uint256, _end: uint256) -> DynArray[address, MAX_POSITIONS]: view
 
@@ -169,14 +145,10 @@ interface IFactoryRegistry:
 
 interface IVoter:
   def gauges(_pool_addr: address) -> address: view
-  def gaugeToFees(_gauge_addr: address) -> address: view
-  def isAlive(_gauge_addr: address) -> bool: view
-  def isWhitelistedToken(_token_addr: address) -> bool: view
 
 interface IPoolFactory:
   def allPoolsLength() -> uint256: view
   def allPools(_index: uint256) -> address: view
-  def getFee(_pool_addr: address, _stable: bool) -> uint256: view
   def getPool(_token0: address, _token1: address, _fee: int24) -> address: view
 
 # Vars
