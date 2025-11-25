@@ -100,8 +100,8 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
         if pool_data[3] != empty(address):
           launcher = self.cl_launcher
 
-        # if pool is emerging and other token is pairable, set token as emerging
-        if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
+        # if pool is emerging and token is not whitelisted, set token as emerging
+        if staticcall launcher.emerging(pool_data[1]) > 0 and not staticcall lp_shared.voter.isWhitelistedToken(tokens[i]):
           emerging = True
 
       seen.append(tokens[i])
