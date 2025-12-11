@@ -68,16 +68,14 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   addresses_count: uint256 = len(_addresses)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
   seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
+  emerging_mapping: HashMap[address, uint8] 
 
   for index: uint256 in range(0, MAX_TOKENS):
     if index >= addresses_count:
       break
 
-    seen.append(_addresses[index])
-    new_token: Token = self._token(_addresses[index], _account, False)
-
-    if new_token.decimals != 0 and new_token.symbol != "":
-      col.append(new_token)
+    if _addresses[index] not in seen:
+      seen.append(_addresses[index])
 
   for index: uint256 in range(0, lp_shared.MAX_POOLS):
     if index >= pools_count:
@@ -89,10 +87,9 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
 
     for i: uint256 in range(2):
-      if tokens[i] in seen:
+      # if the token has already been confirmed as emerging, skip it
+      if emerging_mapping[tokens[i]] == 1:
         continue
-
-      emerging: bool = False
 
       if self.v2_launcher.address != empty(address):
         launcher: IPoolLauncher = self.v2_launcher
@@ -102,14 +99,21 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
 
         # if pool is emerging and token is not whitelisted, set token as emerging
         if staticcall launcher.emerging(pool_data[1]) > 0 and not staticcall lp_shared.voter.isWhitelistedToken(tokens[i]):
-          emerging = True
+          emerging_mapping[tokens[i]] = 1
 
-      seen.append(tokens[i])
-      new_token: Token = self._token(tokens[i], _account, emerging)
+      if tokens[i] not in seen:
+        seen.append(tokens[i])
 
-      # Skip tokens that fail basic ERC20 calls
-      if new_token.decimals != 0 and new_token.symbol != "":
-        col.append(new_token)
+  seen_count: uint256 = len(seen)
+
+  for index: uint256 in range(0, MAX_TOKENS):
+    if index >= seen_count:
+      break
+
+    new_token: Token = self._token(seen[index], _account, emerging_mapping[seen[index]])
+
+    if new_token.decimals != 0 and new_token.symbol != "":
+      col.append(new_token)
 
   return col
 
