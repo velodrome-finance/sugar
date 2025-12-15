@@ -156,7 +156,8 @@ voter: public(IVoter)
 registry: public(IFactoryRegistry)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
-alm_factory: public(IAlmFactory)
+alm_factories: public(DynArray[IAlmFactory, MAX_FACTORIES])
+alm_cores: public(DynArray[IAlmCore, MAX_FACTORIES])
 alm_map: public(HashMap[uint256, HashMap[address, address]])
 v2_launcher: public(IPoolLauncher)
 cl_launcher: public(IPoolLauncher)
@@ -168,7 +169,7 @@ cl_locker_factory: public(ILockerFactory)
 
 @deploy
 def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
-    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _lp_helper: address):
+    _alm_factories: DynArray[address, MAX_FACTORIES], _v2_launcher: address, _cl_launcher: address, _lp_helper: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -176,7 +177,6 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
-  self.alm_factory = IAlmFactory(_alm_factory)
   self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
   self.v2_launcher = IPoolLauncher(_v2_launcher)
   self.cl_launcher = IPoolLauncher(_cl_launcher)
@@ -184,6 +184,11 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   if _v2_launcher != empty(address) and _cl_launcher != empty(address):
     self.v2_locker_factory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
     self.cl_locker_factory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
+  for i: uint256 in range(0, MAX_FACTORIES):
+    if i >= len(_alm_factories):
+      break
+    self.alm_factories.append(IAlmFactory(_alm_factories[i]))
+    self.alm_cores.append(IAlmCore(staticcall self.alm_factories[i].core()))
 
 @external
 @view
@@ -244,10 +249,6 @@ def _positions(
   pools_done: uint256 = 0
 
   factories_count: uint256 = len(_factories)
-
-  alm_core: IAlmCore = empty(IAlmCore)
-  if self.alm_factory != empty(IAlmFactory):
-    alm_core = IAlmCore(staticcall self.alm_factory.core())
 
   for index: uint256 in range(0, MAX_FACTORIES):
     if index >= factories_count:
@@ -401,13 +402,16 @@ def _positions(
             else:
               break
 
-        # Next, continue with fetching the ALM positions!
-        if self.alm_factory == empty(IAlmFactory):
-          continue
+        alm_staking: IGauge = IGauge(empty(address))
+        factory_index: uint256 = 0
 
-        alm_staking: IGauge = IGauge(
-          self._alm_pool_to_wrapper(pool_addr)
-        )
+        for i: uint256 in range(0, MAX_FACTORIES):
+          if i >= MAX_FACTORIES:
+            break
+          alm_staking = IGauge(self._alm_pool_to_wrapper(pool_addr, i))
+          if alm_staking.address != empty(address):
+            break
+          factory_index += 1
 
         if alm_staking.address == empty(address):
           continue
@@ -417,19 +421,19 @@ def _positions(
         if alm_user_liq == 0:
           continue
 
-        alm_pos: AlmManagedPositionInfo = staticcall alm_core.managedPositionAt(
+        alm_pos: AlmManagedPositionInfo = staticcall self.alm_cores[factory_index].managedPositionAt(
           staticcall IAlmLpWrapper(alm_staking.address).positionId()
         )
 
         if gauge.address != empty(address) and len(alm_pos.ammPositionIds) > 0:
           staked = staticcall gauge.stakedContains(
-            alm_core.address, alm_pos.ammPositionIds[0]
+            self.alm_cores[factory_index].address, alm_pos.ammPositionIds[0]
           )
 
         pos: Position = self._cl_position(
           alm_pos.ammPositionIds[0],
           # Account is the ALM Core contract here...
-          alm_core.address,
+          self.alm_cores[factory_index].address,
           pool_addr,
           gauge.address if staked else empty(address),
           factory.address,
@@ -442,7 +446,7 @@ def _positions(
           pos2: Position = self._cl_position(
             alm_pos.ammPositionIds[1],
             # Account is the ALM Core contract here...
-            alm_core.address,
+            self.alm_cores[factory_index].address,
             pool_addr,
             gauge.address if staked else empty(address),
             factory.address,
@@ -709,15 +713,16 @@ def _v2_position(_account: address, _pool: address, _locker: address) -> Positio
 
 @internal
 @view
-def _alm_pool_to_wrapper(_pool: address) -> address:
+def _alm_pool_to_wrapper(_pool: address, _factory_index: uint256) -> address:
   """
   @notice Returns the ALM wrapper for the given pool
   @param _pool The pool to return the wrapper for
+  @param _factory_index The ALM factory to use
   """
   mapped_wrapper: address = self.alm_map[chain.id][_pool]
   if mapped_wrapper != empty(address):
     return mapped_wrapper
-  return staticcall self.alm_factory.poolToWrapper(_pool)
+  return staticcall self.alm_factories[_factory_index].poolToWrapper(_pool)
 
 @internal
 @view

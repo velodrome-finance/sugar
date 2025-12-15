@@ -224,7 +224,7 @@ voter: public(IVoter)
 registry: public(IFactoryRegistry)
 convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
-alm_factory: public(IAlmFactory)
+alm_factories: public(DynArray[IAlmFactory, MAX_FACTORIES])
 alm_map: public(HashMap[uint256, HashMap[address, address]])
 v2_launcher: public(IPoolLauncher)
 cl_launcher: public(IPoolLauncher)
@@ -237,7 +237,7 @@ cl_locker_factory: public(ILockerFactory)
 
 @deploy
 def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
-    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address, _lp_helper: address):
+    _alm_factories: DynArray[address, MAX_FACTORIES], _v2_launcher: address, _cl_launcher: address, _token_sugar: address, _lp_helper: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -245,7 +245,6 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   self.registry = IFactoryRegistry(_registry)
   self.convertor = _convertor
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
-  self.alm_factory = IAlmFactory(_alm_factory)
   self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
   self.v2_launcher = IPoolLauncher(_v2_launcher)
   self.cl_launcher = IPoolLauncher(_cl_launcher)
@@ -254,6 +253,10 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   if _v2_launcher != empty(address) and _cl_launcher != empty(address):
     self.v2_locker_factory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
     self.cl_locker_factory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
+  for i: uint256 in range(0, MAX_FACTORIES):
+    if i >= len(_alm_factories):
+      break
+    self.alm_factories.append(IAlmFactory(_alm_factories[i]))
 
 @external
 @view
@@ -645,9 +648,12 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
     emissions = staticcall gauge.rewardRate()
 
   alm_wrapper: address = empty(address)
-  if self.alm_factory != empty(IAlmFactory):
-    alm_wrapper = self._alm_pool_to_wrapper(pool.address)
-    
+  for i: uint256 in range(0, MAX_FACTORIES):
+    if i >= len(self.alm_factories):
+      break
+    alm_wrapper = self._alm_pool_to_wrapper(pool.address, i)
+    if alm_wrapper != empty(address):
+      break
 
   return Lp(
     lp=pool.address,
@@ -714,15 +720,16 @@ def _safe_emissions_cap(_gauge: address, _factory: address) -> uint256:
 
 @internal
 @view
-def _alm_pool_to_wrapper(_pool: address) -> address:
+def _alm_pool_to_wrapper(_pool: address, _factory_index: uint256) -> address:
   """
   @notice Returns the ALM wrapper for the given pool
   @param _pool The pool to return the wrapper for
+  @param _factory_index The ALM factory to use
   """
   mapped_wrapper: address = self.alm_map[chain.id][_pool]
   if mapped_wrapper != empty(address):
     return mapped_wrapper
-  return staticcall self.alm_factory.poolToWrapper(_pool)
+  return staticcall self.alm_factories[_factory_index].poolToWrapper(_pool)
 
 @external
 @view
