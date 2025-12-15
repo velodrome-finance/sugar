@@ -479,9 +479,11 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
 
   if self.v2_launcher.address != empty(address):
     locked: uint256 = staticcall self.v2_locker_factory.locked(_data[1])
-    locked0 = (reserve0 * locked) // pool_liquidity
-    locked1 = (reserve1 * locked) // pool_liquidity
     emerging = staticcall self.v2_launcher.emerging(_data[1])
+    if pool_liquidity != 0:
+      locked0 = (reserve0 * locked) // pool_liquidity
+      locked1 = (reserve1 * locked) // pool_liquidity
+    
 
   if gauge.address != empty(address):
     gauge_liquidity = staticcall gauge.totalSupply()
