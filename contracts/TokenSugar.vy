@@ -77,18 +77,18 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     pool_data: address[4] = pools[index]
 
     pool: IPool = IPool(pool_data[1])
-    tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
 
-    for i: uint256 in range(2):
-      if self.v2_launcher.address != empty(address):
-        launcher: IPoolLauncher = self.v2_launcher
-        # check if pool is CL pool
-        if pool_data[3] != empty(address):
-          launcher = self.cl_launcher
+    if self.v2_launcher.address != empty(address):
+      launcher: IPoolLauncher = self.v2_launcher
+      # check if pool is CL pool
+      if pool_data[3] != empty(address):
+        launcher = self.cl_launcher
 
-        # if pool is emerging add both tokens to emerging array
-        if staticcall launcher.emerging(pool_data[1]) > 0:
-          emerging.append(tokens[i])
+      # if pool is emerging add both tokens to emerging array
+      if staticcall launcher.emerging(pool_data[1]) > 0:
+        tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
+        emerging.append(tokens[0])
+        emerging.append(tokens[1])
 
   for index: uint256 in range(0, lp_shared.MAX_POOLS):
     if index >= pools_count:
