@@ -78,17 +78,15 @@ The returned data/struct of type `Lp` values represent:
 The available methods are:
  * `LpSugar.all(_limit: uint256, _offset: uint256) -> Lp[]` -
    returns a paginated list of `Lp` structs.
- * `LpSugar.byIndex(_index: uint256) -> Lp` - returns the
-   `Lp` data for a specific index of a pool.
  * `LpSugar.byAddress(_pool: address) -> Lp` - returns the
    `Lp` data for a specific pool address.
  * `LpSugar.count() -> uint256` - returns the total number of pools.
 
----
+### Position Data
 
 To get the positions of an account, use this function:
- * `LpSugar.positions(_limit, _offset, _account) -> Position[]`
- * `LpSugar.positionsUnstakedConcentrated(_limit, _offset, _account) -> Position[]`
+ * `PositionSugar.positions(_limit, _offset, _account) -> Position[]`
+ * `PositionSugar.positionsUnstakedConcentrated(_limit, _offset, _account) -> Position[]`
 
 The later call is required for deployments prior to Superchain release.
 
@@ -112,7 +110,7 @@ The returned data is a struct of type `Position` with the following values:
   * `unlocks_at` - unlock timestamp for locked launcher liquidity, 0 otherwise
   * `alm` - pool ALM vault contract address
 
----
+### Token Data
 
 The pools token list (compiled from all the pools `token0`/`token1`) uses the type
 `Token` with the following values:
@@ -126,7 +124,7 @@ The pools token list (compiled from all the pools `token0`/`token1`) uses the ty
 
 To fetch the token list this method is available:
 
- * `LpSugar.tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
+ * `TokenSugar.tokens(_limit: uint256, _offset: uint256, _account: address, _oracle: address, _oracle_connectors: address[]) -> Token[]`
 
 ### veNFT and Pool Rewards Data
 

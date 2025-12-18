@@ -68,16 +68,27 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
   addresses_count: uint256 = len(_addresses)
   col: DynArray[Token, MAX_TOKENS] = empty(DynArray[Token, MAX_TOKENS])
   seen: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
+  emerging: DynArray[address, MAX_TOKENS] = empty(DynArray[address, MAX_TOKENS])
 
-  for index: uint256 in range(0, MAX_TOKENS):
-    if index >= addresses_count:
+  for index: uint256 in range(0, lp_shared.MAX_POOLS):
+    if index >= pools_count:
       break
 
-    seen.append(_addresses[index])
-    new_token: Token = self._token(_addresses[index], _account, False)
+    pool_data: address[4] = pools[index]
 
-    if new_token.decimals != 0 and new_token.symbol != "":
-      col.append(new_token)
+    pool: IPool = IPool(pool_data[1])
+
+    if self.v2_launcher.address != empty(address):
+      launcher: IPoolLauncher = self.v2_launcher
+      # check if pool is CL pool
+      if pool_data[3] != empty(address):
+        launcher = self.cl_launcher
+
+      # if pool is emerging add both tokens to emerging array
+      if staticcall launcher.emerging(pool_data[1]) > 0:
+        tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
+        emerging.append(tokens[0])
+        emerging.append(tokens[1])
 
   for index: uint256 in range(0, lp_shared.MAX_POOLS):
     if index >= pools_count:
@@ -89,27 +100,21 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
     tokens: address[2] = [staticcall pool.token0(), staticcall pool.token1()]
 
     for i: uint256 in range(2):
-      if tokens[i] in seen:
-        continue
-
-      emerging: bool = False
-
-      if self.v2_launcher.address != empty(address):
-        launcher: IPoolLauncher = self.v2_launcher
-        # check if pool is CL pool
-        if pool_data[3] != empty(address):
-          launcher = self.cl_launcher
-
-        # if pool is emerging and other token is pairable, set token as emerging
-        if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
-          emerging = True
-
-      seen.append(tokens[i])
-      new_token: Token = self._token(tokens[i], _account, emerging)
-
-      # Skip tokens that fail basic ERC20 calls
-      if new_token.decimals != 0 and new_token.symbol != "":
+      if tokens[i] not in seen:
+        new_token: Token = self._token(tokens[i], _account, False)
+        new_token.emerging = (not new_token.listed) and (tokens[i] in emerging)
+        seen.append(tokens[i])
         col.append(new_token)
+
+  for index: uint256 in range(0, MAX_TOKENS):
+    if index >= addresses_count:
+      break
+
+    if _addresses[index] not in seen:
+      new_token: Token = self._token(_addresses[index], _account, False)
+      new_token.emerging = (not new_token.listed) and (_addresses[index] in emerging)
+      seen.append(_addresses[index])
+      col.append(new_token)
 
   return col
 
