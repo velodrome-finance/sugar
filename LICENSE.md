@@ -15,7 +15,7 @@ Licensed Work:        Velodrome Smart Contracts (Sugar)
 Additional Use Grant: Any uses listed and defined at
                       v2-license-grants.velodrome.eth
 
-Change Date:          The earlier of 2025-06-01 or a date specified at
+Change Date:          The date specified at
                       v2-license-date.velodrome.eth
 
 Change License:       GNU General Public License v2.0 or later
