@@ -306,19 +306,22 @@ def forSwaps(_limit: uint256, _offset: uint256) -> DynArray[SwapLp, MAX_TOKENS]:
       token0: address = staticcall pool.token0()
       token1: address = staticcall pool.token1()
       reserve0: uint256 = 0
+      reserve1: uint256 = 0
       pool_fee: uint256 = 0
 
       if nfpm != empty(address):
         type = staticcall pool.tickSpacing()
         reserve0 = staticcall self.token_sugar.safe_balance_of(token0, pool_addr)
+        reserve1 = staticcall self.token_sugar.safe_balance_of(token1, pool_addr)
         pool_fee = convert(staticcall pool.fee(), uint256)
       else:
         if staticcall pool.stable():
           type = 0
         reserve0 = staticcall pool.reserve0()
+        reserve1 = staticcall pool.reserve1()
         pool_fee = staticcall factory.getFee(pool_addr, (type == 0))
 
-      if reserve0 > 0 or pool_addr == self.convertor:
+      if reserve0 > 0 or reserve1 > 0 or pool_addr == self.convertor:
         pools.append(
           SwapLp(
             lp=pool_addr,
