@@ -152,7 +152,7 @@ def _safe_balance_of(_token: address, _address: address) -> uint256:
       _token,
       abi_encode(_address, method_id=method_id("balanceOf(address)")),
       max_outsize=32,
-      gas=100000,
+      gas=500000,
       is_delegate_call=False,
       is_static_call=True,
       revert_on_failure=False
