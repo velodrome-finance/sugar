@@ -14,6 +14,7 @@ initializes: lp_shared
 
 MAX_TOKENS: public(constant(uint256)) = 2000
 MAX_TOKEN_SYMBOL_LEN: public(constant(uint256)) = 32
+MAX_FACTORIES: constant(uint256) = 10
 
 struct Token:
   token_address: address
@@ -34,17 +35,24 @@ interface IPoolLauncher:
   def isPairableToken(_token: address) -> bool: view
 
 # Vars
-v2_launcher: public(IPoolLauncher)
-cl_launcher: public(IPoolLauncher)
+launcher_map: public(HashMap[address, address])
 
 @deploy
 def __init__(_voter: address, _registry: address, _convertor: address,\
-    _v2_launcher: address, _cl_launcher: address):
+    _v2_factories: DynArray[address, MAX_FACTORIES], _v2_launchers: DynArray[address, MAX_FACTORIES],\
+    _cl_factories: DynArray[address, MAX_FACTORIES], _cl_launchers: DynArray[address, MAX_FACTORIES]):
   """
   @dev Sets up our external contract addresses
   """
-  self.v2_launcher = IPoolLauncher(_v2_launcher)
-  self.cl_launcher = IPoolLauncher(_cl_launcher)
+  for i: uint256 in range(MAX_FACTORIES):
+    if i >= len(_v2_factories):
+      break
+    self.launcher_map[_v2_factories[i]] = _v2_launchers[i]
+
+  for i: uint256 in range(MAX_FACTORIES):
+    if i >= len(_cl_factories):
+      break
+    self.launcher_map[_cl_factories[i]] = _cl_launchers[i]
 
   # Modules...
   lp_shared.__init__(_voter, _registry, _convertor)
@@ -94,14 +102,10 @@ def tokens(_limit: uint256, _offset: uint256, _account: address, \
 
       emerging: bool = False
 
-      if self.v2_launcher.address != empty(address):
-        launcher: IPoolLauncher = self.v2_launcher
-        # check if pool is CL pool
-        if pool_data[3] != empty(address):
-          launcher = self.cl_launcher
-
+      launcher: address = self.launcher_map[pool_data[0]]
+      if launcher != empty(address):
         # if pool is emerging and other token is pairable, set token as emerging
-        if staticcall launcher.emerging(pool_data[1]) > 0 and staticcall launcher.isPairableToken(tokens[1 - i]):
+        if staticcall IPoolLauncher(launcher).emerging(pool_data[1]) > 0 and staticcall IPoolLauncher(launcher).isPairableToken(tokens[1 - i]):
           emerging = True
 
       seen.append(tokens[i])

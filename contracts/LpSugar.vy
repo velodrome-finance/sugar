@@ -282,18 +282,17 @@ convertor: public(address)
 cl_helper: public(ISlipstreamHelper)
 alm_factory: public(IAlmFactory)
 alm_map: public(HashMap[uint256, HashMap[address, address]])
-v2_launcher: public(IPoolLauncher)
-cl_launcher: public(IPoolLauncher)
+launcher_map: public(HashMap[address, address])
 token_sugar: public(ITokenSugar)
 lp_helper: public(ILpHelper)
-v2_locker_factory: public(ILockerFactory)
-cl_locker_factory: public(ILockerFactory)
+locker_factory_map: public(HashMap[address, ILockerFactory])
 
 # Methods
 
 @deploy
-def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,\
-    _alm_factory: address, _v2_launcher: address, _cl_launcher: address, _token_sugar: address, _lp_helper: address):
+def __init__(_voter: address, _registry: address, _convertor: address, _slipstream_helper: address,_alm_factory: address,\
+    _v2_factories: DynArray[address, MAX_FACTORIES], _v2_launchers: DynArray[address, MAX_FACTORIES], _cl_factories: DynArray[address, MAX_FACTORIES],\
+    _cl_launchers: DynArray[address, MAX_FACTORIES], _token_sugar: address, _lp_helper: address):
   """
   @dev Sets up our external contract addresses
   """
@@ -303,13 +302,22 @@ def __init__(_voter: address, _registry: address, _convertor: address, _slipstre
   self.cl_helper = ISlipstreamHelper(_slipstream_helper)
   self.alm_factory = IAlmFactory(_alm_factory)
   self.alm_map[57073][0xaC7fC3e9b9d3377a90650fe62B858fF56bD841C9] = 0xFcD4bE2aDb8cdB01e5308Cd96ba06F5b92aebBa1
-  self.v2_launcher = IPoolLauncher(_v2_launcher)
-  self.cl_launcher = IPoolLauncher(_cl_launcher)
   self.token_sugar = ITokenSugar(_token_sugar)
   self.lp_helper = ILpHelper(_lp_helper)
-  if _v2_launcher != empty(address) and _cl_launcher != empty(address):
-    self.v2_locker_factory = ILockerFactory(staticcall self.v2_launcher.lockerFactory())
-    self.cl_locker_factory = ILockerFactory(staticcall self.cl_launcher.lockerFactory())
+
+  for i: uint256 in range(len(_v2_factories), bound=MAX_FACTORIES):
+      self.launcher_map[_v2_factories[i]] = _v2_launchers[i]
+      if _v2_launchers[i] != empty(address):
+          self.locker_factory_map[_v2_factories[i]] = ILockerFactory(
+              staticcall IPoolLauncher(_v2_launchers[i]).lockerFactory()
+          )
+
+  for i: uint256 in range(len(_cl_factories), bound=MAX_FACTORIES):
+      self.launcher_map[_cl_factories[i]] = _cl_launchers[i]
+      if _cl_launchers[i] != empty(address):
+          self.locker_factory_map[_cl_factories[i]] = ILockerFactory(
+              staticcall IPoolLauncher(_cl_launchers[i]).lockerFactory()
+          )
 
 @external
 @view
@@ -440,11 +448,9 @@ def all(_limit: uint256, _offset: uint256, _filter: uint256) -> DynArray[Lp, MAX
         listed = True
 
     emerging: bool = False
-    if self.cl_launcher.address != empty(address) and (_filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed)):
-      if pool_data[3] != empty(address):
-        emerging = staticcall self.cl_launcher.emerging(pool.address) > 0
-      else:
-        emerging = staticcall self.v2_launcher.emerging(pool.address) > 0
+    launcher: address = self.launcher_map[pool_data[0]]
+    if launcher != empty(address) and (_filter == 3 or (_filter == 4 and not listed) or (_filter == 5 and not listed)):
+      emerging = staticcall IPoolLauncher(launcher).emerging(pool.address) > 0
 
     include: bool = False
     if _filter == 0:
@@ -550,15 +556,18 @@ def _v2_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   if is_stable:
     type = 0
 
-  if self.v2_launcher.address != empty(address):
-    locked = staticcall self.v2_locker_factory.locked(_data[1])
-    emerging = staticcall self.v2_launcher.emerging(_data[1])
+  launcher: address = self.launcher_map[_data[0]]
+
+  if launcher != empty(address):
+    locker: ILockerFactory = self.locker_factory_map[_data[0]]
+    locked = staticcall locker.locked(_data[1])
+    emerging = staticcall IPoolLauncher(launcher).emerging(_data[1])
 
   if gauge.address != empty(address):
     gauge_liquidity = staticcall gauge.totalSupply()
     emissions_token = staticcall gauge.rewardToken()
-  elif self.v2_launcher.address != empty(address):
-    launcher_pool: PoolLauncherPool = staticcall self.v2_launcher.pools(_data[1])
+  elif launcher != empty(address):
+    launcher_pool: PoolLauncherPool = staticcall IPoolLauncher(launcher).pools(_data[1])
 
     if launcher_pool.createdAt != 0:
       created_at = launcher_pool.createdAt
@@ -722,8 +731,10 @@ def _positions(
             break
 
         # Fetch locked V2/Basic positions
-        if self.v2_launcher.address != empty(address):
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall self.v2_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+        launcher: address = self.launcher_map[factory.address]
+        if launcher != empty(address):
+          locker: ILockerFactory = self.locker_factory_map[factory.address]
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall locker.lockersPerPoolPerUser(pool_addr, _account)
 
           for lindex: uint256 in range(0, MAX_POSITIONS):
             if lindex >= len(lockers):
@@ -810,8 +821,10 @@ def _positions(
               break
 
         # Fetch locked CL positions
-        if self.cl_launcher.address != empty(address):
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall self.cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
+        cl_launcher: address = self.launcher_map[factory.address]
+        if cl_launcher != empty(address):
+          cl_locker: ILockerFactory = self.locker_factory_map[factory.address]
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker.lockersPerPoolPerUser(pool_addr, _account)
 
           for lindex: uint256 in range(0, MAX_POSITIONS):
             if lindex >= len(lockers):
@@ -1172,17 +1185,20 @@ def _cl_lp(_data: address[4], _token0: address, _token1: address) -> Lp:
   tick_low: int24 = (slot.tick // tick_spacing) * tick_spacing
   tick_high: int24 = tick_low + tick_spacing
 
-  if self.cl_launcher.address != empty(address):
-    locked = staticcall self.cl_locker_factory.locked(_data[1])
-    emerging = staticcall self.cl_launcher.emerging(_data[1])
+  launcher: address = self.launcher_map[_data[0]]
+
+  if launcher != empty(address):
+    locker: ILockerFactory = self.locker_factory_map[_data[0]]
+    locked = staticcall locker.locked(_data[1])
+    emerging = staticcall IPoolLauncher(launcher).emerging(_data[1])
 
     if gauge.address != empty(address):
       gauge_factory: address = staticcall gauge.gaugeFactory()
       emissions_cap = self._safe_emissions_cap(_data[2], gauge_factory)
 
   if gauge.address == empty(address):
-    if self.cl_launcher.address != empty(address):
-      launcher_pool: PoolLauncherPool = staticcall self.cl_launcher.pools(_data[1])
+    if launcher != empty(address):
+      launcher_pool: PoolLauncherPool = staticcall IPoolLauncher(launcher).pools(_data[1])
 
       if launcher_pool.createdAt != 0:
         created_at = launcher_pool.createdAt

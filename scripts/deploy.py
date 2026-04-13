@@ -3,6 +3,11 @@ import os
 
 from ape import project, accounts
 
+def _parse_addresses(env_var: str) -> list:
+    val = os.getenv(env_var)
+    if not val or val.strip() == "":
+        return [] # return empty list if env var not set
+    return [addr.strip() for addr in val.split(",") if addr.strip()]
 
 def main():
     contract_name = str(os.getenv("CONTRACT")).lower()
@@ -15,13 +20,20 @@ def main():
     elif len(accounts) > 0:
         account = accounts[0]
 
+    v2_factories = _parse_addresses(f"V2_FACTORIES_{chain_id}")
+    v2_launchers = _parse_addresses(f"V2_LAUNCHERS_{chain_id}")
+    cl_factories = _parse_addresses(f"CL_FACTORIES_{chain_id}")
+    cl_launchers = _parse_addresses(f"CL_LAUNCHERS_{chain_id}")
+
     if "token" in contract_name:
         token_sugar = project.TokenSugar.deploy(
             os.getenv(f"VOTER_{chain_id}"),
             os.getenv(f"REGISTRY_{chain_id}"),
             os.getenv(f"CONVERTOR_{chain_id}"),
-            os.getenv(f"V2_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
-            os.getenv(f"CL_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
+            v2_factories,
+            v2_launchers,
+            cl_factories,
+            cl_launchers,
             sender=account,
             publish=publish,
         )
@@ -45,8 +57,10 @@ def main():
             os.getenv(f"CONVERTOR_{chain_id}"),
             os.getenv(f"SLIPSTREAM_HELPER_{chain_id}"),
             os.getenv(f"ALM_FACTORY_{chain_id}"),
-            os.getenv(f"V2_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
-            os.getenv(f"CL_LAUNCHER_{chain_id}") or "0x0000000000000000000000000000000000000000",
+            v2_factories,
+            v2_launchers,
+            cl_factories,
+            cl_launchers,
             token_sugar_address,
             lp_helper_address,
             sender=account,
