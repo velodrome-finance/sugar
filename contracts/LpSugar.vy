@@ -733,8 +733,8 @@ def _positions(
         # Fetch locked V2/Basic positions
         launcher: address = self.launcher_map[factory.address]
         if launcher != empty(address):
-          locker: ILockerFactory = self.locker_factory_map[factory.address]
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall locker.lockersPerPoolPerUser(pool_addr, _account)
+          locker_factory: ILockerFactory = self.locker_factory_map[factory.address]
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall locker_factory.lockersPerPoolPerUser(pool_addr, _account)
 
           for lindex: uint256 in range(0, MAX_POSITIONS):
             if lindex >= len(lockers):
@@ -823,8 +823,8 @@ def _positions(
         # Fetch locked CL positions
         cl_launcher: address = self.launcher_map[factory.address]
         if cl_launcher != empty(address):
-          cl_locker: ILockerFactory = self.locker_factory_map[factory.address]
-          lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker.lockersPerPoolPerUser(pool_addr, _account)
+          cl_locker_factory: ILockerFactory = self.locker_factory_map[factory.address]
+          lockers: DynArray[address, MAX_POSITIONS] = staticcall cl_locker_factory.lockersPerPoolPerUser(pool_addr, _account)
 
           for lindex: uint256 in range(0, MAX_POSITIONS):
             if lindex >= len(lockers):
